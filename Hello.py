@@ -13,15 +13,155 @@
 # limitations under the License.
 #
 # Modified 2026-10-14: DES preparation calculator and experimental results workbench.
-"""Entry script: register the three pages and run. Logic lives in lab_core.py / lab_plots.py, pages in views.py."""
+"""Entry script: look and feel, the A*STAR intro, page registration.
+
+Logic lives in lab_core.py / lab_plots.py, page content in views.py.
+"""
+from pathlib import Path
+
 import streamlit as st
 
 import views
 
-st.set_page_config(page_title="DES Lab · Experiment Workbench", page_icon="🧪", layout="wide")
+ROOT = Path(__file__).parent
+LOGO_PATH = ROOT / "static/astar_logo.png"
+LOGO_URL = "app/static/astar_logo.png"
+
+# A*STAR brand colours sampled from the supplied logo: blue #002F86, red #D8291B.
+STYLE = """
+<style>
+  /* ---------- layout ---------- */
+  .stMainBlockContainer { max-width: 1180px; padding-top: 2.0rem; padding-bottom: 3rem; }
+  [data-testid="stAppViewContainer"] { animation: dshFadeIn .7s ease 2.55s both; }
+  h1 { font-weight: 800; letter-spacing: -0.02em; color: #0B1F4B; }
+  h2, h3 { font-weight: 700; letter-spacing: -0.01em; color: #0B1F4B; }
+  h1 + div p, h1 ~ p { color: #33415C; }
+
+  /* ---------- sidebar ---------- */
+  [data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #F8FAFE 0%, #EEF2FA 100%);
+    border-right: 1px solid #E3E9F4;
+  }
+  [data-testid="stSidebar"] [data-testid="stSidebarNav"] a { border-radius: 10px; }
+  [data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover { background: #E4EBF8; }
+  [data-testid="stSidebar"] hr { border-color: #DCE4F2; }
+  [data-testid="stSidebar"] img { display: block; margin: 0 0 .35rem 0; }
+
+  /* ---------- cards ---------- */
+  div[data-testid="stMetric"] {
+    background: #FFFFFF;
+    border: 1px solid #E4EAF6;
+    border-radius: 14px;
+    padding: 14px 16px 12px 16px;
+    box-shadow: 0 1px 3px rgba(0, 47, 134, .06);
+  }
+  div[data-testid="stMetricLabel"] p { color: #55637D; font-weight: 600; }
+  div[data-testid="stMetricValue"] { color: #002F86; font-weight: 700; }
+  [data-testid="stExpander"] {
+    border: 1px solid #E4EAF6;
+    border-radius: 12px;
+    background: #FCFDFF;
+  }
+  [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
+    border: 1px solid #E4EAF6;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  [data-testid="stAlert"] { border-radius: 12px; }
+
+  /* ---------- buttons ---------- */
+  .stButton > button, .stDownloadButton > button, .stLinkButton > a {
+    border-radius: 10px;
+    border: 1px solid #C9D5EC;
+    font-weight: 600;
+    transition: all .18s ease;
+  }
+  .stDownloadButton > button:hover, .stButton > button:hover, .stLinkButton > a:hover {
+    border-color: #002F86;
+    color: #002F86;
+    box-shadow: 0 2px 10px rgba(0, 47, 134, .12);
+    transform: translateY(-1px);
+  }
+  /* keep the app chrome clean, but leave the ⋮ menu usable */
+  [data-testid="stAppDeployButton"] { display: none; }
+  [data-testid="stDecoration"] { display: none; }
+
+  @keyframes dshFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---------- A*STAR intro (~3 s, once per session) ---------- */
+  #dsh-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    background: #FFFFFF;
+    animation: dshSplashOut .6s ease 2.4s forwards;
+  }
+  #dsh-splash img {
+    width: min(440px, 64vw);
+    height: auto;
+    animation: dshLogoIn 1.1s cubic-bezier(.2, .75, .25, 1) both;
+  }
+  #dsh-splash .dsh-bar {
+    width: min(230px, 42vw);
+    height: 4px;
+    border-radius: 999px;
+    background: #E7ECF6;
+    overflow: hidden;
+  }
+  #dsh-splash .dsh-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #002F86 0%, #D8291B 100%);
+    animation: dshBar 2.2s cubic-bezier(.4, .1, .2, 1) .2s forwards;
+  }
+  #dsh-splash .dsh-tag {
+    font: 600 13px/1 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: #6B7A99;
+    animation: dshLogoIn 1.1s ease .25s both;
+  }
+  @keyframes dshLogoIn {
+    from { opacity: 0; transform: scale(.9) translateY(12px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes dshBar { to { width: 100%; } }
+  @keyframes dshSplashOut { to { opacity: 0; visibility: hidden; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    #dsh-splash { animation: dshSplashOut .2s linear 1.2s forwards; }
+    #dsh-splash img, #dsh-splash .dsh-bar span, #dsh-splash .dsh-tag,
+    [data-testid="stAppViewContainer"] { animation-duration: .2s; animation-delay: 0s; }
+  }
+</style>
+"""
+
+SPLASH = """
+<div id="dsh-splash">
+  <img src="app/static/astar_logo.png" alt="A*STAR — Agency for Science, Technology and Research, Singapore">
+  <div class="dsh-bar"><span></span></div>
+  <div class="dsh-tag">DES Lab · Experiment Workbench</div>
+</div>
+"""
+
+st.set_page_config(page_title="DES Lab · Experiment Workbench", page_icon=str(LOGO_PATH), layout="wide")
+st.markdown(STYLE, unsafe_allow_html=True)
+
+# Show the A*STAR intro once per browser session (about 3 seconds, then it fades away).
+if not st.session_state.get("_intro_shown"):
+    st.session_state["_intro_shown"] = True
+    st.markdown(SPLASH, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.title("🧪 DES Lab")
+    st.image(str(LOGO_PATH), width=196)
+    st.markdown("### 🧪 DES Lab")
     st.caption("Experiment workbench / LOCAL EDITION")
 
 page = st.navigation([

@@ -34,6 +34,19 @@ python -m venv .venv
 .venv\Scripts\python -m streamlit run Hello.py --server.port 8514
 ```
 
+## Look and feel
+
+- Opening the app — or opening any page in a new browser session — plays a **~3 second A\*STAR intro**: the logo
+  fades in over a blue→red progress bar, then the white overlay fades away and the app content fades in. It shows
+  once per session and is shortened automatically for `prefers-reduced-motion` users.
+- The theme uses the two colours sampled from the supplied logo: A\*STAR blue `#002F86` and red `#D8291B`.
+- The logo lives in `static/astar_logo.png`, is served by Streamlit's static file serving
+  (`[server] enableStaticServing = true`), and is also used as the sidebar mark and the browser favicon.
+- `Hello.py` holds the stylesheet and the intro markup, `views.py` holds the page content, `lab_plots.py` the figure.
+
+> The A\*STAR name and logo belong to A\*STAR. Keep the repository private, or follow A\*STAR's brand guidelines,
+> before sharing or publishing it.
+
 ## Recorded runs (sample)
 
 `sample_data/my_des_runs.csv` holds three ChCl:GA runs, one measurement per condition (so no error bars):
@@ -83,14 +96,15 @@ through `streamlit.testing.v1.AppTest` — 13 tests, all passing.
 ## Layout
 
 ```
-Hello.py                    # entry: st.set_page_config + st.navigation
+Hello.py                    # entry: branding stylesheet + A*STAR intro + st.navigation
 views.py                    # three pages: calculator / results & figures / guide
 lab_core.py                 # recipe mass balance, CSV merging, grouped summary (pure functions)
 lab_plots.py                # matplotlib figure: mean bars + error bars + raw points
+static/astar_logo.png       # A*STAR logo (sidebar mark, browser favicon, intro animation)
 sample_data/                # demo_lignin.csv (fictitious) / my_des_runs.csv (recorded)
 data/                       # experiment workbook + chat-history extraction report
 tests/test_lab.py           # unittest for the calculation and IO layer
-tests/test_app_pages.py     # headless page tests with AppTest
+tests/test_app_pages.py     # headless page tests with AppTest (incl. the intro-once behaviour)
 Start.ps1 / Stop.ps1
 ```
 

@@ -1,8 +1,8 @@
 [theme]
-primaryColor = "#148578"
-backgroundColor = "#FAFCFB"
-secondaryBackgroundColor = "#EFF5F2"
-textColor = "#172B28"
+primaryColor = "#002F86"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F5FB"
+textColor = "#0B1F4B"
 font = "sans serif"
 
 [browser]
@@ -12,3 +12,4 @@ gatherUsageStats = false
 address = "127.0.0.1"
 headless = true
 maxUploadSize = 50
+enableStaticServing = true

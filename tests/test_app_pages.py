@@ -83,6 +83,17 @@ class AppPageTests(unittest.TestCase):
         self.assertEqual(at.title[0].value, "How to use")
         self.assertIn("Download my experiment data CSV", [b.label for b in at.download_button])
 
+    def test_entry_page_branding_and_intro_once(self):
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.run()
+        self.assertEqual(errors(at), [])
+        markup = "\n".join(str(m.value) for m in at.markdown)
+        # the overlay element (not the stylesheet, which only mentions the selector)
+        self.assertIn('id="dsh-splash"', markup, "the A*STAR intro should be injected on the first run")
+        self.assertIn('<img src="app/static/astar_logo.png"', markup)
+        at.run()  # a rerun in the same session must not replay the intro
+        self.assertNotIn('id="dsh-splash"', "\n".join(str(m.value) for m in at.markdown))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
