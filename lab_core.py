@@ -8,26 +8,26 @@ import pandas as pd
 
 def calculate_recipe(components, target_g, basis="active", added_water_g=0):
     if not math.isfinite(target_g) or target_g <= 0:
-        raise ValueError("目标质量必须大于 0。")
+        raise ValueError("Target mass must be greater than 0.")
     if not math.isfinite(added_water_g) or added_water_g < 0:
-        raise ValueError("额外加水量不能为负数。")
+        raise ValueError("Extra water cannot be negative.")
     if basis not in ("active", "reagent"):
-        raise ValueError("未知的质量基准。")
+        raise ValueError("Unknown target-mass basis.")
     data = pd.DataFrame(components).copy()
     if len(data) < 2:
-        raise ValueError("至少填写两种组分。")
+        raise ValueError("Enter at least two components.")
     for col in ["mw", "ratio", "assay_pct", "water_pct"]:
         data[col] = pd.to_numeric(data[col], errors="coerce")
     if not np.isfinite(data[["mw", "ratio", "assay_pct", "water_pct"]].to_numpy()).all():
-        raise ValueError("摩尔质量、比例、含量和水分必须是有限数值。")
+        raise ValueError("Molar mass, ratio, active content and water must all be finite numbers.")
     if data["name"].isna().any() or data["name"].astype(str).str.strip().eq("").any():
-        raise ValueError("每种组分都需要名称。")
+        raise ValueError("Every component needs a name.")
     if (data[["mw", "ratio", "assay_pct"]] <= 0).any().any():
-        raise ValueError("摩尔质量、摩尔份数和有效含量必须大于 0。")
+        raise ValueError("Molar mass, molar ratio and active content must be greater than 0.")
     if (data["assay_pct"] > 100).any() or (data["water_pct"] < 0).any():
-        raise ValueError("有效含量须 ≤100%，水分须 ≥0%。")
+        raise ValueError("Active content must be ≤100% and water must be ≥0%.")
     if (data["assay_pct"] + data["water_pct"] > 100 + 1e-9).any():
-        raise ValueError("有效含量 + 独立水分不能超过 100%。")
+        raise ValueError("Active content plus separate water cannot exceed 100%.")
     fraction = data["assay_pct"] / 100
     weights = data["mw"] * data["ratio"]
     scale = target_g / (weights.sum() if basis == "active" else (weights / fraction).sum())
@@ -44,11 +44,11 @@ def read_csv_bytes(content, encoding="utf-8-sig"):
     header = next(csv.reader(content.decode(encoding).splitlines()), [])
     names = [name.strip() for name in header]
     if not names or any(not name for name in names) or len(names) != len(set(names)):
-        raise ValueError("CSV 表头不能为空或重复；请使用逗号分隔。")
+        raise ValueError("CSV headers cannot be empty or duplicated; use comma-separated values.")
     frame = pd.read_csv(BytesIO(content), encoding=encoding)
     frame.columns = frame.columns.str.strip()
     if "_source_file" in frame.columns:
-        raise ValueError("_source_file 是来源追踪保留列，请先重命名。")
+        raise ValueError("_source_file is a reserved column used for source tracking; rename it first.")
     return frame.dropna(how="all")
 
 
@@ -59,13 +59,13 @@ def merge_results(files, encoding="utf-8-sig"):
         frame["_source_file"] = name
         frames.append(frame)
     if not frames:
-        raise ValueError("请先选择 CSV 文件。")
+        raise ValueError("Choose at least one CSV file.")
     return pd.concat(frames, ignore_index=True, sort=False)
 
 
 def summarize(frame, groups, measurement):
     if not groups or measurement in groups:
-        raise ValueError("请选择分组列，且不要把测量值本身作为分组列。")
+        raise ValueError("Choose grouping columns, and do not use the measurement column itself for grouping.")
     numeric = pd.to_numeric(frame[measurement], errors="coerce")
     finite = np.isfinite(numeric)
     missing_groups = frame[groups].isna().any(axis=1)
