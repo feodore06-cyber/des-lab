@@ -32,7 +32,9 @@ STYLE = """
 <style>
   /* ---------- layout ---------- */
   .stMainBlockContainer { max-width: 1180px; padding-top: 2.0rem; padding-bottom: 3rem; }
-  [data-testid="stAppViewContainer"] { animation: dshFadeIn .7s ease 2.55s both; }
+  /* NOTE: never animate the app container's opacity from 0. If such an animation fails to
+     run (background tab, animations disabled, a re-render resetting it) the whole app would
+     stay invisible behind a white shell. The intro overlay below is the only moving part. */
   h1 { font-weight: 800; letter-spacing: -0.02em; color: #0B1F4B; }
   h2, h3 { font-weight: 700; letter-spacing: -0.01em; color: #0B1F4B; }
   h1 + div p, h1 ~ p { color: #33415C; }
@@ -91,9 +93,10 @@ STYLE = """
   [data-testid="stAppDeployButton"] { display: none; }
   [data-testid="stDecoration"] { display: none; }
 
-  @keyframes dshFadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-  /* ---------- A*STAR intro (~3 s, once per session) ---------- */
+  /* ---------- A*STAR intro (~3 s, once per session) ----------
+     Fail-safe design: the overlay is hidden by default and the animation is what shows it.
+     If the animation never runs (animations disabled, background tab, reduced motion),
+     the overlay simply stays hidden and the app is fully visible. */
   #dsh-splash {
     position: fixed;
     inset: 0;
@@ -104,7 +107,10 @@ STYLE = """
     justify-content: center;
     gap: 30px;
     background: #FFFFFF;
-    animation: dshSplashOut .6s ease 2.4s forwards;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    animation: dshIntro 3s ease forwards;
   }
   #dsh-splash img {
     width: min(440px, 64vw);
@@ -138,12 +144,18 @@ STYLE = """
     to   { opacity: 1; transform: none; }
   }
   @keyframes dshBar { to { width: 100%; } }
-  @keyframes dshSplashOut { to { opacity: 0; visibility: hidden; } }
+  /* 0–80 % opaque hold, last 20 % fade out and stop intercepting clicks */
+  @keyframes dshIntro {
+    0%   { opacity: 1; visibility: visible; }
+    80%  { opacity: 1; visibility: visible; }
+    100% { opacity: 0; visibility: hidden; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
-    #dsh-splash { animation: dshSplashOut .2s linear 1.2s forwards; }
-    #dsh-splash img, #dsh-splash .dsh-bar span, #dsh-splash .dsh-tag,
-    [data-testid="stAppViewContainer"] { animation-duration: .2s; animation-delay: 0s; }
+    #dsh-splash { animation: dshIntro 1.4s ease forwards; }
+    #dsh-splash img, #dsh-splash .dsh-bar span, #dsh-splash .dsh-tag {
+      animation-duration: .2s; animation-delay: 0s;
+    }
   }
 </style>
 """
