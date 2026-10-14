@@ -48,6 +48,18 @@ python -m venv .venv
 - 程序不换算单位、不填补缺失值、不自动删除重复行；非数值/缺失行会被排除并列出原因。
 - 数据只在本机内存里处理，不上传、不落盘。
 
+## 实验数据记录
+
+`data/` 放实验记录（仓库为**私有**，只有你自己能看到）：
+
+- `DES实验数据记录.xlsx` —— 4 张表：**实验记录**（ChCl:GA 1:1 / 1:2 / 2:1 的 biomass 与 lignin，
+  得率用公式自动算：1.13% / 1.94% / 0.78%）、**聊天记录提取**（从 Codex/ChatGPT 会话里整理出的
+  实验操作、导师指示、计划、文献对照）、**分析测量记录**（纤维尺寸、Sample E 的 NMR）、**说明**。
+- `Codex聊天记录_实验数据提取.md` —— 同一次整理的完整报告：扫描了哪些会话、找到了什么、
+  以及**没找到**什么（你在对话里口述的三组产率数据不在任何聊天记录里）。
+
+> Excel 里得率是公式：用 Excel / LibreOffice 打开改数值再保存即可，不要在脚本文本编辑器里改。
+
 ## 测试
 
 ```powershell
@@ -66,6 +78,7 @@ views.py                    # 三个页面：配比计算 / 结果与图表 / �
 lab_core.py                 # 配比计算、CSV 合并、分组统计（纯函数，便于测试）
 lab_plots.py                # matplotlib 绘图（柱 + 误差棒 + 散点）
 sample_data/                # demo_lignin.csv（虚构）/ my_des_runs.csv（实测）
+data/                       # 实验数据记录 Excel + 聊天记录提取报告
 tests/test_lab.py           # 计算与 IO 的 unittest
 tests/test_app_pages.py     # 用 AppTest 无头跑三个页面
 Start.ps1 / Stop.ps1
