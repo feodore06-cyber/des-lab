@@ -1,0 +1,4 @@
+sample_id,formulation,replicate,biomass_g,lignin_mg,lignin_yield_pct
+EXP-01,ChCl-GA 1:1,1,2.3,26.0,1.13
+EXP-02,ChCl-GA 1:2,1,2.88,56.0,1.94
+EXP-03,ChCl-GA 2:1,1,1.9545,15.2,0.78

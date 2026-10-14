@@ -1,0 +1,10 @@
+sample_id,formulation,temperature_C,time_min,replicate,biomass_g,lignin_mg,lignin_yield_pct
+DEMO-A1,ChCl-GA 1:1,90,60,1,2.00,24.0,1.20
+DEMO-A2,ChCl-GA 1:1,90,60,2,2.00,26.0,1.30
+DEMO-A3,ChCl-GA 1:1,90,60,3,2.00,25.0,1.25
+DEMO-B1,ChCl-GA 1:2,90,60,1,2.00,36.0,1.80
+DEMO-B2,ChCl-GA 1:2,90,60,2,2.00,38.0,1.90
+DEMO-B3,ChCl-GA 1:2,90,60,3,2.00,37.0,1.85
+DEMO-C1,ChCl-GA 2:1,90,60,1,2.00,16.0,0.80
+DEMO-C2,ChCl-GA 2:1,90,60,2,2.00,15.0,0.75
+DEMO-C3,ChCl-GA 2:1,90,60,3,2.00,17.0,0.85

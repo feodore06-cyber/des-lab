@@ -11,41 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+#
+# Modified 2026-10-14: Chinese DES preparation calculator and experimental results workbench.
+"""入口脚本：注册三个页面并运行。计算与绘图逻辑见 lab_core.py / lab_plots.py，页面见 views.py。"""
 import streamlit as st
-from streamlit.logger import get_logger
 
-LOGGER = get_logger(__name__)
+import views
 
+st.set_page_config(page_title="DES Lab · 实验工作台", page_icon="🧪", layout="wide")
 
-def run():
-    st.set_page_config(
-        page_title="Hello",
-        page_icon="👋",
-    )
+with st.sidebar:
+    st.title("🧪 DES Lab")
+    st.caption("实验工作台 / LOCAL EDITION")
 
-    st.write("# Welcome to Streamlit! 👋")
+page = st.navigation([
+    st.Page(views.calculator, title="DES 配比计算", icon="🧪", default=True),
+    st.Page(views.results, title="实验结果与图表", icon="📊", url_path="results"),
+    st.Page(views.guide, title="使用说明与模板", icon="📖", url_path="guide"),
+])
+page.run()
 
-    st.sidebar.success("Select a demo above.")
-
-    st.markdown(
-        """
-        Streamlit is an open-source app framework built specifically for
-        Machine Learning and Data Science projects.
-        **👈 Select a demo from the sidebar** to see some examples
-        of what Streamlit can do!
-        ### Want to learn more?
-        - Check out [streamlit.io](https://streamlit.io)
-        - Jump into our [documentation](https://docs.streamlit.io)
-        - Ask a question in our [community
-          forums](https://discuss.streamlit.io)
-        ### See more complex demos
-        - Use a neural net to [analyze the Udacity Self-driving Car Image
-          Dataset](https://github.com/streamlit/demo-self-driving)
-        - Explore a [New York City rideshare dataset](https://github.com/streamlit/demo-uber-nyc-pickups)
-    """
-    )
-
-
-if __name__ == "__main__":
-    run()
+st.sidebar.divider()
+st.sidebar.caption("本机运行 · 配方可追溯 · CSV / PNG / SVG")
