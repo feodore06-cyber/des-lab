@@ -31,6 +31,9 @@ DEMO_CSV = ROOT / "sample_data/demo_lignin.csv"
 MY_CSV = ROOT / "sample_data/my_des_runs.csv"
 LABELS = {"name": "Component / reagent form", "mw": "Molar mass (g/mol)", "ratio": "Molar ratio",
           "assay_pct": "Active content (wt%)", "water_pct": "Separate water (wt%)"}
+Y_LABELS = {"lignin_yield_pct": "Lignin yield (%)", "lignin_mg": "Recovered lignin (mg)",
+            "biomass_g": "Biomass (g)", "dry_strength_MPa": "Dry strength (MPa)",
+            "wet_strength_MPa": "Wet strength (MPa)"}
 
 
 def calculator():
@@ -175,7 +178,8 @@ def results():
     title = a.text_input("Figure title",
                          value="DEMO · fictitious example" if data_kind == "synthetic_demo"
                          else "DES pretreatment · lignin yield")
-    ylabel = b.text_input("Y-axis title / unit", value=measurement, key=f"ylabel_{measurement}")
+    ylabel = b.text_input("Y-axis title / unit", value=Y_LABELS.get(measurement, measurement),
+                          key=f"ylabel_{measurement}")
     fig = make_figure(clean, summary, groups, measurement, title, ylabel)
     st.pyplot(fig, width="stretch")
     st.caption("Bar = mean · error bar = ±1 sample SD · dots = raw observations. Error bars are not a significance "

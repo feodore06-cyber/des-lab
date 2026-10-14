@@ -42,10 +42,15 @@ STYLE = """
     background: linear-gradient(180deg, #F8FAFE 0%, #EEF2FA 100%);
     border-right: 1px solid #E3E9F4;
   }
+  /* st.logo defaults to a tiny mark; scale the brand up so the wordmark reads */
+  [data-testid="stSidebarHeader"] { height: auto; padding: .9rem 1rem .3rem 1rem; }
+  [data-testid="stSidebarHeader"] img,
+  [data-testid="stLogo"] img,
+  img[data-testid="stLogo"] { height: 50px !important; width: auto !important; border-radius: 0 !important; }
   [data-testid="stSidebar"] [data-testid="stSidebarNav"] a { border-radius: 10px; }
   [data-testid="stSidebar"] [data-testid="stSidebarNav"] a:hover { background: #E4EBF8; }
   [data-testid="stSidebar"] hr { border-color: #DCE4F2; }
-  [data-testid="stSidebar"] img { display: block; margin: 0 0 .35rem 0; }
+  [data-testid="stSidebar"] img { display: block; }
 
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
@@ -154,15 +159,13 @@ SPLASH = """
 st.set_page_config(page_title="DES Lab · Experiment Workbench", page_icon=str(LOGO_PATH), layout="wide")
 st.markdown(STYLE, unsafe_allow_html=True)
 
+# st.logo pins the brand to the very top of the sidebar, above the page navigation.
+st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
+
 # Show the A*STAR intro once per browser session (about 3 seconds, then it fades away).
 if not st.session_state.get("_intro_shown"):
     st.session_state["_intro_shown"] = True
     st.markdown(SPLASH, unsafe_allow_html=True)
-
-with st.sidebar:
-    st.image(str(LOGO_PATH), width=196)
-    st.markdown("### 🧪 DES Lab")
-    st.caption("Experiment workbench / LOCAL EDITION")
 
 page = st.navigation([
     st.Page(views.calculator, title="DES Recipe Calculator", icon="🧪", default=True),
@@ -172,4 +175,5 @@ page = st.navigation([
 page.run()
 
 st.sidebar.divider()
+st.sidebar.caption("Experiment workbench / LOCAL EDITION")
 st.sidebar.caption("Runs locally · traceable recipes · CSV / PNG / SVG")

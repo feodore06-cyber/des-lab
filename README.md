@@ -40,6 +40,8 @@ python -m venv .venv
   fades in over a blue→red progress bar, then the white overlay fades away and the app content fades in. It shows
   once per session and is shortened automatically for `prefers-reduced-motion` users.
 - The theme uses the two colours sampled from the supplied logo: A\*STAR blue `#002F86` and red `#D8291B`.
+- The exported figure follows the same palette: navy bars, dark error bars, red raw-data points on a light grid,
+  with friendly axis defaults such as `Lignin yield (%)`.
 - The logo lives in `static/astar_logo.png`, is served by Streamlit's static file serving
   (`[server] enableStaticServing = true`), and is also used as the sidebar mark and the browser favicon.
 - `Hello.py` holds the stylesheet and the intro markup, `views.py` holds the page content, `lab_plots.py` the figure.
