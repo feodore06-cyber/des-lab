@@ -40,11 +40,12 @@ def calculator():
     st.info("The numbers below are a calculation example, not a recommended formulation. Update them from your "
             "reagent labels; a mass balance cannot prove that a mixture has formed a DES.")
     components = st.data_editor(pd.DataFrame([
-        {"name": "ChCl (water-free basis)", "mw": 139.62, "ratio": 1.0, "assay_pct": 100.0, "water_pct": 0.0},
-        {"name": "Glyoxylic acid / 50 wt% solution", "mw": 74.04, "ratio": 2.0, "assay_pct": 50.0, "water_pct": 50.0},
+        {"name": "ChCl (98 wt%)", "mw": 139.62, "ratio": 1.0, "assay_pct": 98.0, "water_pct": 0.0},
+        {"name": "Glyoxylic acid (98 wt%, solid)", "mw": 74.04, "ratio": 2.0, "assay_pct": 98.0, "water_pct": 0.0},
     ]), column_config=LABELS, num_rows="dynamic", hide_index=True, width="stretch", key="components")
-    st.caption("Add a third component on the last row. Active content below 100% is never treated as water; "
-               "enter water separately.")
+    st.caption("Add a third component on the last row. Both reagents are entered as 98 wt% solids with no separate "
+               "water, so the missing 2% counts as non-water impurity — never as solvent. Enter any real water "
+               "separately.")
     a, b, c = st.columns([2, 1, 1])
     basis_label = a.selectbox("Target mass basis",
                              ["Total active components (excluding solvent water)",
@@ -81,8 +82,8 @@ def calculator():
                     "active mass = k × r × M, and reagent to weigh = active mass / p. "
                     "The scale factor k follows from the selected target mass.")
         st.markdown("Preset molar masses: [ChCl 139.62](https://www.sigmaaldrich.com/GI/en/product/sigma/c1879); "
-                    "[glyoxylic acid 74.04, 50 wt% solution](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150). "
-                    "ChCl at 100% is an idealised example, not a bottle assay.")
+                    "[glyoxylic acid 74.04](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150). "
+                    "Both presets are 98 wt% solids with no separate water; the remaining 2% is impurity, not water.")
 
 
 def results():

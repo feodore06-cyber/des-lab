@@ -47,10 +47,10 @@ class AppPageTests(unittest.TestCase):
         self.assertEqual(errors(at), [])
         self.assertEqual(at.title[0].value, "DES Recipe Calculator")
         metrics = [m.value for m in at.metric]
-        # default 10 g active basis: ChCl 1 : glyoxylic acid (50 wt% solution) 2
-        self.assertEqual(metrics[0], "15.1470 g")   # 4.853 g ChCl + 10.294 g solution
-        self.assertEqual(metrics[1], "5.1470 g")    # water carried in by the 50% solution
-        self.assertEqual(metrics[2], "33.98%")
+        # default 10 g active basis: ChCl 1 : glyoxylic acid 2, both 98 wt% solids, no separate water
+        self.assertEqual(metrics[0], "10.2041 g")   # 4.9520 g ChCl + 5.2521 g glyoxylic acid
+        self.assertEqual(metrics[1], "0.0000 g")    # solids only: the missing 2% is impurity, not water
+        self.assertEqual(metrics[2], "0.00%")
         self.assertIn("Download recipe CSV", [b.label for b in at.download_button])
 
     def test_results_page_my_data(self):

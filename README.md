@@ -16,8 +16,10 @@ The interface is in **English**.
 
 The calculator deliberately separates three things that are easy to mix up: the **molar ratio** (the formulation),
 the **reagent assay** (what the bottle actually contains) and the **water** (separate water plus extra water added).
-A shortfall from 100% active content is **never** silently treated as water — impurities are not water — and for a
-hydrate you should use the molar mass of that hydrate instead of entering crystal water twice.
+The presets use the actual reagents: **ChCl 98 wt%** and **glyoxylic acid 98 wt% as a solid** — glyoxylic acid is
+not dosed as an aqueous solution here, so no water is carried in. A shortfall from 100% active content is **never**
+silently treated as water — the missing 2% is impurity — and for a hydrate you should use the molar mass of that
+hydrate instead of entering crystal water twice.
 
 ## Running it
 
