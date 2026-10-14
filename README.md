@@ -1,25 +1,30 @@
-# 🧪 DES Lab · 实验工作台
+# 🧪 DES Lab · Experiment Workbench
 
-本机浏览器里使用的 DES（低共熔溶剂）实验小工具：**算配比 → 整理结果 → 画图导出**。
-基于 [streamlit/hello](https://github.com/streamlit/hello)（Apache-2.0）改造，保留原许可证。
+A small local browser workbench for DES (deep eutectic solvent) experiments:
+**work out a recipe → organise results → plot and export**.
+Built on [streamlit/hello](https://github.com/streamlit/hello) (Apache-2.0); the original licence is kept.
 
-## 功能
+The interface is in **English**.
 
-| 页面 | 作用 |
+## What it does
+
+| Page | Purpose |
 | --- | --- |
-| 🧪 DES 配比计算 | 输入 ChCl / GA 等组分的摩尔份数、摩尔质量、有效含量与独立水分，得到可追溯的称量清单（哪些是有效组分、哪些是试剂称量、哪些是试剂带入的水），可导出 `des_recipe.csv` |
-| 📊 实验结果与图表 | 合并一个或多个 CSV，按实验条件分组统计（n、均值、样本标准差、极值），画均值柱状图 + ±1 SD 误差棒 + 原始数据点，导出 PNG（300 dpi）/ SVG / 汇总 CSV |
-| 📖 使用说明与模板 | 使用步骤、虚构示例 CSV、我的实验数据 CSV、空白记录模板 |
+| 🧪 DES Recipe Calculator | Enter molar ratios, molar masses, active content and separate water for each component (for example ChCl and glyoxylic acid) and get a traceable weighing list: which mass is active component, which is reagent to weigh, and how much water the reagent carries. Exports `des_recipe.csv`. |
+| 📊 Results & Figures | Merge one or more CSVs, group by experimental condition and summarise (n, mean, sample SD, min, max), plot mean bars with ±1 SD error bars and the raw observations, export PNG (300 dpi) / SVG / summary CSV. |
+| 📖 Guide & Templates | Step-by-step usage, the fictitious demo CSV, your recorded run CSV and a blank record template. |
 
-配比部分刻意区分三件事：**摩尔比**（配方）、**试剂实际含量**（瓶签）、**含水量**（独立水分 + 额外加水）。
-计算不会自动把"含量不足 100% 的差额"当作水——杂质不是水；水合物请直接用该水合物的摩尔质量。
+The calculator deliberately separates three things that are easy to mix up: the **molar ratio** (the formulation),
+the **reagent assay** (what the bottle actually contains) and the **water** (separate water plus extra water added).
+A shortfall from 100% active content is **never** silently treated as water — impurities are not water — and for a
+hydrate you should use the molar mass of that hydrate instead of entering crystal water twice.
 
-## 运行
+## Running it
 
-双击 `Start DES Lab.cmd`（首次会自动建 `.venv` 并安装依赖），浏览器打开 <http://127.0.0.1:8514>。
-停止：双击 `Stop DES Lab.cmd`。
+Double-click `Start DES Lab.cmd` (the first run creates `.venv` and installs dependencies), then open
+<http://127.0.0.1:8514>. To stop it, double-click `Stop DES Lab.cmd`.
 
-手动运行：
+Manually:
 
 ```powershell
 python -m venv .venv
@@ -27,9 +32,9 @@ python -m venv .venv
 .venv\Scripts\python -m streamlit run Hello.py --server.port 8514
 ```
 
-## 实测数据示例
+## Recorded runs (sample)
 
-`sample_data/my_des_runs.csv` 已录入 3 组 ChCl:GA 实验（每组 n=1，故不显示误差棒）：
+`sample_data/my_des_runs.csv` holds three ChCl:GA runs, one measurement per condition (so no error bars):
 
 | sample_id | formulation | biomass_g | lignin_mg | lignin_yield_pct |
 | --- | --- | --- | --- | --- |
@@ -37,53 +42,56 @@ python -m venv .venv
 | EXP-02 | ChCl-GA 1:2 | 2.88 | 56.0 | 1.94 |
 | EXP-03 | ChCl-GA 2:1 | 1.9545 | 15.2 | 0.78 |
 
-木质素得率 (%) = 木质素质量 (mg) ÷ [生物质质量 (g) × 1000] × 100% ＝ 木质素质量 (mg) ÷ [生物质质量 (g) × 10]
+Lignin yield (%) = lignin mass (mg) ÷ [biomass mass (g) × 1000] × 100% = lignin mass (mg) ÷ [biomass mass (g) × 10].
 
-`sample_data/demo_lignin.csv` 是 9 条**完全虚构**的数据，只用于演示操作。
+`sample_data/demo_lignin.csv` is 9 rows of **entirely fictitious** data used to demonstrate the workflow.
 
-## 数据约定
+## Experiment records
 
-- 每行 = 一次测量；同名列必须同单位；列名写清单位（如 `lignin_mg`、`lignin_yield_pct`）。
-- Excel 先另存为 **CSV UTF-8**；中文 CSV 读取失败时把编码切换为 `gb18030`。
-- 程序不换算单位、不填补缺失值、不自动删除重复行；非数值/缺失行会被排除并列出原因。
-- 数据只在本机内存里处理，不上传、不落盘。
+`data/` holds the lab record (this repository is **private**):
 
-## 实验数据记录
+- `DES实验数据记录.xlsx` — four sheets: the run log (ChCl:GA 1:1 / 1:2 / 2:1 with biomass and lignin, yield computed
+  by formula: 1.13% / 1.94% / 0.78%), records recovered from chat history (operations, supervisor instructions, plans,
+  literature comparisons), analytical measurements (fibre dimensions, Sample E NMR) and notes. Sheet text is in Chinese.
+- `Codex聊天记录_实验数据提取.md` — the full extraction report: which sessions were scanned, what was found, and what
+  was **not** found (the three yields above exist only in the workbook, not in any chat log).
 
-`data/` 放实验记录（仓库为**私有**，只有你自己能看到）：
+> The yields in the workbook are formulas. Edit values in Excel / LibreOffice and save; do not edit the sheet as text.
 
-- `DES实验数据记录.xlsx` —— 4 张表：**实验记录**（ChCl:GA 1:1 / 1:2 / 2:1 的 biomass 与 lignin，
-  得率用公式自动算：1.13% / 1.94% / 0.78%）、**聊天记录提取**（从 Codex/ChatGPT 会话里整理出的
-  实验操作、导师指示、计划、文献对照）、**分析测量记录**（纤维尺寸、Sample E 的 NMR）、**说明**。
-- `Codex聊天记录_实验数据提取.md` —— 同一次整理的完整报告：扫描了哪些会话、找到了什么、
-  以及**没找到**什么（你在对话里口述的三组产率数据不在任何聊天记录里）。
+## Data conventions
 
-> Excel 里得率是公式：用 Excel / LibreOffice 打开改数值再保存即可，不要在脚本文本编辑器里改。
+- One row = one measurement; identically named columns must use identical units; put units in the column name
+  (`lignin_mg`, `lignin_yield_pct`).
+- Save Excel as **CSV UTF-8**; if a Chinese CSV fails to load, switch the encoding to `gb18030`.
+- Units are never converted, missing measurements are never filled in, duplicate rows are never deleted automatically.
+  Non-numeric or incomplete rows are excluded from the summary and listed with the reason.
+- Everything runs in the local process; uploads are not persisted anywhere.
 
-## 测试
+## Tests
 
 ```powershell
 .venv\Scripts\python -m unittest discover -s tests -v
 ```
 
-覆盖：配比质量守恒、称量基准、杂质≠水、非法输入、CSV 合并与统计（含 inf/缺失/重复表头）、
-示例数据标准差、实测得率与 `lignin_mg / biomass_g / 10` 的一致性、CSV 公式注入转义、PNG/SVG 导出，
-以及三个页面在 `streamlit.testing.v1.AppTest` 下无异常运行（共 13 项，全部通过）。
+Covers mass balance of the recipe, weighing bases, "impurity is not water", invalid inputs, CSV merging and
+summaries (including inf / missing / duplicate headers), demo SD values, consistency of the recorded yields with
+`lignin_mg / biomass_g / 10`, CSV formula-injection escaping, PNG/SVG export, and headless runs of all three pages
+through `streamlit.testing.v1.AppTest` — 13 tests, all passing.
 
-## 目录
+## Layout
 
 ```
-Hello.py                    # 入口：st.set_page_config + st.navigation
-views.py                    # 三个页面：配比计算 / 结果与图表 / 使用说明
-lab_core.py                 # 配比计算、CSV 合并、分组统计（纯函数，便于测试）
-lab_plots.py                # matplotlib 绘图（柱 + 误差棒 + 散点）
-sample_data/                # demo_lignin.csv（虚构）/ my_des_runs.csv（实测）
-data/                       # 实验数据记录 Excel + 聊天记录提取报告
-tests/test_lab.py           # 计算与 IO 的 unittest
-tests/test_app_pages.py     # 用 AppTest 无头跑三个页面
+Hello.py                    # entry: st.set_page_config + st.navigation
+views.py                    # three pages: calculator / results & figures / guide
+lab_core.py                 # recipe mass balance, CSV merging, grouped summary (pure functions)
+lab_plots.py                # matplotlib figure: mean bars + error bars + raw points
+sample_data/                # demo_lignin.csv (fictitious) / my_des_runs.csv (recorded)
+data/                       # experiment workbook + chat-history extraction report
+tests/test_lab.py           # unittest for the calculation and IO layer
+tests/test_app_pages.py     # headless page tests with AppTest
 Start.ps1 / Stop.ps1
 ```
 
-## 许可证
+## Licence
 
-Apache License 2.0，见 [LICENSE](LICENSE)。原项目版权归 Streamlit Inc.，本仓库为其改造版本。
+Apache License 2.0, see [LICENSE](LICENSE). Original copyright Streamlit Inc.; this is a modified derivative.

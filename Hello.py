@@ -12,24 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified 2026-10-14: Chinese DES preparation calculator and experimental results workbench.
-"""入口脚本：注册三个页面并运行。计算与绘图逻辑见 lab_core.py / lab_plots.py，页面见 views.py。"""
+# Modified 2026-10-14: DES preparation calculator and experimental results workbench.
+"""Entry script: register the three pages and run. Logic lives in lab_core.py / lab_plots.py, pages in views.py."""
 import streamlit as st
 
 import views
 
-st.set_page_config(page_title="DES Lab · 实验工作台", page_icon="🧪", layout="wide")
+st.set_page_config(page_title="DES Lab · Experiment Workbench", page_icon="🧪", layout="wide")
 
 with st.sidebar:
     st.title("🧪 DES Lab")
-    st.caption("实验工作台 / LOCAL EDITION")
+    st.caption("Experiment workbench / LOCAL EDITION")
 
 page = st.navigation([
-    st.Page(views.calculator, title="DES 配比计算", icon="🧪", default=True),
-    st.Page(views.results, title="实验结果与图表", icon="📊", url_path="results"),
-    st.Page(views.guide, title="使用说明与模板", icon="📖", url_path="guide"),
+    st.Page(views.calculator, title="DES Recipe Calculator", icon="🧪", default=True),
+    st.Page(views.results, title="Results & Figures", icon="📊", url_path="results"),
+    st.Page(views.guide, title="Guide & Templates", icon="📖", url_path="guide"),
 ])
 page.run()
 
 st.sidebar.divider()
-st.sidebar.caption("本机运行 · 配方可追溯 · CSV / PNG / SVG")
+st.sidebar.caption("Runs locally · traceable recipes · CSV / PNG / SVG")
