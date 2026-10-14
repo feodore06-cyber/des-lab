@@ -112,10 +112,36 @@ STYLE = """
     pointer-events: none;
     animation: dshIntro 3s ease forwards;
   }
+  #dsh-splash .dsh-shine-wrap {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    animation: dshLogoIn 1.1s cubic-bezier(.2, .75, .25, 1) both;
+  }
   #dsh-splash img {
+    display: block;
     width: min(440px, 64vw);
     height: auto;
-    animation: dshLogoIn 1.1s cubic-bezier(.2, .75, .25, 1) both;
+  }
+  /* Universal-style light sweep: a soft beam travels left to right across the wordmark.
+     mix-blend-mode: screen keeps the white paper white and only brightens the navy/red ink. */
+  #dsh-splash .dsh-beam {
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    left: 0;
+    width: 30%;
+    background: linear-gradient(100deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, .18) 24%,
+      rgba(255, 255, 255, .85) 42%,
+      rgba(255, 255, 255, 1) 52%,
+      rgba(255, 255, 255, .18) 78%,
+      rgba(255, 255, 255, 0) 100%);
+    mix-blend-mode: screen;
+    transform: translateX(-170%) skewX(-16deg);
+    animation: dshBeam 2.0s cubic-bezier(.42, 0, .58, 1) .65s forwards;
+    pointer-events: none;
   }
   #dsh-splash .dsh-bar {
     width: min(230px, 42vw);
@@ -144,6 +170,10 @@ STYLE = """
     to   { opacity: 1; transform: none; }
   }
   @keyframes dshBar { to { width: 100%; } }
+  @keyframes dshBeam {
+    from { transform: translateX(-170%) skewX(-16deg); }
+    to   { transform: translateX(400%) skewX(-16deg); }
+  }
   /* 0–80 % opaque hold, last 20 % fade out and stop intercepting clicks */
   @keyframes dshIntro {
     0%   { opacity: 1; visibility: visible; }
@@ -153,16 +183,21 @@ STYLE = """
 
   @media (prefers-reduced-motion: reduce) {
     #dsh-splash { animation: dshIntro 1.4s ease forwards; }
-    #dsh-splash img, #dsh-splash .dsh-bar span, #dsh-splash .dsh-tag {
+    #dsh-splash img, #dsh-splash .dsh-bar span, #dsh-splash .dsh-tag,
+    #dsh-splash .dsh-shine-wrap {
       animation-duration: .2s; animation-delay: 0s;
     }
+    #dsh-splash .dsh-beam { display: none; }
   }
 </style>
 """
 
 SPLASH = """
 <div id="dsh-splash">
-  <img src="app/static/astar_logo.png" alt="A*STAR — Agency for Science, Technology and Research, Singapore">
+  <div class="dsh-shine-wrap">
+    <img src="app/static/astar_logo.png" alt="A*STAR — Agency for Science, Technology and Research, Singapore">
+    <span class="dsh-beam" aria-hidden="true"></span>
+  </div>
   <div class="dsh-bar"><span></span></div>
   <div class="dsh-tag">DES Lab · Experiment Workbench</div>
 </div>

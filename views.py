@@ -42,13 +42,26 @@ def calculator():
     st.write("Enter molar ratios and the real reagent assays to get a traceable weighing list.")
     st.info("The numbers below are a calculation example, not a recommended formulation. Update them from your "
             "reagent labels; a mass balance cannot prove that a mixture has formed a DES.")
+
+    st.markdown("**1 · Purity of each reagent**")
+    ideal = st.toggle("Assume 100 wt% purity (ideal)", value=False, key="ideal",
+                      help="On: every reagent is treated as 100% active, so the reagent to weigh equals the "
+                           "active mass. With no extra water the total prepared mass then equals the target "
+                           "mass. Off: type the real assay from each bottle into the table below.")
+    default_assay = 100.0 if ideal else 98.0
     components = st.data_editor(pd.DataFrame([
-        {"name": "ChCl (98 wt%)", "mw": 139.62, "ratio": 1.0, "assay_pct": 98.0, "water_pct": 0.0},
-        {"name": "Glyoxylic acid (98 wt%, solid)", "mw": 74.04, "ratio": 2.0, "assay_pct": 98.0, "water_pct": 0.0},
-    ]), column_config=LABELS, num_rows="dynamic", hide_index=True, width="stretch", key="components")
-    st.caption("Add a third component on the last row. Both reagents are entered as 98 wt% solids with no separate "
-               "water, so the missing 2% counts as non-water impurity — never as solvent. Enter any real water "
-               "separately.")
+        {"name": "ChCl", "mw": 139.62, "ratio": 1.0, "assay_pct": default_assay, "water_pct": 0.0},
+        {"name": "Glyoxylic acid (solid)", "mw": 74.04, "ratio": 2.0, "assay_pct": default_assay, "water_pct": 0.0},
+    ]), column_config=LABELS, num_rows="dynamic", hide_index=True, width="stretch",
+        disabled=["assay_pct"] if ideal else [], key="components")
+    if ideal:
+        components = components.copy()
+        components["assay_pct"] = 100.0
+    st.caption("Edit **Active content (wt%)** per row for the real bottle label (98, 99, 100 …). Below 100 %, the "
+               "missing part is impurity — never solvent water. Add a third component on the last row; enter any "
+               "real water separately in **Separate water (wt%)**.")
+
+    st.markdown("**2 · How much to prepare**")
     a, b, c = st.columns([2, 1, 1])
     basis_label = a.selectbox("Target mass basis",
                              ["Total active components (excluding solvent water)",
@@ -63,10 +76,24 @@ def calculator():
     except ValueError as exc:
         st.error(str(exc))
         return
-    a, b, c = st.columns(3)
+    active_sum = float(recipe["active_g"].sum())
+    weighed_sum = float(recipe["weigh_g"].sum())
+    over_pct = 100 * (weighed_sum / active_sum - 1) if active_sum else 0.0
+    st.markdown("**3 · Result**")
+    a, b, c, d = st.columns(4)
     a.metric("Total prepared mass", f"{totals['total_g']:.4f} g")
     b.metric("Entered water + extra water", f"{totals['known_water_g']:.4f} g")
     c.metric("Water mass fraction counted", f"{totals['known_water_pct']:.2f}%")
+    d.metric("Weighed above active mass", f"{over_pct:.2f}%",
+             help="How much extra reagent you weigh to deliver the same active amount because of the assay. "
+                  "0.00% means the reagents are being treated as 100 wt% pure.")
+    if over_pct < 1e-9 and not water:
+        st.success("Every reagent is 100 wt% and no extra water is added, so **total prepared mass = target mass** "
+                   "exactly. That is expected, not a bug: you are weighing only active component.")
+    else:
+        st.caption(f"Because of the assay you weigh **{over_pct:.2f}%** more reagent than the active mass it "
+                   f"delivers ({weighed_sum:.4f} g weighed for {active_sum:.4f} g active). "
+                   f"Set the assay to 100 % to see the ideal case where both are equal.")
     st.caption("Water accounting covers only the separate water you entered plus extra water; absorbed water, "
                "crystal water and evaporation are not estimated.")
     result_labels = {**LABELS, "moles": "Amount (mol)", "active_g": "Active component (g)",
@@ -84,6 +111,10 @@ def calculator():
         st.markdown("With molar ratio r, molar mass M and active content p (as a fraction): "
                     "active mass = k × r × M, and reagent to weigh = active mass / p. "
                     "The scale factor k follows from the selected target mass.")
+        st.markdown("**Purity**: at 98 wt% you weigh 1 / 0.98 = 2.04 % more reagent than the active mass it "
+                    "delivers. At 100 wt% the two are equal, so with no extra water the total prepared mass "
+                    "equals the target mass exactly. The missing percent at 98 wt% is impurity, and it is never "
+                    "counted as water or solvent.")
         st.markdown("Preset molar masses: [ChCl 139.62](https://www.sigmaaldrich.com/GI/en/product/sigma/c1879); "
                     "[glyoxylic acid 74.04](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150). "
                     "Both presets are 98 wt% solids with no separate water; the remaining 2% is impurity, not water.")

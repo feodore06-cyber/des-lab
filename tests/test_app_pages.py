@@ -51,7 +51,22 @@ class AppPageTests(unittest.TestCase):
         self.assertEqual(metrics[0], "10.2041 g")   # 4.9520 g ChCl + 5.2521 g glyoxylic acid
         self.assertEqual(metrics[1], "0.0000 g")    # solids only: the missing 2% is impurity, not water
         self.assertEqual(metrics[2], "0.00%")
+        self.assertEqual(metrics[3], "2.04%")       # 1 / 0.98 - 1: extra reagent weighed for the assay
         self.assertIn("Download recipe CSV", [b.label for b in at.download_button])
+
+    def test_calculator_ideal_purity_makes_total_equal_target(self):
+        at = run(page_calculator)
+        at.toggle[0].set_value(True).run()
+        self.assertEqual(errors(at), [])
+        metrics = [m.value for m in at.metric]
+        self.assertEqual(metrics[0], "10.0000 g")   # 100 wt%: total prepared mass == target mass
+        self.assertEqual(metrics[1], "0.0000 g")
+        self.assertEqual(metrics[2], "0.00%")
+        self.assertEqual(metrics[3], "0.00%")       # nothing weighed above the active mass
+        notes = " ".join(str(s.value).replace("**", "") for s in at.success)
+        self.assertIn("total prepared mass = target mass", notes)
+        weighing = next(t.value for t in at.dataframe if "Reagent to weigh (g)" in t.value.columns)
+        self.assertTrue((abs(weighing["Reagent to weigh (g)"] - weighing["Active component (g)"]) < 1e-9).all())
 
     def test_results_page_my_data(self):
         at = run(page_results)

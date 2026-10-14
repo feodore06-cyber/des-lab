@@ -21,6 +21,17 @@ not dosed as an aqueous solution here, so no water is carried in. A shortfall fr
 silently treated as water — the missing 2% is impurity — and for a hydrate you should use the molar mass of that
 hydrate instead of entering crystal water twice.
 
+Purity is a first-class input, because it changes what you weigh:
+
+- Type the real bottle assay per component into **Active content (wt%)**, or flip **Assume 100 wt% purity (ideal)**
+  to force every reagent to 100% (the assay column then becomes read-only).
+- The fourth metric, **Weighed above active mass**, shows the consequence: 98 wt% means you weigh
+  `1 / 0.98 − 1 = 2.04 %` more reagent than the active mass it delivers. At 100 wt% it shows `0.00 %`.
+- At 100 wt% with no extra water, **total prepared mass = target mass** exactly. That is expected, not a bug —
+  the app says so explicitly instead of leaving you to wonder where the difference went.
+
+> The assay changes how much you weigh; it never changes the molar ratio of the mixture you end up with.
+
 ## Running it
 
 Double-click `Start DES Lab.cmd` (the first run creates `.venv` and installs dependencies), then open
