@@ -175,6 +175,17 @@ class PageTests(unittest.TestCase):
         self.assertEqual(errors(at), [])
         self.assertEqual([t.value for t in at.title], [], "no page title before signing in")
         self.assertEqual(len(at.text_input), 2, "username + password fields")
+        # the form must not hint at a real account name
+        for field in at.text_input:
+            for name in ("Thena", "Chuanyu", "ChCl"):
+                self.assertNotIn(name, str(getattr(field, "placeholder", "") or ""))
+                self.assertNotIn(name, str(field.label or ""))
+
+        # pressing Sign in with both fields empty explains what is missing
+        at.button[0].click().run()
+        self.assertTrue(at.warning, "empty fields should warn, not claim a wrong password")
+        self.assertFalse(at.error)
+        self.assertIsNone(session_user(at))
 
         at.text_input[0].set_value("Thena")
         at.text_input[1].set_value("not-the-password")

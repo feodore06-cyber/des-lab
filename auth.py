@@ -181,18 +181,23 @@ def save_recipe(username: str, frame: pd.DataFrame) -> Path:
 
 # ------------------------------------------------------------------ login page
 def login_form() -> None:
-    """Render the sign-in gate. Caller stops the script when it returns."""
+    """Render the sign-in gate. Caller stops the script when it returns.
+
+    No placeholders and no names are shown here: a grey example like "Thena" both hints at a real
+    account and looks pre-filled, so the field is left blank instead.
+    """
     left, middle, right = st.columns([1, 1.1, 1])
     with middle:
         st.markdown("### Sign in")
-        st.caption("Each teammate signs in to their own record folder. "
-                   "Ask Chuanyu if your account is missing.")
+        st.caption("Each teammate signs in to their own record folder. Ask your lab lead for an account.")
         with st.form("login", clear_on_submit=False):
-            username = st.text_input("Username", placeholder="Thena")
-            password = st.text_input("Password", type="password", placeholder="••••••••")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
             submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
         if submitted:
-            if login(username, password):
+            if not username.strip() or not password:
+                st.warning("Enter both your username and password.")
+            elif login(username, password):
                 st.rerun()
             else:
                 st.error("Unknown username or wrong password.")

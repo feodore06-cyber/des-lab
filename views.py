@@ -301,7 +301,7 @@ This is a local workbench built on Streamlit's official `hello` repository, keep
     with right:
         st.markdown("**Add a teammate**")
         with st.form("add_teammate", clear_on_submit=True):
-            name = st.text_input("Username", placeholder="e.g. Thena")
+            name = st.text_input("Username", placeholder="teammate's username")
             initial = st.text_input("Initial password", type="password")
             if st.form_submit_button("Add teammate"):
                 try:
