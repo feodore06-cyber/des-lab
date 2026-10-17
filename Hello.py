@@ -56,6 +56,12 @@ STYLE = """
   [data-testid="stSidebar"] hr { border-color: #DCE4F2; }
   [data-testid="stSidebar"] img { display: block; }
 
+  /* ---------- sign-in page ---------- */
+  /* the logo is served from static/ and centred in the column, so it sits on the page centre line;
+     it is drawn at 340 px because the source is 697 px wide (crisp at 2x scaling too) */
+  .dsh-login-brand { display: flex; justify-content: center; margin: 2.2vh 0 1.5rem; }
+  .dsh-login-brand img { width: min(370px, 100%); height: auto; display: block; }
+
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
     background: #FFFFFF;
@@ -219,7 +225,7 @@ if not st.session_state.get("_intro_shown"):
 auth.ensure_store()
 user = auth.current_user()
 if not user:
-    auth.login_form(str(LOGO_PATH))
+    auth.login_form(LOGO_URL)
     st.stop()
 
 # From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.

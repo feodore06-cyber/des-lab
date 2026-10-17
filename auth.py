@@ -180,17 +180,25 @@ def save_recipe(username: str, frame: pd.DataFrame) -> Path:
 
 
 # ------------------------------------------------------------------ login page
-def login_form(logo_path: str | None = None) -> None:
+def login_form(logo_url: str | None = None) -> None:
     """Render the sign-in gate. Caller stops the script when it returns.
 
     No placeholders and no names are shown here: a grey example like "Thena" both hints at a real
     account and looks pre-filled, so the field is left blank instead. The caller keeps the sidebar
     out of this page by not adding any sidebar elements before signing in.
     """
+    if logo_url:
+        # its own wider slot so the wordmark is drawn at full size (the form column is narrower)
+        logo_left, logo_mid, logo_right = st.columns([1, 1.9, 1])
+        with logo_mid:
+            st.markdown(
+                '<div class="dsh-login-brand">'
+                f'<img src="{logo_url}" alt="A*STAR - Agency for Science, Technology and Research, Singapore">'
+                "</div>",
+                unsafe_allow_html=True,
+            )
     left, middle, right = st.columns([1, 1.15, 1])
     with middle:
-        if logo_path:
-            st.image(logo_path, width=250)
         st.markdown("### Sign in")
         st.caption("Each teammate signs in to their own record folder. Ask your lab lead for an account.")
         with st.form("login", clear_on_submit=False):
