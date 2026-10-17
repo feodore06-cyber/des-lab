@@ -32,7 +32,8 @@ LOGO_URL = "app/static/astar_logo.png"
 STYLE = """
 <style>
   /* ---------- layout ---------- */
-  .stMainBlockContainer { max-width: 1180px; padding-top: 2.0rem; padding-bottom: 3rem; }
+  /* keep the first line clear of Streamlit's sticky header (about 3.75rem tall) */
+  .stMainBlockContainer { max-width: 1180px; padding-top: 4rem; padding-bottom: 3rem; }
   /* NOTE: never animate the app container's opacity from 0. If such an animation fails to
      run (background tab, animations disabled, a re-render resetting it) the whole app would
      stay invisible behind a white shell. The intro overlay below is the only moving part. */
@@ -207,23 +208,22 @@ SPLASH = """
 st.set_page_config(page_title="DES Lab · Experiment Workbench", page_icon=str(LOGO_PATH), layout="wide")
 st.markdown(STYLE, unsafe_allow_html=True)
 
-# st.logo pins the brand to the very top of the sidebar, above the page navigation.
-st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
-
 # Show the A*STAR intro once per browser session (about 3 seconds, then it fades away).
 if not st.session_state.get("_intro_shown"):
     st.session_state["_intro_shown"] = True
     st.markdown(SPLASH, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------- sign in ----
-# Every teammate signs in, then only sees their own record folder.
+# Every teammate signs in, then only sees their own record folder. Nothing is put in the sidebar
+# before this point, so the sign-in page has no sidebar at all - just the form in the middle.
 auth.ensure_store()
 user = auth.current_user()
 if not user:
-    auth.login_form()
-    st.sidebar.divider()
-    st.sidebar.caption("Team sign-in · records stay on this machine")
+    auth.login_form(str(LOGO_PATH))
     st.stop()
+
+# From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.
+st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
 
 page = st.navigation([
     st.Page(views.calculator, title="DES Recipe Calculator", icon="🧪", default=True),
