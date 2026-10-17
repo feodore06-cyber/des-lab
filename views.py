@@ -23,6 +23,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import auth
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 from lab_plots import figure_bytes, make_figure
 
@@ -107,6 +108,11 @@ def calculator():
     for name, value in totals.items():
         export[name] = value
     st.download_button("Download recipe CSV", csv_bytes(export), "des_recipe.csv", "text/csv")
+    user = auth.current_user()
+    if user:
+        if st.button("Save this weighing list to my records", key="save_recipe"):
+            saved = auth.save_recipe(user, export)
+            st.success(f"Saved to {saved}")
     with st.expander("Formulas and data sources"):
         st.markdown("With molar ratio r, molar mass M and active content p (as a fraction): "
                     "active mass = k × r × M, and reagent to weigh = active mass / p. "
@@ -124,18 +130,32 @@ def results():
     st.caption("02 / ANALYZE")
     st.title("Results and Figures")
     st.write("Merge data → choose conditions → check replicates and spread → export figures.")
-    source = st.radio("Data source", ["Fictitious demo (9 rows)", "My DES runs (3 conditions, n=1)", "Upload my CSV"],
-                      horizontal=True, key="source")
-    if source.startswith("Fictitious"):
-        st.warning("DEMO · The 9 rows below are entirely fictitious. They only demonstrate the workflow and are "
-                   "not your results or any literature value.")
-        files = [("demo_lignin.csv", DEMO_CSV.read_bytes())]
-        encoding, data_kind = "utf-8-sig", "synthetic_demo"
-    elif source.startswith("My DES"):
+    user = auth.current_user()
+    sources = (["My saved data"] if user else []) + [
+        "Sample: my DES runs (3 conditions, n=1)", "Fictitious demo (9 rows)", "Upload my CSV"]
+    source = st.radio("Data source", sources, horizontal=True, key="source")
+    if source.startswith("My saved"):
+        saved = auth.load_results(user)
+        if saved is None or saved.empty:
+            st.info("No rows in your record folder yet. Upload a CSV below and press **Save to my records**, or "
+                    "import the three recorded runs to start from.")
+            if st.button("Import the 3 recorded runs into my records", key="import_runs"):
+                auth.save_results(user, pd.read_csv(MY_CSV), append=False)
+                st.rerun()
+            return
+        st.caption(f"Loaded **{len(saved)} rows** from `{auth.results_path(user)}`.")
+        files = [(f"{user}_results.csv", auth.results_path(user).read_bytes())]
+        encoding, data_kind = "utf-8-sig", "user_saved"
+    elif source.startswith("Sample"):
         st.info("Three recorded runs: ChCl:GA = 1:1 / 1:2 / 2:1. Each condition was measured once, so no error "
                 "bar is drawn.")
         files = [("my_des_runs.csv", MY_CSV.read_bytes())]
         encoding, data_kind = "utf-8-sig", "my_experiments"
+    elif source.startswith("Fictitious"):
+        st.warning("DEMO · The 9 rows below are entirely fictitious. They only demonstrate the workflow and are "
+                   "not your results or any literature value.")
+        files = [("demo_lignin.csv", DEMO_CSV.read_bytes())]
+        encoding, data_kind = "utf-8-sig", "synthetic_demo"
     else:
         uploads = st.file_uploader("Choose one or more CSV files (one measurement per row; identical column "
                                    "names must use identical units)", type="csv", accept_multiple_files=True)
@@ -166,6 +186,14 @@ def results():
     with st.expander("Merged raw data (source file preserved)", expanded=False):
         st.dataframe(frame, hide_index=True, width="stretch")
         st.download_button("Download merged CSV", csv_bytes(frame), "merged_results.csv", "text/csv")
+        if user and data_kind == "user_uploaded":
+            st.divider()
+            st.caption(f"Saving writes to `{auth.results_path(user)}`, which only exists on this machine.")
+            mode = st.radio("Save mode", ["Append to my saved data", "Replace my saved data"],
+                            horizontal=True, key="save_mode")
+            if st.button("Save these rows to my records", key="save_results"):
+                path = auth.save_results(user, frame, append=mode.startswith("Append"))
+                st.success(f"Saved {len(frame)} rows to {path}")
     default_groups = [c for c in ["formulation", "temperature_C", "time_min"] if c in columns]
     groups = st.multiselect("Group by which experimental conditions?", columns, default=default_groups, key="groups")
     candidates = [c for c in columns if c not in groups and pd.to_numeric(frame[c], errors="coerce").notna().any()]
@@ -233,9 +261,10 @@ def guide():
 
 Lignin yield (%) = lignin mass (mg) ÷ [biomass mass (g) × 1000] × 100%.
 
-Data is processed in this local process only. Uploaded results are not saved; download anything you need before
-closing or refreshing the page. Files are aligned by column name, unmatched columns stay empty, units are never
-converted, missing measurements are never filled in and duplicates are never deleted automatically.
+Data is processed in this local process only. Uploaded results are only kept if you press **Save to my records**;
+download anything else you need before closing or refreshing the page. Files are aligned by column name, unmatched
+columns stay empty, units are never converted, missing measurements are never filled in and duplicates are never
+deleted automatically.
 
 This is a local workbench built on Streamlit's official `hello` repository, keeping the Apache-2.0 licence.
 """)
@@ -244,3 +273,39 @@ This is a local workbench built on Streamlit's official `hello` repository, keep
     st.download_button("Download blank record template", csv_bytes(pd.read_csv(DEMO_CSV).iloc[:0]),
                        "results_template.csv", "text/csv")
     st.link_button("Source project · streamlit/hello (Apache-2.0)", "https://github.com/streamlit/hello")
+
+    st.divider()
+    st.subheader("Account & team")
+    user = auth.current_user()
+    if not user:
+        st.info("Sign in to see your record folder here.")
+        return
+    st.markdown(f"Signed in as **{user}** · your records: `{auth.user_dir(user)}`")
+    st.caption("Everything you save stays in that folder on this machine. It is git-ignored, so it never reaches "
+               "GitHub.")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Change my password**")
+        with st.form("change_password", clear_on_submit=True):
+            first = st.text_input("New password", type="password")
+            second = st.text_input("Repeat new password", type="password")
+            if st.form_submit_button("Change password"):
+                if first != second:
+                    st.error("The two passwords do not match.")
+                elif len(first) < 6:
+                    st.error("Use at least 6 characters.")
+                else:
+                    auth.change_password(user, first)
+                    st.success("Password updated for this local account.")
+    with right:
+        st.markdown("**Add a teammate**")
+        with st.form("add_teammate", clear_on_submit=True):
+            name = st.text_input("Username", placeholder="e.g. Thena")
+            initial = st.text_input("Initial password", type="password")
+            if st.form_submit_button("Add teammate"):
+                try:
+                    auth.add_user(name, initial)
+                    st.success(f"Account created for {name.strip()}. Their records get their own folder.")
+                except ValueError as exc:
+                    st.error(str(exc))

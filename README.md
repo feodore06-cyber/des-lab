@@ -45,6 +45,23 @@ python -m venv .venv
 .venv\Scripts\python -m streamlit run Hello.py --server.port 8514
 ```
 
+## Team accounts and per-user records
+
+The app is shared by a team, so it asks who you are before showing anything. On first launch two accounts are
+seeded — **Thena** and **Chuanyu** — both with the password `ChCl/Ga(1:2)` (change them after the first sign-in).
+
+- Passwords are stored as **salted PBKDF2-HMAC-SHA256 hashes** in `user_data/users.json`; the plain text is never
+  written anywhere and the whole `user_data/` folder is git-ignored.
+- Each account owns a record folder, `user_data/records/<username>/`:
+  - `results.csv` — experiments saved from the Results page,
+  - `recipes/` — a timestamped copy of every weighing list you keep.
+- Switching accounts switches folders: one teammate's rows are never visible to another.
+- **Guide & Templates → Account & team** lets any signed-in teammate change their own password and add a newcomer.
+
+> **Scope of this login.** It keeps records apart on one shared machine; it is not internet-grade authentication.
+> Do not publish this app with these accounts and rely on it to protect data — for a public deployment put it behind
+> a real identity provider, or keep it on the lab machine / a private network.
+
 ## Look and feel
 
 - Opening the app — or opening any page in a new browser session — plays a **~3 second A\*STAR intro**: the logo
@@ -101,23 +118,27 @@ Lignin yield (%) = lignin mass (mg) ÷ [biomass mass (g) × 1000] × 100% = lign
 .venv\Scripts\python -m unittest discover -s tests -v
 ```
 
-Covers mass balance of the recipe, weighing bases, "impurity is not water", invalid inputs, CSV merging and
-summaries (including inf / missing / duplicate headers), demo SD values, consistency of the recorded yields with
-`lignin_mg / biomass_g / 10`, CSV formula-injection escaping, PNG/SVG export, and headless runs of all three pages
-through `streamlit.testing.v1.AppTest` — 13 tests, all passing.
+Covers accounts (salted hashes, wrong password, adding a teammate, sanitised folders), per-user record saving, mass
+balance of the recipe, weighing bases, "impurity is not water", invalid inputs, CSV merging and summaries (including
+inf / missing / duplicate headers), demo SD values, consistency of the recorded yields with `lignin_mg / biomass_g / 10`,
+CSV formula-injection escaping, PNG/SVG export, the sign-in gate, and headless runs of all three pages through
+`streamlit.testing.v1.AppTest` — 27 tests, all passing.
 
 ## Layout
 
 ```
-Hello.py                    # entry: branding stylesheet + A*STAR intro + st.navigation
+Hello.py                    # entry: branding, A*STAR intro, sign-in gate, st.navigation
+auth.py                     # accounts (PBKDF2 hashes) + per-user record folders
 views.py                    # three pages: calculator / results & figures / guide
 lab_core.py                 # recipe mass balance, CSV merging, grouped summary (pure functions)
 lab_plots.py                # matplotlib figure: mean bars + error bars + raw points
 static/astar_logo.png       # A*STAR logo (sidebar mark, browser favicon, intro animation)
 sample_data/                # demo_lignin.csv (fictitious) / my_des_runs.csv (recorded)
 data/                       # experiment workbook + chat-history extraction report
+user_data/                  # git-ignored: users.json + records/<username>/ on this machine
 tests/test_lab.py           # unittest for the calculation and IO layer
-tests/test_app_pages.py     # headless page tests with AppTest (incl. the intro-once behaviour)
+tests/test_app_pages.py     # headless page tests with AppTest (login gate, intro-once, per-user data)
+tests/test_auth.py          # accounts, hashing and per-user record files
 Start.ps1 / Stop.ps1
 ```
 

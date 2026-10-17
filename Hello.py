@@ -13,14 +13,15 @@
 # limitations under the License.
 #
 # Modified 2026-10-14: DES preparation calculator and experimental results workbench.
-"""Entry script: look and feel, the A*STAR intro, page registration.
+"""Entry script: look and feel, the A*STAR intro, sign-in, page registration.
 
-Logic lives in lab_core.py / lab_plots.py, page content in views.py.
+Logic lives in lab_core.py / lab_plots.py, accounts and record folders in auth.py, page content in views.py.
 """
 from pathlib import Path
 
 import streamlit as st
 
+import auth
 import views
 
 ROOT = Path(__file__).parent
@@ -214,6 +215,16 @@ if not st.session_state.get("_intro_shown"):
     st.session_state["_intro_shown"] = True
     st.markdown(SPLASH, unsafe_allow_html=True)
 
+# ---------------------------------------------------------------- sign in ----
+# Every teammate signs in, then only sees their own record folder.
+auth.ensure_store()
+user = auth.current_user()
+if not user:
+    auth.login_form()
+    st.sidebar.divider()
+    st.sidebar.caption("Team sign-in · records stay on this machine")
+    st.stop()
+
 page = st.navigation([
     st.Page(views.calculator, title="DES Recipe Calculator", icon="🧪", default=True),
     st.Page(views.results, title="Results & Figures", icon="📊", url_path="results"),
@@ -222,5 +233,9 @@ page = st.navigation([
 page.run()
 
 st.sidebar.divider()
-st.sidebar.caption("Experiment workbench / LOCAL EDITION")
+st.sidebar.caption(f"Signed in as **{user}**")
+st.sidebar.caption(f"Records: `user_data/records/{user}/`")
+if st.sidebar.button("Log out", use_container_width=True, key="logout"):
+    auth.logout()
+    st.rerun()
 st.sidebar.caption("Runs locally · traceable recipes · CSV / PNG / SVG")
