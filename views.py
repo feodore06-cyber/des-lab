@@ -139,7 +139,7 @@ def results():
         if saved is None or saved.empty:
             st.info("No rows in your record folder yet. Upload a CSV below and press **Save to my records**, or "
                     "import the three recorded runs to start from.")
-            if st.button("Import the 3 recorded runs into my records", key="import_runs"):
+            if st.button("Load the 3 example runs (Chuanyu's records) into my folder", key="import_runs"):
                 auth.save_results(user, pd.read_csv(MY_CSV), append=False)
                 st.rerun()
             return

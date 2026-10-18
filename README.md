@@ -50,6 +50,8 @@ python -m venv .venv
 The app is shared by a team, so it asks who you are before showing anything. On first launch two accounts are
 seeded — **Thena** and **Chuanyu** — both with the password `ChCl/Ga(1:2)` (change them after the first sign-in).
 
+- **Create a new account** straight from the sign-in page: a new teammate picks a name and password and is logged
+  in immediately with an **empty** record folder of their own — no rows are inherited from anybody.
 - Passwords are stored as **salted PBKDF2-HMAC-SHA256 hashes** in `user_data/users.json`; the plain text is never
   written anywhere and the whole `user_data/` folder is git-ignored.
 - Each account owns a record folder, `user_data/records/<username>/`:
@@ -59,8 +61,8 @@ seeded — **Thena** and **Chuanyu** — both with the password `ChCl/Ga(1:2)` (
 - **Guide & Templates → Account & team** lets any signed-in teammate change their own password and add a newcomer.
 
 > **Scope of this login.** It keeps records apart on one shared machine; it is not internet-grade authentication.
-> Do not publish this app with these accounts and rely on it to protect data — for a public deployment put it behind
-> a real identity provider, or keep it on the lab machine / a private network.
+> Sign-up is open to anyone who can reach the page — fine on a lab machine, but do not expose it publicly without
+> putting it behind a real identity provider.
 
 ## Look and feel
 

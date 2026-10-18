@@ -25,6 +25,7 @@ import streamlit as st
 
 ITERATIONS = 200_000
 SESSION_KEY = "auth_user"
+MODE_KEY = "login_mode"          # "signin" or "signup"
 DATA_DIR_ENV = "DESLAB_DATA_DIR"
 
 # Teammates seeded on the very first launch. Change the password in the app
@@ -109,6 +110,7 @@ def add_user(username: str, password: str) -> None:
         raise ValueError(f"{username} already exists.")
     users[username] = _entry(password)
     save_users(users)
+    user_dir(username)  # create the empty record folder straight away
 
 
 def change_password(username: str, password: str) -> None:
@@ -137,6 +139,7 @@ def current_user() -> str | None:
 
 def logout() -> None:
     st.session_state.pop(SESSION_KEY, None)
+    st.session_state.pop(MODE_KEY, None)
 
 
 def login(username: str, password: str) -> bool:
@@ -180,6 +183,37 @@ def save_recipe(username: str, frame: pd.DataFrame) -> Path:
 
 
 # ------------------------------------------------------------------ login page
+SIGNIN, SIGNUP = "signin", "signup"
+
+
+def _signup_form() -> None:
+    st.markdown("### Create account")
+    st.caption("A new account starts empty: your own record folder, no shared rows.")
+    with st.form("signup", clear_on_submit=False):
+        username = st.text_input("Username", help="1-32 characters: letters, digits, dot, dash or underscore.")
+        password = st.text_input("Password", type="password", help="At least 6 characters.")
+        confirm = st.text_input("Repeat password", type="password")
+        submitted = st.form_submit_button("Create my account", type="primary", use_container_width=True)
+    if submitted:
+        name = username.strip()
+        if not name:
+            st.warning("Choose a username.")
+        elif password != confirm:
+            st.error("The two passwords do not match.")
+        else:
+            try:
+                add_user(name, password)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                if login(name, password):
+                    st.session_state.pop(MODE_KEY, None)
+                    st.rerun()
+    if st.button("Back to sign in", use_container_width=True, key="go_signin"):
+        st.session_state[MODE_KEY] = SIGNIN
+        st.rerun()
+
+
 def login_form(logo_url: str | None = None) -> None:
     """Render the sign-in gate. Caller stops the script when it returns.
 
@@ -197,10 +231,16 @@ def login_form(logo_url: str | None = None) -> None:
                 "</div>",
                 unsafe_allow_html=True,
             )
+    if st.session_state.get(MODE_KEY) == SIGNUP:
+        left, middle, right = st.columns([1, 1.15, 1])
+        with middle:
+            _signup_form()
+        return
+
     left, middle, right = st.columns([1, 1.15, 1])
     with middle:
         st.markdown("### Sign in")
-        st.caption("Each teammate signs in to their own record folder. Ask your lab lead for an account.")
+        st.caption("Each teammate signs in to their own record folder.")
         with st.form("login", clear_on_submit=False):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
@@ -209,6 +249,12 @@ def login_form(logo_url: str | None = None) -> None:
             if not username.strip() or not password:
                 st.warning("Enter both your username and password.")
             elif login(username, password):
+                st.session_state.pop(MODE_KEY, None)
                 st.rerun()
             else:
                 st.error("Unknown username or wrong password.")
+        st.divider()
+        st.caption("New teammate?")
+        if st.button("Create a new account", use_container_width=True, key="go_signup"):
+            st.session_state[MODE_KEY] = SIGNUP
+            st.rerun()

@@ -47,6 +47,15 @@ def run(page, user="Chuanyu"):
     return at
 
 
+def press(at, label):
+    """Click the first button with this label and rerun."""
+    matches = [b for b in at.button if b.label == label]
+    assert matches, f"no button labelled {label!r}, have {[b.label for b in at.button]}"
+    matches[0].click()
+    at.run()
+    return at
+
+
 def errors(at):
     return [str(e.value) for e in at.exception]
 
@@ -131,7 +140,7 @@ class PageTests(unittest.TestCase):
         at = run(page_results)
         self.assertEqual(errors(at), [])
         self.assertEqual(at.radio[0].value, "My saved data", "saved data should be the default source")
-        self.assertIn("Import the 3 recorded runs into my records", [b.label for b in at.button])
+        self.assertIn("Load the 3 example runs (Chuanyu's records) into my folder", [b.label for b in at.button])
 
     def test_results_page_reads_only_the_signed_in_users_records(self):
         rows = pd.DataFrame({"formulation": ["ChCl-GA 1:2"] * 3, "replicate": [1, 2, 3],
@@ -143,7 +152,7 @@ class PageTests(unittest.TestCase):
         # Thena has no file: her page must not show Chuanyu's rows
         other = run(page_results, user="Thena")
         self.assertEqual(errors(other), [])
-        self.assertIn("Import the 3 recorded runs into my records", [b.label for b in other.button])
+        self.assertIn("Load the 3 example runs (Chuanyu's records) into my folder", [b.label for b in other.button])
 
     # ----------------------------------------------------------------------- guide
     def test_guide_page_shows_account_tools(self):
@@ -182,22 +191,55 @@ class PageTests(unittest.TestCase):
                 self.assertNotIn(name, str(field.label or ""))
 
         # pressing Sign in with both fields empty explains what is missing
-        at.button[0].click().run()
+        self.assertIn("Create a new account", [b.label for b in at.button])
+        press(at, "Sign in")
         self.assertTrue(at.warning, "empty fields should warn, not claim a wrong password")
         self.assertFalse(at.error)
         self.assertIsNone(session_user(at))
 
         at.text_input[0].set_value("Thena")
         at.text_input[1].set_value("not-the-password")
-        at.button[0].click().run()
+        press(at, "Sign in")
         self.assertTrue(at.error, "a wrong password must be rejected")
         self.assertIsNone(session_user(at))
 
         at.text_input[0].set_value("Thena")
         at.text_input[1].set_value(auth.DEFAULT_PASSWORD)
-        at.button[0].click().run()
+        press(at, "Sign in")
         self.assertEqual(session_user(at), "Thena")
         self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+
+    def test_create_account_starts_with_an_empty_record_folder(self):
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.run()
+        self.assertEqual(errors(at), [])
+
+        press(at, "Create a new account")
+        self.assertEqual(errors(at), [])
+        markup = chr(10).join(str(m.value) for m in at.markdown)
+        self.assertIn("### Create account", markup)
+        self.assertEqual(len(at.text_input), 3, "username + password + repeat")
+
+        # mismatched passwords are refused
+        at.text_input[0].set_value("Wei")
+        at.text_input[1].set_value("first-password")
+        at.text_input[2].set_value("second-password")
+        press(at, "Create my account")
+        self.assertTrue(at.error)
+        self.assertIsNone(session_user(at))
+        self.assertNotIn("Wei", auth.load_users())
+
+        # a proper sign-up logs the new teammate in, with their own empty folder
+        at.text_input[0].set_value("Wei")
+        at.text_input[1].set_value("wei-password")
+        at.text_input[2].set_value("wei-password")
+        press(at, "Create my account")
+        self.assertEqual(errors(at), [])
+        self.assertEqual(session_user(at), "Wei")
+        self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+        self.assertTrue(auth.user_dir("Wei").is_dir(), "record folder should exist immediately")
+        self.assertIsNone(auth.load_results("Wei"), "a new account must start with no rows")
+        self.assertIsNone(auth.load_results("Thena"), "and must not inherit anyone else's rows")
 
 
 if __name__ == "__main__":
