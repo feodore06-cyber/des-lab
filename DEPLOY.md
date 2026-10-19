@@ -62,16 +62,23 @@ git push
    - Repository: `feodore06-cyber/des-lab`
    - Branch: `main`
    - Main file path: `streamlit_app.py`
-4. **Advanced settings → Secrets**（可选，强烈建议）：
+4. **Advanced settings → Secrets**（强烈建议，一次填好）：
 
    ```toml
    DESLAB_HOSTED = "1"
    DESLAB_INVITE_CODE = "your-invite-code"
+
+   [accounts]
+   Chuanyu = "pick-a-strong-password"
+   Thena = "another-strong-password"
    ```
 
    - `DESLAB_HOSTED=1`：侧边栏显示"记录会丢失"的警告；
-   - `DESLAB_INVITE_CODE`：注册必须填邀请码，防止陌生人建号。
+   - `DESLAB_INVITE_CODE`：注册必须填邀请码，防止陌生人建号；
+   - `[accounts]`：**首次启动时用这里的用户名和密码建立账号**——这样公网上不会出现 README 里那个已知密码。
 5. **Deploy**，等 1–2 分钟，得到网址 `https://<你的名字>-des-lab.streamlit.app`。
+
+> 也可以直接点 README 顶部的 **Deploy to Streamlit** 徽章，它会预填好仓库、分支和入口文件。
 
 ### 4. 上线后要做的事
 

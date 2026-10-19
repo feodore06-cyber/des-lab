@@ -5,6 +5,10 @@
 
 ---
 
+[![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=https://github.com/feodore06-cyber/des-lab&branch=main&mainModule=streamlit_app.py)
+
+Public hosting, step by step: **[DEPLOY.md](DEPLOY.md)** (Streamlit Community Cloud / Render with a disk / Cloudflare tunnel).
+
 ## 1. 怎么打开
 
 1. 双击 **`Start DES Lab.cmd`**（第一次运行会自动建 `.venv` 并安装依赖，需要联网，约 1–3 分钟）。

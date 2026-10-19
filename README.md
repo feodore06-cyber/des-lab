@@ -32,6 +32,10 @@ Purity is a first-class input, because it changes what you weigh:
 
 > The assay changes how much you weigh; it never changes the molar ratio of the mixture you end up with.
 
+[![Deploy to Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=https://github.com/feodore06-cyber/des-lab&branch=main&mainModule=streamlit_app.py)
+
+Public hosting, step by step: **[DEPLOY.md](DEPLOY.md)** (Streamlit Community Cloud / Render with a disk / Cloudflare tunnel).
+
 ## Running it
 
 Double-click `Start DES Lab.cmd` (the first run creates `.venv` and installs dependencies), then open

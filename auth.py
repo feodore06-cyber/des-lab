@@ -92,11 +92,26 @@ def save_users(users: dict) -> None:
     tmp.replace(path)
 
 
+def seeded_accounts() -> dict:
+    """Accounts created on the very first launch.
+
+    ``[accounts]`` in Streamlit secrets wins over the built-in defaults, so a hosted deployment can
+    start with its own names and passwords instead of the ones documented in the README.
+    """
+    try:
+        accounts = dict(st.secrets.get("accounts") or {})
+    except Exception:  # no secrets file, or secrets unavailable
+        accounts = {}
+    if accounts:
+        return {str(name): str(password) for name, password in accounts.items()}
+    return {name: DEFAULT_PASSWORD for name in SEED_USERS}
+
+
 def ensure_store() -> dict:
     """Create the store with the seeded teammates if it does not exist yet."""
     users = load_users()
     if not users:
-        users = {name: _entry(DEFAULT_PASSWORD) for name in SEED_USERS}
+        users = {name: _entry(password) for name, password in seeded_accounts().items()}
         save_users(users)
     return users
 

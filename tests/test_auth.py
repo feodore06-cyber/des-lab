@@ -37,6 +37,20 @@ class AuthTests(unittest.TestCase):
         self.assertNotEqual(users["Thena"]["salt"], users["Chuanyu"]["salt"])
         self.assertNotEqual(users["Thena"]["hash"], users["Chuanyu"]["hash"])
 
+    def test_accounts_can_be_seeded_from_secrets(self):
+        """A hosted deployment can seed its own accounts instead of the documented defaults."""
+        import streamlit as st
+
+        original = st.secrets
+        try:
+            st.secrets = {"accounts": {"Wei": "deploy-secret", "Thena": "another-secret"}}
+            users = auth.ensure_store()
+            self.assertEqual(set(users), {"Wei", "Thena"})
+            self.assertTrue(auth.verify("Wei", "deploy-secret"))
+            self.assertFalse(auth.verify("Wei", auth.DEFAULT_PASSWORD))
+        finally:
+            st.secrets = original
+
     def test_wrong_password_and_unknown_user(self):
         auth.ensure_store()
         self.assertFalse(auth.verify("Thena", "wrong"))
