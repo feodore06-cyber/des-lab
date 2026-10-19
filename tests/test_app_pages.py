@@ -178,6 +178,29 @@ class PageTests(unittest.TestCase):
         at.run()  # a rerun in the same session must not replay the intro
         self.assertNotIn('id="dsh-splash"', "\n".join(str(m.value) for m in at.markdown))
 
+    def test_signup_can_require_an_invite_code(self):
+        os.environ[auth.INVITE_ENV] = "lab-code-2026"
+        try:
+            at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+            at.run()
+            press(at, "Create a new account")
+            self.assertEqual(len(at.text_input), 4, "the invite code adds a fourth field")
+
+            at.text_input[0].set_value("Wei")
+            at.text_input[1].set_value("wei-password")
+            at.text_input[2].set_value("wei-password")
+            at.text_input[3].set_value("wrong-code")
+            press(at, "Create my account")
+            self.assertTrue(at.error, "a wrong invite code must be refused")
+            self.assertNotIn("Wei", auth.load_users())
+
+            at.text_input[3].set_value("lab-code-2026")
+            press(at, "Create my account")
+            self.assertEqual(session_user(at), "Wei")
+            self.assertIn("Wei", auth.load_users())
+        finally:
+            os.environ.pop(auth.INVITE_ENV, None)
+
     def test_login_gate_blocks_the_app_and_accepts_the_seeded_password(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()

@@ -231,6 +231,11 @@ if not user:
 # From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.
 st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
 
+if auth.hosted_mode():
+    st.sidebar.warning(
+        "Hosted mode: files in `user_data/` live in this container only and are lost when the app "
+        "restarts or redeploys. Download anything you need to keep.", icon="⚠️")
+
 page = st.navigation([
     st.Page(views.calculator, title="DES Recipe Calculator", icon="🧪", default=True),
     st.Page(views.results, title="Results & Figures", icon="📊", url_path="results"),

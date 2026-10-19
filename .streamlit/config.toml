@@ -9,7 +9,8 @@ font = "sans serif"
 gatherUsageStats = false
 
 [server]
-address = "127.0.0.1"
+# NOTE: no `address` here on purpose. Hosted platforms choose the bind address themselves;
+# Start.ps1 passes --server.address 127.0.0.1 (or 0.0.0.0 with -Share) for local runs.
 headless = true
 maxUploadSize = 50
 enableStaticServing = true

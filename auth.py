@@ -27,6 +27,8 @@ ITERATIONS = 200_000
 SESSION_KEY = "auth_user"
 MODE_KEY = "login_mode"          # "signin" or "signup"
 DATA_DIR_ENV = "DESLAB_DATA_DIR"
+INVITE_ENV = "DESLAB_INVITE_CODE"      # when set, sign-up requires this code
+HOSTED_ENV = "DESLAB_HOSTED"           # when set, warn that storage is ephemeral
 
 # Teammates seeded on the very first launch. Change the password in the app
 # (Guide & Templates -> Account) as soon as the real team is set up.
@@ -150,6 +152,15 @@ def login(username: str, password: str) -> bool:
 
 
 # ---------------------------------------------------------------- record files
+def hosted_mode() -> bool:
+    """True when running on a host whose filesystem does not persist (Streamlit Cloud, ...)."""
+    return bool(os.environ.get(HOSTED_ENV))
+
+
+def invite_required() -> bool:
+    return bool(os.environ.get(INVITE_ENV))
+
+
 def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Path:
     """Store a results table in the user's folder, appending or replacing."""
     path = results_path(username)
@@ -193,11 +204,15 @@ def _signup_form() -> None:
         username = st.text_input("Username", help="1-32 characters: letters, digits, dot, dash or underscore.")
         password = st.text_input("Password", type="password", help="At least 6 characters.")
         confirm = st.text_input("Repeat password", type="password")
+        invite_needed = os.environ.get(INVITE_ENV)
+        invite = st.text_input("Invite code", type="password") if invite_needed else ""
         submitted = st.form_submit_button("Create my account", type="primary", use_container_width=True)
     if submitted:
         name = username.strip()
         if not name:
             st.warning("Choose a username.")
+        elif invite_needed and invite.strip() != invite_needed:
+            st.error("That invite code is not valid.")
         elif password != confirm:
             st.error("The two passwords do not match.")
         else:
