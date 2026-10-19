@@ -4,7 +4,8 @@ A small local browser workbench for DES (deep eutectic solvent) experiments:
 **work out a recipe → organise results → plot and export**.
 Built on [streamlit/hello](https://github.com/streamlit/hello) (Apache-2.0); the original licence is kept.
 
-The interface is in **English**.
+The interface is **bilingual**: an **English / 中文** switch sits in the sidebar (and on the sign-in page), and
+every label, caption, warning and error message follows it. The choice is kept for the browser session.
 
 ## What it does
 

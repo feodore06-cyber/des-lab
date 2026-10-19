@@ -22,7 +22,9 @@ from pathlib import Path
 import streamlit as st
 
 import auth
+import i18n
 import views
+from i18n import t
 
 ROOT = Path(__file__).parent
 LOGO_PATH = ROOT / "static/astar_logo.png"
@@ -231,22 +233,23 @@ if not user:
 # From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.
 st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
 
+# English / 中文 switch - it lives in the sidebar and in session state, so it survives reruns.
+i18n.language_switch(st.sidebar)
+
 if auth.hosted_mode():
-    st.sidebar.warning(
-        "Hosted mode: files in `user_data/` live in this container only and are lost when the app "
-        "restarts or redeploys. Download anything you need to keep.", icon="⚠️")
+    st.sidebar.warning(t("app.hosted_warning"), icon="⚠️")
 
 page = st.navigation([
-    st.Page(views.calculator, title="DES Recipe Calculator", icon="🧪", default=True),
-    st.Page(views.results, title="Results & Figures", icon="📊", url_path="results"),
-    st.Page(views.guide, title="Guide & Templates", icon="📖", url_path="guide"),
+    st.Page(views.calculator, title=t("app.page_calc"), icon="🧪", default=True),
+    st.Page(views.results, title=t("app.page_results"), icon="📊", url_path="results"),
+    st.Page(views.guide, title=t("app.page_guide"), icon="📖", url_path="guide"),
 ])
 page.run()
 
 st.sidebar.divider()
-st.sidebar.caption(f"Signed in as **{user}**")
-st.sidebar.caption(f"Records: `user_data/records/{user}/`")
-if st.sidebar.button("Log out", use_container_width=True, key="logout"):
+st.sidebar.caption(t("app.sidebar_signed_in", user=user))
+st.sidebar.caption(t("app.sidebar_records", user=user))
+if st.sidebar.button(t("app.logout"), use_container_width=True, key="logout"):
     auth.logout()
     st.rerun()
-st.sidebar.caption("Runs locally · traceable recipes · CSV / PNG / SVG")
+st.sidebar.caption(t("app.sidebar_footer2"))

@@ -1,0 +1,441 @@
+# -*- coding: utf-8 -*-
+"""Tiny two-language layer (English / 中文) for the DES Lab interface.
+
+The chosen language lives in ``st.session_state`` so the switch survives reruns. ``t("key")`` returns
+the string for the current language, falling back to English. ``t()`` also accepts a full English
+sentence: if a translation exists for it (used for validation messages raised by other modules) it is
+translated, otherwise the sentence is returned unchanged - so passing arbitrary text is always safe.
+"""
+from __future__ import annotations
+
+import streamlit as st
+
+LANG_KEY = "ui_lang"
+DEFAULT_LANG = "en"
+OPTIONS = {"en": "English", "zh": "中文"}
+
+EN = {
+    # ------------------------------------------------------------------ app / sidebar
+    "app.page_calc": "DES Recipe Calculator",
+    "app.page_results": "Results & Figures",
+    "app.page_guide": "Guide & Templates",
+    "app.sidebar_signed_in": "Signed in as **{user}**",
+    "app.sidebar_records": "Records: `user_data/records/{user}/`",
+    "app.logout": "Log out",
+    "app.sidebar_footer1": "Experiment workbench / LOCAL EDITION",
+    "app.sidebar_footer2": "Runs locally · traceable recipes · CSV / PNG / SVG",
+    "app.hosted_warning": ("Hosted mode: files in `user_data/` live in this container only and are lost when "
+                           "the app restarts or redeploys. Download anything you need to keep."),
+    # ------------------------------------------------------------------ login / signup
+    "login.title": "Sign in",
+    "login.sub": "Each teammate signs in to their own record folder.",
+    "login.username": "Username",
+    "login.password": "Password",
+    "login.submit": "Sign in",
+    "login.new_teammate": "New teammate?",
+    "login.create": "Create a new account",
+    "login.need_both": "Enter both your username and password.",
+    "login.bad": "Unknown username or wrong password.",
+    "login.no_accounts": ("No accounts are configured for this deployment. Add an `[accounts]` table to the "
+                          "app's secrets (see DEPLOY.md) and reload."),
+    "signup.title": "Create account",
+    "signup.sub": "A new account starts empty: your own record folder, no shared rows.",
+    "signup.username_help": "1-32 characters: letters, digits, dot, dash or underscore.",
+    "signup.password_help": "At least 6 characters.",
+    "signup.repeat": "Repeat password",
+    "signup.invite": "Invite code",
+    "signup.submit": "Create my account",
+    "signup.back": "Back to sign in",
+    "signup.choose_name": "Choose a username.",
+    "signup.invite_bad": "That invite code is not valid.",
+    "signup.pw_mismatch": "The two passwords do not match.",
+    # ------------------------------------------------------------------ calculator
+    "calc.step": "01 / PREPARE",
+    "calc.title": "DES Recipe Calculator",
+    "calc.intro": "Enter molar ratios and the real reagent assays to get a traceable weighing list.",
+    "calc.info": ("The numbers below are a calculation example, not a recommended formulation. Update them from "
+                  "your reagent labels; a mass balance cannot prove that a mixture has formed a DES."),
+    "calc.s1": "**1 · Purity of each reagent**",
+    "calc.ideal": "Assume 100 wt% purity (ideal)",
+    "calc.ideal_help": ("On: every reagent is treated as 100% active, so the reagent to weigh equals the active "
+                        "mass. With no extra water the total prepared mass then equals the target mass. Off: type "
+                        "the real assay from each bottle into the table below."),
+    "calc.preset_chcl": "ChCl",
+    "calc.preset_ga": "Glyoxylic acid (solid)",
+    "calc.col_name": "Component / reagent form",
+    "calc.col_mw": "Molar mass (g/mol)",
+    "calc.col_ratio": "Molar ratio",
+    "calc.col_assay": "Active content (wt%)",
+    "calc.col_water": "Separate water (wt%)",
+    "calc.table_caption": ("Edit **Active content (wt%)** per row for the real bottle label (98, 99, 100 …). Below "
+                           "100 %, the missing part is impurity — never solvent water. Add a third component on the "
+                           "last row; enter any real water separately in **Separate water (wt%)**."),
+    "calc.s2": "**2 · How much to prepare**",
+    "calc.basis": "Target mass basis",
+    "calc.basis_active": "Total active components (excluding solvent water)",
+    "calc.basis_reagent": "Total reagent weighed (including carried water)",
+    "calc.target": "Target mass (g)",
+    "calc.water": "Extra water added (g)",
+    "calc.water_caption": ("Extra water is always added on top of the target mass. Hydrates: use the molar mass of "
+                           "the hydrate and do not enter its crystal water again as separate water."),
+    "calc.s3": "**3 · Result**",
+    "calc.m_total": "Total prepared mass",
+    "calc.m_water": "Entered water + extra water",
+    "calc.m_water_pct": "Water mass fraction counted",
+    "calc.m_over": "Weighed above active mass",
+    "calc.over_help": ("How much extra reagent you weigh to deliver the same active amount because of the assay. "
+                       "0.00% means the reagents are being treated as 100 wt% pure."),
+    "calc.success_ideal": ("Every reagent is 100 wt% and no extra water is added, so **total prepared mass = target "
+                           "mass** exactly. That is expected, not a bug: you are weighing only active component."),
+    "calc.caption_assay": ("Because of the assay you weigh **{over:.2f}%** more reagent than the active mass it "
+                           "delivers ({weighed:.4f} g weighed for {active:.4f} g active). Set the assay to 100 % to "
+                           "see the ideal case where both are equal."),
+    "calc.caption_water": ("Water accounting covers only the separate water you entered plus extra water; absorbed "
+                           "water, crystal water and evaporation are not estimated."),
+    "calc.moles": "Amount (mol)",
+    "calc.active_g": "Active component (g)",
+    "calc.weigh_g": "Reagent to weigh (g)",
+    "calc.water_g": "Carried water (g)",
+    "calc.weighing": "Weighing list",
+    "calc.download": "Download recipe CSV",
+    "calc.save": "Save this weighing list to my records",
+    "calc.saved": "Saved to {path}",
+    "calc.formulas": "Formulas and data sources",
+    "calc.formula_1": ("With molar ratio r, molar mass M and active content p (as a fraction): active mass = "
+                       "k × r × M, and reagent to weigh = active mass / p. The scale factor k follows from the "
+                       "selected target mass."),
+    "calc.formula_2": ("**Purity**: at 98 wt% you weigh 1 / 0.98 = 2.04 % more reagent than the active mass it "
+                       "delivers. At 100 wt% the two are equal, so with no extra water the total prepared mass "
+                       "equals the target mass exactly. The missing percent at 98 wt% is impurity, and it is never "
+                       "counted as water or solvent."),
+    "calc.formula_3": ("Preset molar masses: [ChCl 139.62](https://www.sigmaaldrich.com/GI/en/product/sigma/c1879); "
+                       "[glyoxylic acid 74.04](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150). Both "
+                       "presets are 98 wt% solids with no separate water; the remaining 2% is impurity, not water."),
+    # ------------------------------------------------------------------ results
+    "res.step": "02 / ANALYZE",
+    "res.title": "Results and Figures",
+    "res.intro": "Merge data → choose conditions → check replicates and spread → export figures.",
+    "res.source": "Data source",
+    "res.src_saved": "My saved data",
+    "res.src_sample": "Sample: my DES runs (3 conditions, n=1)",
+    "res.src_demo": "Fictitious demo (9 rows)",
+    "res.src_upload": "Upload my CSV",
+    "res.empty": ("No rows in your record folder yet. Upload a CSV below and press **Save to my records**, or "
+                  "import the three recorded runs to start from."),
+    "res.load_example": "Load the 3 example runs (Chuanyu's records) into my folder",
+    "res.loaded": "Loaded **{rows} rows** from `{path}`.",
+    "res.sample_info": ("Three recorded runs: ChCl:GA = 1:1 / 1:2 / 2:1. Each condition was measured once, so no "
+                        "error bar is drawn."),
+    "res.demo_warning": ("DEMO · The 9 rows below are entirely fictitious. They only demonstrate the workflow and "
+                         "are not your results or any literature value."),
+    "res.uploader": ("Choose one or more CSV files (one measurement per row; identical column names must use "
+                     "identical units)"),
+    "res.encoding": "File encoding",
+    "res.encoding_help": "If a Chinese CSV fails to load, choose gb18030.",
+    "res.upload_hint": "Upload a CSV, or open one of the samples. Save Excel files as CSV UTF-8 first.",
+    "res.read_error": "Cannot read the CSV: {error}",
+    "res.no_rows": "The file has no data rows.",
+    "res.m_rows": "Merged rows",
+    "res.m_files": "Source files",
+    "res.m_dupes": "Exact duplicate rows",
+    "res.dupes": ("Duplicate rows found and kept. Check whether the same file was imported twice; identical values "
+                  "can also be genuine replicates."),
+    "res.raw": "Merged raw data (source file preserved)",
+    "res.download_merged": "Download merged CSV",
+    "res.save_path": "Saving writes to `{path}`, which only exists on this machine.",
+    "res.save_mode": "Save mode",
+    "res.save_append": "Append to my saved data",
+    "res.save_replace": "Replace my saved data",
+    "res.save_button": "Save these rows to my records",
+    "res.saved_n": "Saved {rows} rows to {path}",
+    "res.groups": "Group by which experimental conditions?",
+    "res.need_group": "Select at least one grouping column and keep one numeric measurement column.",
+    "res.measure": "Measurement column (units in the name)",
+    "res.yield_caption": ("Lignin yield (%) = lignin mass (mg) ÷ [biomass mass (g) × 1000] × 100%. Group by every "
+                          "condition that defines a run (formulation, moisture, feedstock, temperature, time). Each "
+                          "row counts as one observation; the program cannot tell whether rows are independent "
+                          "replicates."),
+    "res.excluded": ("{rows} row(s) excluded from the summary: non-numeric / missing / infinite measurements "
+                     "{bad}, missing group values {missing} (causes can overlap). The raw data is preserved."),
+    "res.excluded_expander": "Rows excluded from the summary",
+    "res.no_valid": "No complete valid rows for the selected columns.",
+    "res.summary": "Grouped summary",
+    "res.summary_caption": ("n = valid measurements; mean = average; sd = sample standard deviation (ddof=1). With "
+                            "n=1 the sd is left blank and no error bar is drawn."),
+    "res.download_summary": "Download summary CSV",
+    "res.too_many": ("More than 30 groups. Narrow the data range before plotting; the summary can still be "
+                     "downloaded."),
+    "res.fig_title": "Figure title",
+    "res.fig_title_demo": "DEMO · fictitious example",
+    "res.fig_title_real": "DES pretreatment · lignin yield",
+    "res.yaxis": "Y-axis title / unit",
+    "res.fig_caption": ("Bar = mean · error bar = ±1 sample SD · dots = raw observations. Error bars are not a "
+                        "significance test."),
+    "res.download_png": "Download PNG · 300 dpi",
+    "res.download_svg": "Download SVG · vector",
+    # ------------------------------------------------------------------ guide
+    "guide.step": "03 / GUIDE",
+    "guide.title": "How to use",
+    "guide.body": """
+1. **Recipe calculator**: confirm the reagent form, molar mass, active content and separate water, enter the molar
+   ratios and target mass, then download the weighing list.
+2. **Results**: save Excel as CSV UTF-8; one row per measurement, with units in the column names. Pick "My saved data"
+   or upload your own files.
+3. **Group and plot**: choose the columns that define one experimental condition (for example `formulation`), pick
+   the measurement (for example `lignin_yield_pct`), then download the summary CSV or the figure.
+
+Lignin yield (%) = lignin mass (mg) ÷ [biomass mass (g) × 1000] × 100%.
+
+Data is processed in this local process only. Uploaded results are only kept if you press **Save to my records**;
+download anything else you need before closing or refreshing the page. Files are aligned by column name, unmatched
+columns stay empty, units are never converted, missing measurements are never filled in and duplicates are never
+deleted automatically.
+
+This is a local workbench built on Streamlit's official `hello` repository, keeping the Apache-2.0 licence.
+""",
+    "guide.dl_demo": "Download fictitious demo CSV",
+    "guide.dl_mine": "Download my experiment data CSV",
+    "guide.dl_template": "Download blank record template",
+    "guide.link_source": "Source project · streamlit/hello (Apache-2.0)",
+    "guide.account": "Account & team",
+    "guide.signin_hint": "Sign in to see your record folder here.",
+    "guide.signed_in": "Signed in as **{user}** · your records: `{path}`",
+    "guide.records_note": ("Everything you save stays in that folder on this machine. It is git-ignored, so it "
+                           "never reaches GitHub."),
+    "guide.change": "**Change my password**",
+    "guide.new_pw": "New password",
+    "guide.repeat_pw": "Repeat new password",
+    "guide.change_btn": "Change password",
+    "guide.pw_mismatch": "The two passwords do not match.",
+    "guide.pw_short": "Use at least 6 characters.",
+    "guide.pw_done": "Password updated for this local account.",
+    "guide.add": "**Add a teammate**",
+    "guide.username": "Username",
+    "guide.username_ph": "teammate's username",
+    "guide.initial_pw": "Initial password",
+    "guide.add_btn": "Add teammate",
+    "guide.added": "Account created for {user}. Their records get their own folder.",
+    # ------------------------------------------------------------------ validation messages
+    "Invalid user name": "用户名无效。",
+    "Use 1-32 characters: letters, digits, dot, dash or underscore.":
+        "用户名只能用 1–32 个字符：字母、数字、点、短横线或下划线。",
+    "Use a password with at least 6 characters.": "密码至少需要 6 个字符。",
+    "{user} already exists.": "{user} 已存在。",
+    "unknown user": "未知用户。",
+    "Target mass must be greater than 0.": "目标质量必须大于 0。",
+    "Extra water cannot be negative.": "额外加水量不能为负数。",
+    "Unknown target-mass basis.": "未知的质量基准。",
+    "Enter at least two components.": "至少填写两种组分。",
+    "Molar mass, ratio, active content and water must all be finite numbers.":
+        "摩尔质量、比例、有效含量和水分必须是有限数值。",
+    "Every component needs a name.": "每种组分都需要名称。",
+    "Molar mass, molar ratio and active content must be greater than 0.":
+        "摩尔质量、摩尔份数和有效含量必须大于 0。",
+    "Active content must be ≤100% and water must be ≥0%.": "有效含量须 ≤100%，水分须 ≥0%。",
+    "Active content plus separate water cannot exceed 100%.": "有效含量 + 独立水分不能超过 100%。",
+    "CSV headers cannot be empty or duplicated; use comma-separated values.":
+        "CSV 表头不能为空或重复；请使用逗号分隔。",
+    "_source_file is a reserved column used for source tracking; rename it first.":
+        "_source_file 是来源追踪保留列，请先重命名。",
+    "Choose at least one CSV file.": "请先选择 CSV 文件。",
+    "Choose grouping columns, and do not use the measurement column itself for grouping.":
+        "请选择分组列，且不要把测量值本身作为分组列。",
+}
+
+ZH = {
+    # ------------------------------------------------------------------ app / sidebar
+    "app.page_calc": "DES 配比计算",
+    "app.page_results": "实验结果与图表",
+    "app.page_guide": "使用说明与账号",
+    "app.sidebar_signed_in": "当前登录：**{user}**",
+    "app.sidebar_records": "记录目录：`user_data/records/{user}/`",
+    "app.logout": "退出登录",
+    "app.sidebar_footer1": "实验工作台 / 本机版",
+    "app.sidebar_footer2": "本机运行 · 配方可追溯 · CSV / PNG / SVG",
+    "app.hosted_warning": ("托管模式：`user_data/` 里的文件只存在这个容器里，应用重启或重新部署后会丢失。"
+                           "需要保留的内容请及时下载。"),
+    # ------------------------------------------------------------------ login / signup
+    "login.title": "登录",
+    "login.sub": "每位成员登录后进入自己的记录文件夹。",
+    "login.username": "用户名",
+    "login.password": "密码",
+    "login.submit": "登录",
+    "login.new_teammate": "新成员？",
+    "login.create": "创建新账号",
+    "login.need_both": "请填写用户名和密码。",
+    "login.bad": "用户名或密码不正确。",
+    "login.no_accounts": "这个部署还没有配置账号。请在应用的 secrets 里添加 `[accounts]`（见 DEPLOY.md）后刷新。",
+    "signup.title": "创建账号",
+    "signup.sub": "新账号是空的：只有你自己的记录文件夹，不会继承任何人的数据。",
+    "signup.username_help": "1–32 个字符：字母、数字、点、短横线或下划线。",
+    "signup.password_help": "至少 6 个字符。",
+    "signup.repeat": "再次输入密码",
+    "signup.invite": "邀请码",
+    "signup.submit": "创建我的账号",
+    "signup.back": "返回登录",
+    "signup.choose_name": "请填写用户名。",
+    "signup.invite_bad": "邀请码不正确。",
+    "signup.pw_mismatch": "两次输入的密码不一致。",
+    # ------------------------------------------------------------------ calculator
+    "calc.step": "01 / 配制",
+    "calc.title": "DES 配比计算",
+    "calc.intro": "输入摩尔比和试剂的真实含量，得到一张可追溯的称量清单。",
+    "calc.info": ("下面的数字只是计算示例，不是推荐配方。请按试剂瓶标签修改；质量平衡不能证明混合物已经形成 DES。"),
+    "calc.s1": "**1 · 各试剂纯度**",
+    "calc.ideal": "假设 100% 纯度（理想）",
+    "calc.ideal_help": ("打开：所有试剂都按 100% 有效计算，应称试剂就等于有效组分质量；不额外加水时，配制总质量"
+                        "等于目标质量。关闭：在下表里按瓶签填写真实含量。"),
+    "calc.preset_chcl": "氯化胆碱 ChCl",
+    "calc.preset_ga": "乙醛酸（固体）",
+    "calc.col_name": "组分 / 试剂形式",
+    "calc.col_mw": "摩尔质量 (g/mol)",
+    "calc.col_ratio": "摩尔份数",
+    "calc.col_assay": "有效含量 (wt%)",
+    "calc.col_water": "独立水分 (wt%)",
+    "calc.table_caption": ("逐行按瓶签改 **有效含量 (wt%)**（98、99、100…）。不足 100% 的部分是杂质，**不会**被当成"
+                           "溶剂水。最后一行可以加第三种组分；真正的水请单独填在 **独立水分 (wt%)**。"),
+    "calc.s2": "**2 · 配多少**",
+    "calc.basis": "目标质量基准",
+    "calc.basis_active": "有效组分合计（不含溶剂水）",
+    "calc.basis_reagent": "试剂称量合计（含带入水）",
+    "calc.target": "目标质量 (g)",
+    "calc.water": "额外加水 (g)",
+    "calc.water_caption": ("额外加水永远加在目标质量之外。水合物：请用该水合物的摩尔质量，不要把结晶水再填一次。"),
+    "calc.s3": "**3 · 结果**",
+    "calc.m_total": "配制总质量",
+    "calc.m_water": "已填报水量 + 额外加水",
+    "calc.m_water_pct": "已计入的水质量分数",
+    "calc.m_over": "比有效组分多称",
+    "calc.over_help": ("因为纯度不足，为了拿到同样多的有效组分而多称的试剂比例。显示 0.00% 表示按 100% 纯度计算。"),
+    "calc.success_ideal": ("所有试剂都是 100%，也没有额外加水，所以 **配制总质量 = 目标质量**。这是正常的，不是算错："
+                           "你称的只有有效组分。"),
+    "calc.caption_assay": ("因为纯度，你比有效组分多称了 **{over:.2f}%**（称了 {weighed:.4f} g，实际有效 {active:.4f} g）。"
+                           "把含量改成 100% 就能看到两者相等的理想情况。"),
+    "calc.caption_water": ("水的统计只包括你填的独立水分和额外加水；吸湿水、结晶水和蒸发都不估算。"),
+    "calc.moles": "物质的量 (mol)",
+    "calc.active_g": "有效组分 (g)",
+    "calc.weigh_g": "应称取试剂 (g)",
+    "calc.water_g": "带入水 (g)",
+    "calc.weighing": "称量清单",
+    "calc.download": "下载配方 CSV",
+    "calc.save": "把这张称量清单存进我的记录",
+    "calc.saved": "已保存到 {path}",
+    "calc.formulas": "计算公式与数据来源",
+    "calc.formula_1": ("设摩尔份数为 r、摩尔质量为 M、有效含量为 p（小数）：有效组分质量 = k × r × M，应称试剂 = "
+                       "有效组分质量 / p；系数 k 由所选目标质量决定。"),
+    "calc.formula_2": ("**纯度**：98% 时你要称 1 / 0.98 = 2.04 % 的额外试剂才拿到同样的有效组分。100% 时两者相等，"
+                       "不额外加水的话配制总质量正好等于目标质量。98% 里少掉的那部分是杂质，永远不算作水或溶剂。"),
+    "calc.formula_3": ("预设摩尔质量：[ChCl 139.62](https://www.sigmaaldrich.com/GI/en/product/sigma/c1879)；"
+                       "[乙醛酸 74.04](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150)。"
+                       "两者都按 98% 固体、无独立水分处理；剩下的 2% 是杂质，不是水。"),
+    # ------------------------------------------------------------------ results
+    "res.step": "02 / 分析",
+    "res.title": "实验结果与图表",
+    "res.intro": "合并数据 → 选择实验条件 → 看重复数与离散程度 → 导出图表。",
+    "res.source": "数据来源",
+    "res.src_saved": "我保存的数据",
+    "res.src_sample": "示例：我的 3 组 DES 实验（每组 n=1）",
+    "res.src_demo": "虚构演示数据（9 行）",
+    "res.src_upload": "上传我的 CSV",
+    "res.empty": "你的记录文件夹里还没有数据。可以在下面上传 CSV 后点 **存进我的记录**，或者先导入那三组示例数据。",
+    "res.load_example": "把 3 组示例数据（Chuanyu 的记录）导入我的文件夹",
+    "res.loaded": "已从 `{path}` 载入 **{rows} 行**。",
+    "res.sample_info": "三组已记录实验：ChCl:GA = 1:1 / 1:2 / 2:1。每个条件只测了一次，所以不画误差棒。",
+    "res.demo_warning": "演示 · 下面 9 行数据完全是虚构的，只用于演示流程，不是你的结果，也不是文献值。",
+    "res.uploader": "选择一个或多个 CSV（每行一次测量；同名列必须使用相同单位）",
+    "res.encoding": "文件编码",
+    "res.encoding_help": "中文 CSV 读取失败时，选择 gb18030。",
+    "res.upload_hint": "请上传 CSV，或打开示例数据。Excel 文件请先另存为 CSV UTF-8。",
+    "res.read_error": "无法读取 CSV：{error}",
+    "res.no_rows": "文件里没有数据行。",
+    "res.m_rows": "合并记录",
+    "res.m_files": "来源文件",
+    "res.m_dupes": "完全相同的重复行",
+    "res.dupes": "发现重复行，已保留。请确认是不是同一个文件导入了两次；相同数值也可能是真实的重复实验。",
+    "res.raw": "原始合并数据（保留来源文件）",
+    "res.download_merged": "下载合并 CSV",
+    "res.save_path": "保存会写入 `{path}`，这个文件只存在于本机。",
+    "res.save_mode": "保存方式",
+    "res.save_append": "追加到我的数据",
+    "res.save_replace": "替换我的数据",
+    "res.save_button": "把这些行存进我的记录",
+    "res.saved_n": "已保存 {rows} 行到 {path}",
+    "res.groups": "按哪些实验条件分组？",
+    "res.need_group": "至少选择一个分组列，并保留一个数值测量列。",
+    "res.measure": "测量值列（列名含单位）",
+    "res.yield_caption": ("木质素得率 (%) = 木质素质量 (mg) ÷ [生物质质量 (g) × 1000] × 100%。请把决定一次实验的所有条件"
+                          "（配方、含水、原料、温度、时间）都纳入分组。每行按一个观测值统计；程序无法判断它们是否是"
+                          "独立重复。"),
+    "res.excluded": ("有 {rows} 行未参加统计：非数值/缺失/无穷测量 {bad} 行，分组信息缺失 {missing} 行（原因可能重叠）。"
+                     "原始数据保留。"),
+    "res.excluded_expander": "查看未参加统计的记录",
+    "res.no_valid": "所选列没有完整的有效记录可用于统计。",
+    "res.summary": "分组汇总",
+    "res.summary_caption": ("n = 有效测量次数；mean = 均值；sd = 样本标准差（ddof=1）。n=1 时 sd 留空，不画误差棒。"),
+    "res.download_summary": "下载统计 CSV",
+    "res.too_many": "当前分组超过 30 个，请缩小数据范围后再画图；汇总仍可下载。",
+    "res.fig_title": "图标题",
+    "res.fig_title_demo": "演示 · 虚构示例",
+    "res.fig_title_real": "DES 预处理 · 木质素得率",
+    "res.yaxis": "纵轴标题 / 单位",
+    "res.fig_caption": "柱 = 均值 · 误差棒 = ±1 样本标准差 · 点 = 原始观测。误差棒不代表显著性检验。",
+    "res.download_png": "下载 PNG · 300 dpi",
+    "res.download_svg": "下载 SVG · 矢量图",
+    # ------------------------------------------------------------------ guide
+    "guide.step": "03 / 说明",
+    "guide.title": "使用说明",
+    "guide.body": """
+1. **配比计算**：确认试剂形式、摩尔质量、有效含量和独立水分，填写摩尔份数与目标质量，再下载称量清单。
+2. **实验结果**：把 Excel 另存为 CSV UTF-8；一行代表一次测量，列名写清单位。数据来源可选「我保存的数据」或自己上传。
+3. **分组与画图**：选择定义同一实验条件的列（例如 `formulation`），选择测量指标（例如 `lignin_yield_pct`），
+   然后下载汇总 CSV 或图片。
+
+木质素得率 (%) = 木质素质量 (mg) ÷ [生物质质量 (g) × 1000] × 100%。
+
+数据只在本机进程里处理。上传的结果只有点 **存进我的记录** 才会保留；其它内容请在关闭或刷新页面前下载。
+不同文件按列名对齐，未匹配的列保留为空；不换算单位、不填补缺失测量、不自动删除重复。
+
+这是基于 Streamlit 官方 `hello` 仓库改造的本机工作台，保留 Apache-2.0 许可证。
+""",
+    "guide.dl_demo": "下载虚构示例 CSV",
+    "guide.dl_mine": "下载我的实验数据 CSV",
+    "guide.dl_template": "下载空白记录模板",
+    "guide.link_source": "改造来源 · streamlit/hello (Apache-2.0)",
+    "guide.account": "账号与团队",
+    "guide.signin_hint": "登录后才能看到你的记录文件夹。",
+    "guide.signed_in": "当前登录：**{user}** · 你的记录：`{path}`",
+    "guide.records_note": "你保存的内容都留在这个文件夹里，本机可见。它已被 git 忽略，不会进 GitHub。",
+    "guide.change": "**修改我的密码**",
+    "guide.new_pw": "新密码",
+    "guide.repeat_pw": "再次输入新密码",
+    "guide.change_btn": "修改密码",
+    "guide.pw_mismatch": "两次输入的密码不一致。",
+    "guide.pw_short": "请至少使用 6 个字符。",
+    "guide.pw_done": "本机账号的密码已更新。",
+    "guide.add": "**添加成员**",
+    "guide.username": "用户名",
+    "guide.username_ph": "成员的用户名",
+    "guide.initial_pw": "初始密码",
+    "guide.add_btn": "添加成员",
+    "guide.added": "已为 {user} 创建账号，他会有自己的记录文件夹。",
+}
+
+STRINGS = {"en": EN, "zh": ZH}
+
+
+def lang() -> str:
+    value = st.session_state.get(LANG_KEY, DEFAULT_LANG)
+    return value if value in STRINGS else DEFAULT_LANG
+
+
+def t(key: str, **fmt) -> str:
+    """Translate a key (or a full English sentence) into the current language."""
+    text = STRINGS.get(lang(), EN).get(key) or EN.get(key, key)
+    return text.format(**fmt) if fmt else text
+
+
+def language_switch(location) -> None:
+    """Render the English / 中文 switcher inside the given container."""
+    with location:
+        st.radio("Language", list(OPTIONS), format_func=OPTIONS.get, horizontal=True,
+                 key=LANG_KEY, label_visibility="collapsed")

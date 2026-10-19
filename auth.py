@@ -23,6 +23,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from i18n import language_switch, t
+
 ITERATIONS = 200_000
 SESSION_KEY = "auth_user"
 MODE_KEY = "login_mode"          # "signin" or "signup"
@@ -220,33 +222,33 @@ SIGNIN, SIGNUP = "signin", "signup"
 
 
 def _signup_form() -> None:
-    st.markdown("### Create account")
-    st.caption("A new account starts empty: your own record folder, no shared rows.")
+    st.markdown("### " + t("signup.title"))
+    st.caption(t("signup.sub"))
     with st.form("signup", clear_on_submit=False):
-        username = st.text_input("Username", help="1-32 characters: letters, digits, dot, dash or underscore.")
-        password = st.text_input("Password", type="password", help="At least 6 characters.")
-        confirm = st.text_input("Repeat password", type="password")
+        username = st.text_input(t("login.username"), help=t("signup.username_help"))
+        password = st.text_input(t("login.password"), type="password", help=t("signup.password_help"))
+        confirm = st.text_input(t("signup.repeat"), type="password")
         invite_needed = os.environ.get(INVITE_ENV)
-        invite = st.text_input("Invite code", type="password") if invite_needed else ""
-        submitted = st.form_submit_button("Create my account", type="primary", use_container_width=True)
+        invite = st.text_input(t("signup.invite"), type="password") if invite_needed else ""
+        submitted = st.form_submit_button(t("signup.submit"), type="primary", use_container_width=True)
     if submitted:
         name = username.strip()
         if not name:
-            st.warning("Choose a username.")
+            st.warning(t("signup.choose_name"))
         elif invite_needed and invite.strip() != invite_needed:
-            st.error("That invite code is not valid.")
+            st.error(t("signup.invite_bad"))
         elif password != confirm:
-            st.error("The two passwords do not match.")
+            st.error(t("signup.pw_mismatch"))
         else:
             try:
                 add_user(name, password)
             except ValueError as exc:
-                st.error(str(exc))
+                st.error(t(str(exc)))
             else:
                 if login(name, password):
                     st.session_state.pop(MODE_KEY, None)
                     st.rerun()
-    if st.button("Back to sign in", use_container_width=True, key="go_signin"):
+    if st.button(t("signup.back"), use_container_width=True, key="go_signin"):
         st.session_state[MODE_KEY] = SIGNIN
         st.rerun()
 
@@ -268,6 +270,9 @@ def login_form(logo_url: str | None = None) -> None:
                 "</div>",
                 unsafe_allow_html=True,
             )
+    switcher_left, switcher_mid, switcher_right = st.columns([1, 1.9, 1])
+    language_switch(switcher_mid)
+
     if st.session_state.get(MODE_KEY) == SIGNUP:
         left, middle, right = st.columns([1, 1.15, 1])
         with middle:
@@ -275,28 +280,27 @@ def login_form(logo_url: str | None = None) -> None:
         return
 
     if not load_users():
-        st.error("No accounts are configured for this deployment. Add an `[accounts]` table to the "
-                 "app's secrets (see DEPLOY.md) and reload.")
+        st.error(t("login.no_accounts"))
         return
 
     left, middle, right = st.columns([1, 1.15, 1])
     with middle:
-        st.markdown("### Sign in")
-        st.caption("Each teammate signs in to their own record folder.")
+        st.markdown("### " + t("login.title"))
+        st.caption(t("login.sub"))
         with st.form("login", clear_on_submit=False):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Sign in", type="primary", use_container_width=True)
+            username = st.text_input(t("login.username"))
+            password = st.text_input(t("login.password"), type="password")
+            submitted = st.form_submit_button(t("login.submit"), type="primary", use_container_width=True)
         if submitted:
             if not username.strip() or not password:
-                st.warning("Enter both your username and password.")
+                st.warning(t("login.need_both"))
             elif login(username, password):
                 st.session_state.pop(MODE_KEY, None)
                 st.rerun()
             else:
-                st.error("Unknown username or wrong password.")
+                st.error(t("login.bad"))
         st.divider()
-        st.caption("New teammate?")
-        if st.button("Create a new account", use_container_width=True, key="go_signup"):
+        st.caption(t("login.new_teammate"))
+        if st.button(t("login.create"), use_container_width=True, key="go_signup"):
             st.session_state[MODE_KEY] = SIGNUP
             st.rerun()

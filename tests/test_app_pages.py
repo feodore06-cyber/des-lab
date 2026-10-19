@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 import auth  # noqa: E402
+import i18n  # noqa: E402
 
 TIMEOUT = 120
 SAMPLE_RUNS = "Sample: my DES runs (3 conditions, n=1)"
@@ -39,10 +40,12 @@ def page_guide():
     views.guide()
 
 
-def run(page, user="Chuanyu"):
+def run(page, user="Chuanyu", lang=None):
     at = AppTest.from_function(page, default_timeout=TIMEOUT)
     if user:
         at.session_state[auth.SESSION_KEY] = user
+    if lang:
+        at.session_state[i18n.LANG_KEY] = lang
     at.run()
     return at
 
@@ -231,6 +234,33 @@ class PageTests(unittest.TestCase):
         press(at, "Sign in")
         self.assertEqual(session_user(at), "Thena")
         self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+
+    def test_language_switch_translates_every_page(self):
+        calc = run(page_calculator, lang="zh")
+        self.assertEqual(errors(calc), [])
+        self.assertEqual(calc.title[0].value, "DES 配比计算")
+        labels = [m.label for m in calc.metric]
+        self.assertIn("配制总质量", labels)
+        self.assertIn("比有效组分多称", labels)
+        buttons = [b.label for b in calc.button]
+        self.assertIn("把这张称量清单存进我的记录", buttons)
+        self.assertIn("下载配方 CSV", [b.label for b in calc.download_button])
+
+        res = run(page_results, lang="zh")
+        self.assertEqual(errors(res), [])
+        self.assertEqual(res.title[0].value, "实验结果与图表")
+        self.assertEqual(res.radio[0].label, "数据来源")
+        self.assertEqual(res.radio[0].value, "我保存的数据")
+
+        guide = run(page_guide, lang="zh")
+        self.assertEqual(errors(guide), [])
+        self.assertEqual(guide.title[0].value, "使用说明")
+        self.assertIn("账号与团队", [s.value for s in guide.subheader])
+
+    def test_language_switch_keeps_english_by_default(self):
+        at = run(page_calculator)
+        self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+        self.assertEqual(i18n.lang(), "en")
 
     def test_create_account_starts_with_an_empty_record_folder(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
