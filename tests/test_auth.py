@@ -51,6 +51,15 @@ class AuthTests(unittest.TestCase):
         finally:
             st.secrets = original
 
+    def test_hosted_without_secrets_never_seeds_the_default_password(self):
+        os.environ[auth.HOSTED_ENV] = "1"
+        try:
+            self.assertEqual(auth.ensure_store(), {}, "a hosted site must not create demo accounts")
+            self.assertEqual(auth.load_users(), {})
+            self.assertFalse(auth.verify("Chuanyu", auth.DEFAULT_PASSWORD))
+        finally:
+            os.environ.pop(auth.HOSTED_ENV, None)
+
     def test_wrong_password_and_unknown_user(self):
         auth.ensure_store()
         self.assertFalse(auth.verify("Thena", "wrong"))

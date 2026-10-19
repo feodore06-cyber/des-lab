@@ -23,8 +23,8 @@ Public hosting, step by step: **[DEPLOY.md](DEPLOY.md)** (Streamlit Community Cl
 
 | 用户名 | 初始密码 |
 | --- | --- |
-| `Thena` | `ChCl/Ga(1:2)` |
-| `Chuanyu` | `ChCl/Ga(1:2)` |
+| `Thena` | `see DEPLOY.md - set it yourself (secrets / first sign-in)` |
+| `Chuanyu` | `see DEPLOY.md - set it yourself (secrets / first sign-in)` |
 
 - 登录页下方有 **Create a new account**：新同事自己起用户名和密码，注册完直接登录，**记录文件夹是空的**，不会继承任何人的数据。
 - 密码在磁盘上以 **加盐 PBKDF2 哈希** 保存，不存明文。

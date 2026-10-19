@@ -40,7 +40,7 @@ Cloud 要读你的仓库。仓库里这些文件会被**看到**：
 | --- | --- | --- |
 | `data/DES实验数据记录.xlsx` | 你的实验数据 | 建议移出仓库 |
 | `data/Codex聊天记录_实验数据提取.md` | 含导师/同事姓名 | 建议移出仓库 |
-| `README.zh.md` | 初始账号密码 `ChCl/Ga(1:2)` | 公开前建议删掉密码 |
+| `README.zh.md` | 初始账号密码 `see DEPLOY.md - set it yourself (secrets / first sign-in)` | 公开前建议删掉密码 |
 
 两种做法：
 - **保持 private** + 在 Streamlit Cloud 授权访问私有仓库（推荐）；

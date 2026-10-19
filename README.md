@@ -52,7 +52,7 @@ python -m venv .venv
 ## Team accounts and per-user records
 
 The app is shared by a team, so it asks who you are before showing anything. On first launch two accounts are
-seeded — **Thena** and **Chuanyu** — both with the password `ChCl/Ga(1:2)` (change them after the first sign-in).
+seeded — **Thena** and **Chuanyu** — both with the password `see DEPLOY.md - set it yourself (secrets / first sign-in)` (change them after the first sign-in).
 
 - **Create a new account** straight from the sign-in page: a new teammate picks a name and password and is logged
   in immediately with an **empty** record folder of their own — no rows are inherited from anybody.

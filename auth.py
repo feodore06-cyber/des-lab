@@ -96,7 +96,9 @@ def seeded_accounts() -> dict:
     """Accounts created on the very first launch.
 
     ``[accounts]`` in Streamlit secrets wins over the built-in defaults, so a hosted deployment can
-    start with its own names and passwords instead of the ones documented in the README.
+    start with its own names and passwords instead of the documented local ones. A hosted deployment
+    with no ``[accounts]`` seeds *nothing* - so the documented demo password can never be the door to
+    a public site.
     """
     try:
         accounts = dict(st.secrets.get("accounts") or {})
@@ -104,6 +106,8 @@ def seeded_accounts() -> dict:
         accounts = {}
     if accounts:
         return {str(name): str(password) for name, password in accounts.items()}
+    if hosted_mode():
+        return {}
     return {name: DEFAULT_PASSWORD for name in SEED_USERS}
 
 
@@ -111,7 +115,10 @@ def ensure_store() -> dict:
     """Create the store with the seeded teammates if it does not exist yet."""
     users = load_users()
     if not users:
-        users = {name: _entry(password) for name, password in seeded_accounts().items()}
+        accounts = seeded_accounts()
+        if not accounts:
+            return {}
+        users = {name: _entry(password) for name, password in accounts.items()}
         save_users(users)
     return users
 
@@ -265,6 +272,11 @@ def login_form(logo_url: str | None = None) -> None:
         left, middle, right = st.columns([1, 1.15, 1])
         with middle:
             _signup_form()
+        return
+
+    if not load_users():
+        st.error("No accounts are configured for this deployment. Add an `[accounts]` table to the "
+                 "app's secrets (see DEPLOY.md) and reload.")
         return
 
     left, middle, right = st.columns([1, 1.15, 1])
