@@ -36,6 +36,7 @@ Public hosting, step by step: **[DEPLOY.md](DEPLOY.md)** (Streamlit Community Cl
 | --- | --- |
 | **DES Recipe Calculator** | 填摩尔比、摩尔质量、**纯度（Active content）**、水的含量，算出该称多少克。可以一键把称量表存进自己的记录。 |
 | **Results & Figures** | 读自己的记录或上传 CSV，按实验条件分组统计（n、均值、标准差、极值），画均值柱 + 误差棒 + 原始点，导出 PNG / SVG / 汇总 CSV。 |
+| **Chemical Lookup / 化学品查询** | 输入任意化学品（英文名、中文名或 CAS 号），实时从 PubChem 取名称、分子式、**摩尔质量 M_r**、CAS、SMILES、氢键供体/受体数、XLogP、TPSA；一键加进配方表（按 1 摩尔份）。链接可分享，例如 /lookup?q=choline%20chloride。需要能上网，不需要 API key。 |
 | **Guide & Templates** | 使用说明、示例 CSV 下载、空白模板、账号管理。 |
 
 ### 关于纯度（重要）

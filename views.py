@@ -24,6 +24,7 @@ import pandas as pd
 import streamlit as st
 
 import auth
+import chem
 import i18n
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
@@ -51,6 +52,18 @@ def _y_label(measurement: str) -> str:
     return pair[1] if i18n.lang() == "zh" else pair[0]
 
 
+def _recipe_rows() -> list:
+    """The component table lives in session state so the look-up page can append to it."""
+    rows = st.session_state.get("recipe_rows")
+    if rows is None:
+        rows = [
+            {"name": t("calc.preset_chcl"), "mw": 139.62, "ratio": 1.0, "assay_pct": 98.0, "water_pct": 0.0},
+            {"name": t("calc.preset_ga"), "mw": 74.04, "ratio": 2.0, "assay_pct": 98.0, "water_pct": 0.0},
+        ]
+        st.session_state["recipe_rows"] = rows
+    return rows
+
+
 def calculator():
     labels = _column_labels()
     st.caption(t("calc.step"))
@@ -60,15 +73,15 @@ def calculator():
 
     st.markdown(t("calc.s1"))
     ideal = st.toggle(t("calc.ideal"), value=False, key="ideal", help=t("calc.ideal_help"))
-    default_assay = 100.0 if ideal else 98.0
-    components = st.data_editor(pd.DataFrame([
-        {"name": t("calc.preset_chcl"), "mw": 139.62, "ratio": 1.0, "assay_pct": default_assay, "water_pct": 0.0},
-        {"name": t("calc.preset_ga"), "mw": 74.04, "ratio": 2.0, "assay_pct": default_assay, "water_pct": 0.0},
-    ]), column_config=labels, num_rows="dynamic", hide_index=True, width="stretch",
-        disabled=["assay_pct"] if ideal else [], key="components")
+    rows = _recipe_rows()
+    components = st.data_editor(pd.DataFrame(rows), column_config=labels, num_rows="dynamic",
+                                hide_index=True, width="stretch",
+                                disabled=["assay_pct"] if ideal else [],
+                                key=f"components_{len(rows)}")
     if ideal:
         components = components.copy()
         components["assay_pct"] = 100.0
+    st.session_state["recipe_rows"] = components.to_dict("records")
     st.caption(t("calc.table_caption"))
 
     st.markdown(t("calc.s2"))
@@ -284,3 +297,97 @@ def guide():
                     st.success(t("guide.added", user=name.strip()))
                 except ValueError as exc:
                     st.error(t(str(exc)))
+
+def lookup():
+    """Search PubChem live and show the key data for a compound."""
+    st.caption(t("lookup.step"))
+    st.title(t("lookup.title"))
+    st.write(t("lookup.intro"))
+
+    # a ?q=... link can be shared or bookmarked, e.g. /lookup?q=choline%20chloride
+    if "chem_term" not in st.session_state and st.query_params.get("q"):
+        st.session_state["chem_term"] = st.query_params["q"]
+    term = st.text_input(t("lookup.term"), placeholder=t("lookup.placeholder"), key="chem_term")
+    if not term.strip():
+        st.caption(t("lookup.alias_hint"))
+        st.caption(t("lookup.source"))
+        return
+
+    try:
+        cids = chem.find_cids(term)
+        suggestions = chem.suggest(term)
+    except chem.ChemError as exc:
+        if str(exc) == "offline":
+            st.error(t("lookup.offline"))
+        elif str(exc) == "not found":
+            st.warning(t("lookup.notfound", term=term))
+        else:
+            st.error(str(exc))
+        return
+
+    if not cids:
+        st.warning(t("lookup.notfound", term=term))
+        if suggestions:
+            st.caption(t("lookup.suggest"))
+            st.dataframe(pd.DataFrame({"name": suggestions}), hide_index=True, width="stretch")
+        st.caption(t("lookup.source"))
+        return
+
+    record = None
+    if len(cids) == 1:
+        try:
+            record = chem.compound(cids[0])
+        except chem.ChemError as exc:
+            st.error(t("lookup.offline") if str(exc) == "offline" else str(exc))
+            return
+    else:
+        options = suggestions or [f"CID {cid}" for cid in cids[:8]]
+        st.caption(t("lookup.suggest"))
+        choice = st.selectbox(t("lookup.pick"), options, key="chem_pick")
+        try:
+            if choice.startswith("CID "):
+                record = chem.compound(int(choice[4:]))
+            else:
+                picked = chem.find_cids(choice)
+                record = chem.compound(picked[0]) if picked else None
+        except chem.ChemError as exc:
+            st.error(t("lookup.offline") if str(exc) == "offline" else str(exc))
+            return
+        if record is None:
+            st.warning(t("lookup.notfound", term=choice))
+            return
+
+    unknown = t("lookup.unknown_value")
+
+    def value(item, pattern="{v}"):
+        if item in (None, ""):
+            return unknown
+        return pattern.format(v=item)
+
+    st.subheader(record["name"])
+    a, b, c, d = st.columns(4)
+    a.metric(t("lookup.mw"), value(record["mw"], "{v:.3f} g/mol"))
+    b.metric(t("lookup.formula"), value(record["formula"]))
+    c.metric(t("lookup.cas"), value(record["cas"]))
+    d.metric(t("lookup.cid"), str(record["cid"]))
+    a, b, c, d = st.columns(4)
+    a.metric(t("lookup.hbd"), value(record["hbd"], "{v:.0f}"))
+    b.metric(t("lookup.hba"), value(record["hba"], "{v:.0f}"))
+    c.metric(t("lookup.xlogp"), value(record["xlogp"], "{v:g}"))
+    d.metric(t("lookup.tpsa"), value(record["tpsa"], "{v:g}"))
+
+    with st.expander(t("lookup.iupac") + " / " + t("lookup.smiles")):
+        st.write(record["iupac"] or unknown)
+        st.code(record["smiles"] or unknown, language="text")
+
+    left, right = st.columns(2)
+    left.link_button(t("lookup.open"), record["url"], use_container_width=True)
+    if right.button(t("lookup.add"), type="primary", use_container_width=True, key="add_from_lookup"):
+        rows = _recipe_rows()
+        rows.append({"name": record["name"], "mw": float(record["mw"] or 0.0), "ratio": 1.0,
+                     "assay_pct": 100.0, "water_pct": 0.0})
+        st.session_state["recipe_rows"] = rows
+        st.success(t("lookup.added", name=record["name"], mw=f"{record['mw']:.3f}" if record["mw"] else "-"))
+        st.caption(t("lookup.added_hint"))
+
+    st.caption(t("lookup.source"))

@@ -242,6 +242,7 @@ if auth.hosted_mode():
 page = st.navigation([
     st.Page(views.calculator, title=t("app.page_calc"), icon="🧪", default=True),
     st.Page(views.results, title=t("app.page_results"), icon="📊", url_path="results"),
+    st.Page(views.lookup, title=t("app.page_lookup"), icon="🔍", url_path="lookup"),
     st.Page(views.guide, title=t("app.page_guide"), icon="📖", url_path="guide"),
 ])
 page.run()

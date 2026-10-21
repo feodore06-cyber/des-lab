@@ -35,6 +35,11 @@ def page_results():
     views.results()
 
 
+def page_lookup():
+    import views
+    views.lookup()
+
+
 def page_guide():
     import views
     views.guide()
@@ -158,6 +163,37 @@ class PageTests(unittest.TestCase):
         self.assertIn("Load the 3 example runs (Chuanyu's records) into my folder", [b.label for b in other.button])
 
     # ----------------------------------------------------------------------- guide
+    def test_lookup_page_shows_a_compound_and_adds_it_to_the_recipe(self):
+        import chem
+
+        record = {"cid": 6209, "name": "Choline Chloride", "formula": "C5H14ClNO", "mw": 139.62,
+                  "iupac": "2-hydroxyethyl(trimethyl)azanium;chloride", "smiles": "C[N+](C)(C)CCO.[Cl-]",
+                  "hbd": 1.0, "hba": 2.0, "xlogp": -5.9, "tpsa": 20.2, "cas": "67-48-1",
+                  "url": "https://pubchem.ncbi.nlm.nih.gov/compound/6209"}
+        saved = (chem.find_cids, chem.compound, chem.suggest)
+        chem.find_cids = lambda term: [6209]
+        chem.compound = lambda cid: record
+        chem.suggest = lambda term, limit=8: ["Choline Chloride"]
+        try:
+            at = AppTest.from_function(page_lookup, default_timeout=TIMEOUT)
+            at.session_state[auth.SESSION_KEY] = "Chuanyu"
+            at.run()
+            at.text_input[0].set_value("choline chloride").run()
+            self.assertEqual(errors(at), [])
+            values = [m.value for m in at.metric]
+            self.assertIn("139.620 g/mol", values)
+            self.assertIn("C5H14ClNO", values)
+            self.assertIn("67-48-1", values)
+            self.assertEqual(at.subheader[0].value, "Choline Chloride")
+
+            at.button(key="add_from_lookup").click().run()
+            rows = at.session_state["recipe_rows"]
+            self.assertEqual(rows[-1]["name"], "Choline Chloride")
+            self.assertAlmostEqual(rows[-1]["mw"], 139.62)
+            self.assertEqual(rows[-1]["ratio"], 1.0)
+        finally:
+            chem.find_cids, chem.compound, chem.suggest = saved
+
     def test_guide_page_shows_account_tools(self):
         at = run(page_guide)
         self.assertEqual(errors(at), [])

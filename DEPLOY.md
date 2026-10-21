@@ -144,3 +144,4 @@ cloudflared tunnel --url http://127.0.0.1:8514
 - [ ] README 里的初始密码是否要删
 - [ ] 设置了 `DESLAB_INVITE_CODE`（公开部署时）
 - [ ] 部署后用手机 4G 打开一次，确认不是只有 Wi-Fi 能用
+- [ ] 「化学品查询」页需要托管环境能访问 pubchem.ncbi.nlm.nih.gov（一般默认可以）

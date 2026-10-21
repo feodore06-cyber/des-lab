@@ -13,6 +13,7 @@ every label, caption, warning and error message follows it. The choice is kept f
 | --- | --- |
 | 🧪 DES Recipe Calculator | Enter molar ratios, molar masses, active content and separate water for each component (for example ChCl and glyoxylic acid) and get a traceable weighing list: which mass is active component, which is reagent to weigh, and how much water the reagent carries. Exports `des_recipe.csv`. |
 | 📊 Results & Figures | Merge one or more CSVs, group by experimental condition and summarise (n, mean, sample SD, min, max), plot mean bars with ±1 SD error bars and the raw observations, export PNG (300 dpi) / SVG / summary CSV. |
+| 🔍 Chemical Lookup | Type any chemical - English name, Chinese name or CAS number - and get the key data live from PubChem: name, formula, **molar mass M_r**, CAS, SMILES, H-bond donor/acceptor counts, XLogP, TPSA. One click adds it to the recipe as one molar part. Links like /lookup?q=choline%20chloride can be shared. Needs outbound internet; no API key. |
 | 📖 Guide & Templates | Step-by-step usage, the fictitious demo CSV, your recorded run CSV and a blank record template. |
 
 The calculator deliberately separates three things that are easy to mix up: the **molar ratio** (the formulation),
@@ -118,6 +119,7 @@ Lignin yield (%) = lignin mass (mg) ÷ [biomass mass (g) × 1000] × 100% = lign
 - Units are never converted, missing measurements are never filled in, duplicate rows are never deleted automatically.
   Non-numeric or incomplete rows are excluded from the summary and listed with the reason.
 - Everything runs in the local process; uploads are not persisted anywhere.
+- The Chemical Lookup page sends your search term to PubChem (NCBI/NLM) over HTTPS; nothing else leaves the machine.
 
 ## Tests
 
