@@ -40,6 +40,11 @@ def page_lookup():
     views.lookup()
 
 
+def page_feedback():
+    import views
+    views.feedback()
+
+
 def page_guide():
     import views
     views.guide()
@@ -193,6 +198,43 @@ class PageTests(unittest.TestCase):
             self.assertEqual(rows[-1]["ratio"], 1.0)
         finally:
             chem.find_cids, chem.compound, chem.suggest = saved
+
+    def test_feedback_form_stores_a_report_and_admins_see_the_inbox(self):
+        import feedback as feedback_mod
+
+        at = AppTest.from_function(page_feedback, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.run()
+        self.assertEqual(errors(at), [])
+
+        at.text_area[0].set_value("the M_r field is confusing on the calculator page").run()
+        press(at, "Send feedback")
+        self.assertEqual(errors(at), [])
+        frame = feedback_mod.load_all()
+        self.assertIsNotNone(frame)
+        self.assertEqual(len(frame), 1)
+        self.assertEqual(frame.iloc[0]["user"], "Chuanyu")
+        self.assertIn("M_r field", frame.iloc[0]["message"])
+        # the admin sees the inbox
+        self.assertIn("Inbox (admins only)", [s.value for s in at.subheader])
+
+    def test_feedback_inbox_is_hidden_from_non_admins(self):
+        import feedback as feedback_mod
+
+        feedback_mod.add("Thena", "bug", "export button does nothing", "Results")
+        at = AppTest.from_function(page_feedback, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Thena"
+        at.run()
+        self.assertEqual(errors(at), [])
+        self.assertNotIn("Inbox (admins only)", [s.value for s in at.subheader])
+        self.assertIn("only the administrators", " ".join(str(c.value) for c in at.caption))
+
+    def test_feedback_requires_a_message(self):
+        at = AppTest.from_function(page_feedback, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.run()
+        press(at, "Send feedback")
+        self.assertTrue(at.warning, "an empty report should warn")
 
     def test_guide_page_shows_account_tools(self):
         at = run(page_guide)

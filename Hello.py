@@ -64,6 +64,52 @@ STYLE = """
   .dsh-login-brand { display: flex; justify-content: center; margin: 2.2vh 0 1.5rem; }
   .dsh-login-brand img { width: min(370px, 100%); height: auto; display: block; }
 
+  /* ---------- floating feedback button ---------- */
+  .dsh-fab {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .7rem 1.05rem;
+    border-radius: 999px;
+    background: #002F86;
+    color: #FFFFFF !important;
+    font: 600 .95rem/1 "Segoe UI", system-ui, sans-serif;
+    text-decoration: none !important;
+    box-shadow: 0 6px 20px rgba(0, 47, 134, .35);
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .dsh-fab:hover { background: #0B1F4B; transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0, 47, 134, .45); }
+  .dsh-fab-icon { font-size: 1.05rem; }
+  @media (max-width: 640px) { .dsh-fab-label { display: none; } .dsh-fab { padding: .85rem; } }
+
+  /* the real button behind the floating chip (Streamlit tags keyed widgets with st-key-<key>) */
+  div.st-key-open_feedback {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 1000;
+    width: auto;
+  }
+  div.st-key-open_feedback button {
+    border-radius: 999px !important;
+    border: none !important;
+    background: #002F86 !important;
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+    padding: .7rem 1.1rem !important;
+    box-shadow: 0 6px 20px rgba(0, 47, 134, .35);
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  div.st-key-open_feedback button:hover {
+    background: #0B1F4B !important;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 26px rgba(0, 47, 134, .45);
+  }
+
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
     background: #FFFFFF;
@@ -243,8 +289,14 @@ page = st.navigation([
     st.Page(views.calculator, title=t("app.page_calc"), icon="🧪", default=True),
     st.Page(views.results, title=t("app.page_results"), icon="📊", url_path="results"),
     st.Page(views.lookup, title=t("app.page_lookup"), icon="🔍", url_path="lookup"),
+    st.Page(views.feedback, title=t("app.page_feedback"), icon="💬", url_path="feedback"),
     st.Page(views.guide, title=t("app.page_guide"), icon="📖", url_path="guide"),
 ])
+# A permanent, prominent way in: a floating Feedback button that opens a dialog (no page reload,
+# so the sign-in survives).
+if st.button("💬 " + t("fb.fab"), key="open_feedback"):
+    views.feedback_dialog()
+
 page.run()
 
 st.sidebar.divider()

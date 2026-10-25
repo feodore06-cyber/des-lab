@@ -25,6 +25,7 @@ import streamlit as st
 
 import auth
 import chem
+import feedback as feedback_mod
 import i18n
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
@@ -391,3 +392,80 @@ def lookup():
         st.caption(t("lookup.added_hint"))
 
     st.caption(t("lookup.source"))
+
+def _feedback_form(suffix: str = "page") -> None:
+    """The report form, shared by the Feedback page and the floating dialog."""
+    user = auth.current_user()
+    kinds = [("bug", t("fb.cat_bug")), ("idea", t("fb.cat_idea")),
+             ("data", t("fb.cat_data")), ("other", t("fb.cat_other"))]
+    with st.form(f"feedback_form_{suffix}", clear_on_submit=True):
+        kind_label = st.selectbox(t("fb.category"), [label for _, label in kinds], key=f"fb_kind_{suffix}")
+        message = st.text_area(t("fb.message"), height=140, placeholder=t("fb.message_hint"),
+                               key=f"fb_message_{suffix}")
+        a, b = st.columns(2)
+        page_ref = a.text_input(t("fb.page"), placeholder="e.g. Results & Figures", key=f"fb_page_{suffix}")
+        contact = b.text_input(t("fb.contact"), placeholder="email / chat handle", key=f"fb_contact_{suffix}")
+        submitted = st.form_submit_button(t("fb.submit"), type="primary", use_container_width=True)
+    if not submitted:
+        return
+    if not message.strip():
+        st.warning(t("fb.need_text"))
+        return
+    kind = dict((label, key) for key, label in kinds)[kind_label]
+    try:
+        path = feedback_mod.add(user or "anonymous", kind, message, page_ref, contact)
+    except OSError:
+        st.error(t("fb.write_failed"))
+        st.code(f"{kind}: {message}", language="text")
+    else:
+        st.success(t("fb.saved"))
+        st.caption(t("fb.saved_path", path=path))
+
+
+@st.dialog("💬 " + t("fb.title"))
+def feedback_dialog() -> None:
+    """Opened by the floating button, so a report never costs you your session."""
+    st.caption(t("fb.intro"))
+    _feedback_form("dialog")
+
+
+def feedback():
+    """Send a report and - for admins - read the inbox."""
+    st.caption(t("fb.step"))
+    st.title(t("fb.title"))
+    st.write(t("fb.intro"))
+    user = auth.current_user()
+    _feedback_form("page")
+
+    st.divider()
+    if not auth.is_admin(user):
+        st.caption(t("fb.inbox_hint"))
+        return
+
+    st.subheader(t("fb.inbox"))
+    if auth.hosted_mode():
+        st.warning(t("fb.hosted_note"), icon="⚠️")
+    frame = feedback_mod.load_all()
+    if frame is None or frame.empty:
+        st.info(t("fb.inbox_empty"))
+        st.caption(t("fb.inbox_hint"))
+        return
+
+    kinds = [("bug", t("fb.cat_bug")), ("idea", t("fb.cat_idea")),
+             ("data", t("fb.cat_data")), ("other", t("fb.cat_other"))]
+    counts = feedback_mod.stats(frame)
+    a, b, c = st.columns(3)
+    a.metric(t("fb.inbox_total"), counts["total"])
+    b.metric(t("fb.inbox_recent"), counts["recent"])
+    c.metric(t("fb.inbox_kinds"), ", ".join(f"{k}: {v}" for k, v in sorted(counts["by_category"].items())) or "-")
+
+    options = [t("fb.inbox_all")] + [label for _, label in kinds]
+    choice = st.selectbox(t("fb.inbox_filter"), options, key="fb_filter")
+    view = frame
+    if choice != t("fb.inbox_all"):
+        wanted = dict((label, key) for key, label in kinds)[choice]
+        view = frame[frame["category"] == wanted]
+
+    st.dataframe(view, hide_index=True, width="stretch")
+    st.download_button(t("fb.download"), csv_bytes(frame), "feedback.csv", "text/csv")
+    st.caption(t("fb.inbox_hint"))

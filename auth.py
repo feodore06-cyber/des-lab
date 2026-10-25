@@ -31,6 +31,8 @@ MODE_KEY = "login_mode"          # "signin" or "signup"
 DATA_DIR_ENV = "DESLAB_DATA_DIR"
 INVITE_ENV = "DESLAB_INVITE_CODE"      # when set, sign-up requires this code
 HOSTED_ENV = "DESLAB_HOSTED"           # when set, warn that storage is ephemeral
+ADMIN_ENV = "DESLAB_ADMINS"             # comma separated list of admin usernames
+DEFAULT_ADMINS = ("Chuanyu",)
 
 # Teammates seeded on the very first launch. Change the password in the app
 # (Guide & Templates -> Account) as soon as the real team is set up.
@@ -159,6 +161,25 @@ def verify(username: str, password: str) -> bool:
 
 
 # ------------------------------------------------------------------- session
+def admins() -> set:
+    """Who may read the feedback inbox: DESLAB_ADMINS or the [admins] secret, else the default."""
+    raw = os.environ.get(ADMIN_ENV)
+    if not raw:
+        try:
+            secret = st.secrets.get("admins")
+        except Exception:
+            secret = None
+        if secret:
+            raw = ",".join(secret) if isinstance(secret, (list, tuple)) else str(secret)
+    if raw:
+        return {name.strip() for name in raw.split(",") if name.strip()}
+    return set(DEFAULT_ADMINS)
+
+
+def is_admin(username: str | None) -> bool:
+    return bool(username) and username in admins()
+
+
 def current_user() -> str | None:
     return st.session_state.get(SESSION_KEY)
 
