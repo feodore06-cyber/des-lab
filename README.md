@@ -14,6 +14,7 @@ every label, caption, warning and error message follows it. The choice is kept f
 | 🧪 DES Recipe Calculator | Enter molar ratios, molar masses, active content and separate water for each component (for example ChCl and glyoxylic acid) and get a traceable weighing list: which mass is active component, which is reagent to weigh, and how much water the reagent carries. Exports `des_recipe.csv`. |
 | 📊 Results & Figures | Merge one or more CSVs, group by experimental condition and summarise (n, mean, sample SD, min, max), plot mean bars with ±1 SD error bars and the raw observations, export PNG (300 dpi) / SVG / summary CSV. |
 | 🔍 Chemical Lookup | Type any chemical - English name, Chinese name or CAS number - and get the key data live from PubChem: name, formula, **molar mass M_r**, CAS, SMILES, H-bond donor/acceptor counts, XLogP, TPSA. One click adds it to the recipe as one molar part. Links like /lookup?q=choline%20chloride can be shared. Needs outbound internet; no API key. |
+| 💬 Feedback | A floating **Feedback** chip sits at the bottom right of every page and opens a dialog - no reload, so your session survives. Reports are appended to `user_data/feedback/feedback.csv` with the time, your account, a category, the message and the page. Admins get an **inbox** on the Feedback page: counters, a category filter, the table and a CSV download. |
 | 📖 Guide & Templates | Step-by-step usage, the fictitious demo CSV, your recorded run CSV and a blank record template. |
 
 The calculator deliberately separates three things that are easy to mix up: the **molar ratio** (the formulation),
@@ -65,6 +66,10 @@ seeded — **Thena** and **Chuanyu** — both with the password `see DEPLOY.md -
   - `recipes/` — a timestamped copy of every weighing list you keep.
 - Switching accounts switches folders: one teammate's rows are never visible to another.
 - **Guide & Templates → Account & team** lets any signed-in teammate change their own password and add a newcomer.
+
+**Who reads the feedback?** The Feedback page shows its inbox only to administrators: the names in
+DESLAB_ADMINS (comma separated) or the [admins] secret, defaulting to the account this project started with.
+Everyone can send a report; only those accounts can read them.
 
 > **Scope of this login.** It keeps records apart on one shared machine; it is not internet-grade authentication.
 > Sign-up is open to anyone who can reach the page — fine on a lab machine, but do not expose it publicly without

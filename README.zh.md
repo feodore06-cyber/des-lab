@@ -37,6 +37,7 @@ Public hosting, step by step: **[DEPLOY.md](DEPLOY.md)** (Streamlit Community Cl
 | **DES Recipe Calculator** | 填摩尔比、摩尔质量、**纯度（Active content）**、水的含量，算出该称多少克。可以一键把称量表存进自己的记录。 |
 | **Results & Figures** | 读自己的记录或上传 CSV，按实验条件分组统计（n、均值、标准差、极值），画均值柱 + 误差棒 + 原始点，导出 PNG / SVG / 汇总 CSV。 |
 | **Chemical Lookup / 化学品查询** | 输入任意化学品（英文名、中文名或 CAS 号），实时从 PubChem 取名称、分子式、**摩尔质量 M_r**、CAS、SMILES、氢键供体/受体数、XLogP、TPSA；一键加进配方表（按 1 摩尔份）。链接可分享，例如 /lookup?q=choline%20chloride。需要能上网，不需要 API key。 |
+| **Feedback / 反馈** | 每个页面右下角常驻 **💬 Feedback** 按钮（弹窗式，不会刷新页面、不掉登录）。反馈会记录时间、账号、类型、内容和所在页面，存进 user_data/feedback/feedback.csv；管理员在「反馈」页看到收件箱（统计、筛选、明细、CSV 下载）。 |
 | **Guide & Templates** | 使用说明、示例 CSV 下载、空白模板、账号管理。 |
 
 ### 关于纯度（重要）
@@ -83,5 +84,7 @@ user_data/
 - 代码与提交历史：**https://github.com/feodore06-cyber/des-lab**
 - 仓库里含 **27 项自动化测试**（账号与哈希、数据隔离、配比质量守恒、图表导出、登录门禁、页面渲染），
   运行方式：`.venv\Scripts\python -m unittest discover -s tests -v`
-- ⚠️ 这个登录只用于同一台电脑上区分同事的记录，**不是互联网级认证**；而且注册是开放的（任何能打开页面的人都能建账号），所以不要把它公开部署到互联网。要公开部署给外部使用，请接学校/公司的统一身份认证（SSO），或只放在实验室内网。
+- **谁能看反馈？** 只有管理员能看「反馈」页的收件箱：由 DESLAB_ADMINS（逗号分隔）或 secrets 的 [admins] 指定，默认是本项目最早的账号。所有人都能提交。
+
+⚠️ 这个登录只用于同一台电脑上区分同事的记录，**不是互联网级认证**；而且注册是开放的（任何能打开页面的人都能建账号），所以不要把它公开部署到互联网。要公开部署给外部使用，请接学校/公司的统一身份认证（SSO），或只放在实验室内网。
 - A\*STAR 的名称与标志属于 A\*STAR；对外发布前请遵循其品牌规范。
