@@ -74,10 +74,10 @@ def _hash(password: str, salt_hex: str, iterations: int = ITERATIONS) -> str:
                                iterations).hex()
 
 
-def _entry(password: str) -> dict:
+def _entry(password: str, display: str = "") -> dict:
     salt = secrets.token_hex(16)
     return {"salt": salt, "hash": _hash(password, salt), "iterations": ITERATIONS,
-            "created": time.strftime("%Y-%m-%d %H:%M:%S")}
+            "created": time.strftime("%Y-%m-%d %H:%M:%S"), "display": display.strip()}
 
 
 # --------------------------------------------------------------------- store
@@ -129,7 +129,7 @@ def ensure_store() -> dict:
     return users
 
 
-def add_user(username: str, password: str) -> None:
+def add_user(username: str, password: str, display: str = "") -> None:
     username = username.strip()
     if not USERNAME_RE.fullmatch(username):
         raise ValueError("Use 1-32 characters: letters, digits, dot, dash or underscore.")
@@ -138,7 +138,7 @@ def add_user(username: str, password: str) -> None:
     users = ensure_store()
     if username in users:
         raise ValueError(f"{username} already exists.")
-    users[username] = _entry(password)
+    users[username] = _entry(password, display)
     save_users(users)
     user_dir(username)  # create the empty record folder straight away
 
@@ -180,6 +180,22 @@ def admins() -> set:
 
 def is_admin(username: str | None) -> bool:
     return bool(username) and username in admins()
+
+
+def display_name(username: str | None) -> str:
+    """The name shown in the greeting: what the person typed at sign-up, else their username."""
+    if not username:
+        return ""
+    entry = load_users().get(username) or {}
+    return (entry.get("display") or "").strip() or username
+
+
+def set_display_name(username: str, display: str) -> None:
+    users = ensure_store()
+    if username not in users:
+        raise ValueError("unknown user")
+    users[username]["display"] = (display or "").strip()[:40]
+    save_users(users)
 
 
 def current_user() -> str | None:
@@ -291,6 +307,7 @@ def _signup_form() -> None:
     st.markdown("### " + t("signup.title"))
     st.caption(t("signup.sub"))
     with st.form("signup", clear_on_submit=False):
+        display = st.text_input(t("signup.display"), help=t("signup.display_help"))
         username = st.text_input(t("login.username"), help=t("signup.username_help"))
         password = st.text_input(t("login.password"), type="password", help=t("signup.password_help"))
         confirm = st.text_input(t("signup.repeat"), type="password")
@@ -307,7 +324,7 @@ def _signup_form() -> None:
             st.error(t("signup.pw_mismatch"))
         else:
             try:
-                add_user(name, password)
+                add_user(name, password, display)
             except ValueError as exc:
                 st.error(t(str(exc)))
             else:
