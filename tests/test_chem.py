@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """PubChem client: parsing, aliases and error handling (network is stubbed out)."""
 import sys
+
+import os
+os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
 import unittest
 from pathlib import Path
 

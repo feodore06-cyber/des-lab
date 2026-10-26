@@ -83,11 +83,7 @@ def _add_reagent(term: str) -> None:
     st.session_state["recipe_rows"] = rows
     st.success(t("calc.reagent_added", name=record["name"],
                  mw=f"{record['mw']:.3f}" if record["mw"] else "-"))
-    st.caption(" · ".join([
-        f"{t('lookup.formula')}: {record['formula'] or '-'}",
-        f"{t('lookup.cas')}: {record['cas'] or '-'}",
-        f"{t('lookup.cid')}: {record['cid']}",
-    ]))
+    st.session_state["last_reagent"] = record
 
 
 def calculator():
@@ -115,6 +111,26 @@ def calculator():
         components["assay_pct"] = 100.0
     st.session_state["recipe_rows"] = components.to_dict("records")
     st.caption(t("calc.table_caption"))
+
+    record = st.session_state.get("last_reagent")
+    if record:
+        unknown = t("lookup.unknown_value")
+        with st.expander(t("calc.reagent_details", name=record["name"]), expanded=True):
+            a, b, c, d = st.columns(4)
+            a.metric(t("lookup.mw"), f"{record['mw']:.3f} g/mol" if record["mw"] else unknown)
+            b.metric(t("lookup.formula"), record["formula"] or unknown)
+            c.metric(t("lookup.cas"), record["cas"] or unknown)
+            d.metric(t("lookup.cid"), str(record["cid"]))
+            a, b, c, d = st.columns(4)
+            a.metric(t("lookup.hbd"), f"{record['hbd']:.0f}" if record["hbd"] is not None else unknown)
+            b.metric(t("lookup.hba"), f"{record['hba']:.0f}" if record["hba"] is not None else unknown)
+            c.metric(t("lookup.xlogp"), f"{record['xlogp']:g}" if record["xlogp"] is not None else unknown)
+            d.metric(t("lookup.tpsa"), f"{record['tpsa']:g}" if record["tpsa"] is not None else unknown)
+            if record["iupac"]:
+                st.caption(record["iupac"])
+            st.code(record["smiles"] or unknown, language="text")
+            st.link_button(t("lookup.open"), record["url"], use_container_width=False)
+            st.caption(t("lookup.source"))
 
     st.markdown(t("calc.s2"))
     bases = [("active", t("calc.basis_active")), ("reagent", t("calc.basis_reagent"))]
@@ -342,99 +358,6 @@ def guide():
                 except ValueError as exc:
                     st.error(t(str(exc)))
 
-def lookup():
-    """Search PubChem live and show the key data for a compound."""
-    st.caption(t("lookup.step"))
-    st.title(t("lookup.title"))
-    st.write(t("lookup.intro"))
-
-    # a ?q=... link can be shared or bookmarked, e.g. /lookup?q=choline%20chloride
-    if "chem_term" not in st.session_state and st.query_params.get("q"):
-        st.session_state["chem_term"] = st.query_params["q"]
-    term = st.text_input(t("lookup.term"), placeholder=t("lookup.placeholder"), key="chem_term")
-    if not term.strip():
-        st.caption(t("lookup.alias_hint"))
-        st.caption(t("lookup.source"))
-        return
-
-    try:
-        cids = chem.find_cids(term)
-        suggestions = chem.suggest(term)
-    except chem.ChemError as exc:
-        if str(exc) == "offline":
-            st.error(t("lookup.offline"))
-        elif str(exc) == "not found":
-            st.warning(t("lookup.notfound", term=term))
-        else:
-            st.error(str(exc))
-        return
-
-    if not cids:
-        st.warning(t("lookup.notfound", term=term))
-        if suggestions:
-            st.caption(t("lookup.suggest"))
-            st.dataframe(pd.DataFrame({"name": suggestions}), hide_index=True, width="stretch")
-        st.caption(t("lookup.source"))
-        return
-
-    record = None
-    if len(cids) == 1:
-        try:
-            record = chem.compound(cids[0])
-        except chem.ChemError as exc:
-            st.error(t("lookup.offline") if str(exc) == "offline" else str(exc))
-            return
-    else:
-        options = suggestions or [f"CID {cid}" for cid in cids[:8]]
-        st.caption(t("lookup.suggest"))
-        choice = st.selectbox(t("lookup.pick"), options, key="chem_pick")
-        try:
-            if choice.startswith("CID "):
-                record = chem.compound(int(choice[4:]))
-            else:
-                picked = chem.find_cids(choice)
-                record = chem.compound(picked[0]) if picked else None
-        except chem.ChemError as exc:
-            st.error(t("lookup.offline") if str(exc) == "offline" else str(exc))
-            return
-        if record is None:
-            st.warning(t("lookup.notfound", term=choice))
-            return
-
-    unknown = t("lookup.unknown_value")
-
-    def value(item, pattern="{v}"):
-        if item in (None, ""):
-            return unknown
-        return pattern.format(v=item)
-
-    st.subheader(record["name"])
-    a, b, c, d = st.columns(4)
-    a.metric(t("lookup.mw"), value(record["mw"], "{v:.3f} g/mol"))
-    b.metric(t("lookup.formula"), value(record["formula"]))
-    c.metric(t("lookup.cas"), value(record["cas"]))
-    d.metric(t("lookup.cid"), str(record["cid"]))
-    a, b, c, d = st.columns(4)
-    a.metric(t("lookup.hbd"), value(record["hbd"], "{v:.0f}"))
-    b.metric(t("lookup.hba"), value(record["hba"], "{v:.0f}"))
-    c.metric(t("lookup.xlogp"), value(record["xlogp"], "{v:g}"))
-    d.metric(t("lookup.tpsa"), value(record["tpsa"], "{v:g}"))
-
-    with st.expander(t("lookup.iupac") + " / " + t("lookup.smiles")):
-        st.write(record["iupac"] or unknown)
-        st.code(record["smiles"] or unknown, language="text")
-
-    left, right = st.columns(2)
-    left.link_button(t("lookup.open"), record["url"], use_container_width=True)
-    if right.button(t("lookup.add"), type="primary", use_container_width=True, key="add_from_lookup"):
-        rows = _recipe_rows()
-        rows.append({"name": record["name"], "mw": float(record["mw"] or 0.0), "ratio": 1.0,
-                     "assay_pct": 100.0, "water_pct": 0.0})
-        st.session_state["recipe_rows"] = rows
-        st.success(t("lookup.added", name=record["name"], mw=f"{record['mw']:.3f}" if record["mw"] else "-"))
-        st.caption(t("lookup.added_hint"))
-
-    st.caption(t("lookup.source"))
 
 def _feedback_form(suffix: str = "page") -> None:
     """The report form, shared by the Feedback page and the floating dialog."""
@@ -486,7 +409,7 @@ def feedback():
         return
 
     st.subheader(t("fb.inbox"))
-    if auth.hosted_mode():
+    if auth.hosted_mode() and not store.enabled():
         st.warning(t("fb.hosted_note"), icon="⚠️")
     frame = feedback_mod.load_all()
     if frame is None or frame.empty:
@@ -500,7 +423,8 @@ def feedback():
     a, b, c = st.columns(3)
     a.metric(t("fb.inbox_total"), counts["total"])
     b.metric(t("fb.inbox_recent"), counts["recent"])
-    c.metric(t("fb.inbox_kinds"), ", ".join(f"{k}: {v}" for k, v in sorted(counts["by_category"].items())) or "-")
+    c.metric(t("fb.inbox_kinds"),
+             ", ".join(f"{k}: {v}" for k, v in sorted(counts["by_category"].items())) or "-")
 
     options = [t("fb.inbox_all")] + [label for _, label in kinds]
     choice = st.selectbox(t("fb.inbox_filter"), options, key="fb_filter")
@@ -512,3 +436,4 @@ def feedback():
     st.dataframe(view, hide_index=True, width="stretch")
     st.download_button(t("fb.download"), csv_bytes(frame), "feedback.csv", "text/csv")
     st.caption(t("fb.inbox_hint"))
+

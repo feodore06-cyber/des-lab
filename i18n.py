@@ -51,6 +51,9 @@ EN = {
     "signup.invite_bad": "That invite code is not valid.",
     "signup.pw_mismatch": "The two passwords do not match.",
     # ------------------------------------------------------------------ calculator
+    "calc.reagent_details": "Data for {name} (from PubChem)",
+    "app.welcome": "Welcome, {user}",
+    "app.welcome_sub": "Recipe calculator · results · records - everything is saved to your own folder.",
     "calc.step": "01 / PREPARE",
     "calc.title": "Recipe Calculator",
     "calc.intro": "Enter molar ratios and the real reagent assays to get a traceable weighing list.",
@@ -288,6 +291,9 @@ ZH = {
     "signup.invite_bad": "邀请码不正确。",
     "signup.pw_mismatch": "两次输入的密码不一致。",
     # ------------------------------------------------------------------ calculator
+    "calc.reagent_details": "{name} 的化合物数据（来自 PubChem）",
+    "app.welcome": "{user}，欢迎回来",
+    "app.welcome_sub": "配比计算 · 实验结果 · 记录——都保存在你自己的文件夹里。",
     "calc.step": "01 / 配制",
     "calc.title": "配比计算",
     "calc.intro": "输入摩尔比和试剂的真实含量，得到一张可追溯的称量清单。",

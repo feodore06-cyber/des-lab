@@ -7,6 +7,8 @@ Record folders are redirected to a temporary directory through DESLAB_DATA_DIR.
 """
 import os
 import sys
+
+os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,11 +35,6 @@ def page_calculator():
 def page_results():
     import views
     views.results()
-
-
-def page_lookup():
-    import views
-    views.lookup()
 
 
 def page_feedback():
@@ -195,36 +192,40 @@ class PageTests(unittest.TestCase):
         finally:
             chem.find_cids, chem.compound = saved
 
-    def test_lookup_page_shows_a_compound_and_adds_it_to_the_recipe(self):
+    def test_calculator_shows_the_pubchem_details_of_an_added_reagent(self):
         import chem
 
         record = {"cid": 6209, "name": "Choline Chloride", "formula": "C5H14ClNO", "mw": 139.62,
                   "iupac": "2-hydroxyethyl(trimethyl)azanium;chloride", "smiles": "C[N+](C)(C)CCO.[Cl-]",
                   "hbd": 1.0, "hba": 2.0, "xlogp": -5.9, "tpsa": 20.2, "cas": "67-48-1",
                   "url": "https://pubchem.ncbi.nlm.nih.gov/compound/6209"}
-        saved = (chem.find_cids, chem.compound, chem.suggest)
+        saved = (chem.find_cids, chem.compound)
         chem.find_cids = lambda term: [6209]
         chem.compound = lambda cid: record
-        chem.suggest = lambda term, limit=8: ["Choline Chloride"]
         try:
-            at = AppTest.from_function(page_lookup, default_timeout=TIMEOUT)
-            at.session_state[auth.SESSION_KEY] = "Chuanyu"
-            at.run()
-            at.text_input[0].set_value("choline chloride").run()
+            at = run(page_calculator)
+            at.text_input(key="calc_find").set_value("67-48-1").run()
+            at.button(key="calc_find_add").click().run()
             self.assertEqual(errors(at), [])
             values = [m.value for m in at.metric]
             self.assertIn("139.620 g/mol", values)
             self.assertIn("C5H14ClNO", values)
             self.assertIn("67-48-1", values)
-            self.assertEqual(at.subheader[0].value, "Choline Chloride")
-
-            at.button(key="add_from_lookup").click().run()
-            rows = at.session_state["recipe_rows"]
-            self.assertEqual(rows[-1]["name"], "Choline Chloride")
-            self.assertAlmostEqual(rows[-1]["mw"], 139.62)
-            self.assertEqual(rows[-1]["ratio"], 1.0)
+            self.assertTrue(at.code, "the SMILES should be shown")
+            labels = " ".join(str(e.label) for e in at.expander)
+            self.assertIn("Choline Chloride", labels)
         finally:
-            chem.find_cids, chem.compound, chem.suggest = saved
+            chem.find_cids, chem.compound = saved
+
+    def test_signed_in_users_get_a_welcome_line(self):
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.run()
+        at.text_input[0].set_value("Chuanyu")
+        at.text_input[1].set_value(auth.DEFAULT_PASSWORD)
+        press(at, "Sign in")
+        self.assertEqual(errors(at), [])
+        markup = " ".join(m.value for m in at.markdown)
+        self.assertIn("Welcome, Chuanyu", markup)
 
     def test_feedback_form_stores_a_report_and_admins_see_the_inbox(self):
         import feedback as feedback_mod

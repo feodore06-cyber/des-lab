@@ -36,6 +36,8 @@ create index if not exists records_lookup on records (username, kind, id);
 
 def database_url() -> str | None:
     """The Postgres URL, or None when the app should stay on local CSV files."""
+    if os.environ.get("DESLAB_STORAGE", "").strip().lower() == "file":
+        return None  # explicit override: keep using local CSV files
     url = os.environ.get(URL_ENV)
     if url:
         return url.strip()

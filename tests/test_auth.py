@@ -2,6 +2,8 @@
 """Account store, hashing and per-user record files."""
 import os
 import sys
+
+os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
 import tempfile
 import unittest
 from pathlib import Path

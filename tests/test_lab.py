@@ -1,6 +1,9 @@
 import math
 from pathlib import Path
 import sys
+
+import os
+os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
 import unittest
 import pandas as pd
 

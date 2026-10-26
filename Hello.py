@@ -23,6 +23,7 @@ import streamlit as st
 
 import auth
 import i18n
+import store
 import views
 from i18n import t
 
@@ -67,6 +68,20 @@ STYLE = """
      it is drawn at 340 px because the source is 697 px wide (crisp at 2x scaling too) */
   .dsh-login-brand { display: flex; justify-content: center; margin: 2.2vh 0 1.5rem; }
   .dsh-login-brand img { width: min(370px, 100%); height: auto; display: block; }
+
+  /* ---------- greeting after sign-in ---------- */
+  .dsh-welcome {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    margin: 0 0 1.2rem;
+    padding: .8rem 1.05rem;
+    border-left: 4px solid #002F86;
+    border-radius: 10px;
+    background: linear-gradient(90deg, rgba(0, 47, 134, .07), rgba(216, 41, 27, .03));
+  }
+  .dsh-welcome-hi { font: 700 1.12rem/1.35 "Segoe UI", system-ui, sans-serif; color: #0B1F4B; }
+  .dsh-welcome-sub { font: 400 .85rem/1.4 "Segoe UI", system-ui, sans-serif; color: #5A6478; }
 
   /* ---------- floating feedback button ---------- */
   .dsh-fab {
@@ -286,13 +301,21 @@ st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
 # English / 中文 switch - it lives in the sidebar and in session state, so it survives reruns.
 i18n.language_switch(st.sidebar)
 
-if auth.hosted_mode():
+if auth.hosted_mode() and not store.enabled():
     st.sidebar.warning(t("app.hosted_warning"), icon="⚠️")
+
+# A greeting for whoever just signed in, at the top of every page.
+st.markdown(
+    '<div class="dsh-welcome">'
+    f'<span class="dsh-welcome-hi">{t("app.welcome", user=user)}</span>'
+    f'<span class="dsh-welcome-sub">{t("app.welcome_sub")}</span>'
+    "</div>",
+    unsafe_allow_html=True,
+)
 
 page = st.navigation([
     st.Page(views.calculator, title=t("app.page_calc"), icon="🧪", default=True),
     st.Page(views.results, title=t("app.page_results"), icon="📊", url_path="results"),
-    st.Page(views.lookup, title=t("app.page_lookup"), icon="🔍", url_path="lookup"),
     st.Page(views.feedback, title=t("app.page_feedback"), icon="💬", url_path="feedback"),
     st.Page(views.guide, title=t("app.page_guide"), icon="📖", url_path="guide"),
 ])
@@ -305,7 +328,8 @@ page.run()
 
 st.sidebar.divider()
 st.sidebar.caption(t("app.sidebar_signed_in", user=user))
-st.sidebar.caption(t("app.sidebar_records", user=user))
+st.sidebar.caption(t("app.sidebar_db") if store.enabled()
+                   else t("app.sidebar_records", user=user))
 if st.sidebar.button(t("app.logout"), use_container_width=True, key="logout"):
     auth.logout()
     st.rerun()
