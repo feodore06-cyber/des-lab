@@ -1,5 +1,6 @@
 param(
-    [switch]$Share
+    [switch]$Share,
+    [switch]$NoBrowser
 )
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
@@ -70,7 +71,7 @@ for ($attempt = 0; $attempt -lt 30; $attempt++) {
     } catch { Start-Sleep -Milliseconds 500 }
 }
 if (-not $labReady) { throw 'DES Lab did not start. See .runtime/stderr.log.' }
-Start-Process $labUrl
+if (-not $NoBrowser) { Start-Process $labUrl }
 Write-Host "DES Lab is running at $labUrl"
 
 if ($Share) {
