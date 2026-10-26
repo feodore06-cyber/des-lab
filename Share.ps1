@@ -49,7 +49,7 @@ Set-Content -LiteralPath $urlFile -Value $url -Encoding ascii
 $desktop = [Environment]::GetFolderPath('Desktop')
 $desktopFile = Join-Path $desktop 'DES-Lab-link.txt'
 $body = @(
-    'DES Lab - Experiment Workbench',
+    'BioMat Lab - Experiment Workbench',
     '',
     'PUBLIC url (anyone, anywhere):',
     $url,

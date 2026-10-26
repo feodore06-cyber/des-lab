@@ -26,6 +26,7 @@ import streamlit as st
 import auth
 import chem
 import feedback as feedback_mod
+import store
 import i18n
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
@@ -65,6 +66,30 @@ def _recipe_rows() -> list:
     return rows
 
 
+def _add_reagent(term: str) -> None:
+    """Look a reagent up on PubChem and append it to the component table."""
+    try:
+        cids = chem.find_cids(term)
+        if not cids:
+            st.warning(t("lookup.notfound", term=term))
+            return
+        record = chem.compound(cids[0])
+    except chem.ChemError as exc:
+        st.error(t("lookup.offline") if str(exc) == "offline" else str(exc))
+        return
+    rows = _recipe_rows()
+    rows.append({"name": record["name"], "mw": float(record["mw"] or 0.0), "ratio": 1.0,
+                 "assay_pct": 98.0, "water_pct": 0.0})
+    st.session_state["recipe_rows"] = rows
+    st.success(t("calc.reagent_added", name=record["name"],
+                 mw=f"{record['mw']:.3f}" if record["mw"] else "-"))
+    st.caption(" · ".join([
+        f"{t('lookup.formula')}: {record['formula'] or '-'}",
+        f"{t('lookup.cas')}: {record['cas'] or '-'}",
+        f"{t('lookup.cid')}: {record['cid']}",
+    ]))
+
+
 def calculator():
     labels = _column_labels()
     st.caption(t("calc.step"))
@@ -74,6 +99,12 @@ def calculator():
 
     st.markdown(t("calc.s1"))
     ideal = st.toggle(t("calc.ideal"), value=False, key="ideal", help=t("calc.ideal_help"))
+    find_left, find_right = st.columns([3, 1])
+    query = find_left.text_input(t("calc.find_label"), placeholder=t("calc.find_ph"), key="calc_find")
+    if find_right.button(t("calc.find_add"), key="calc_find_add", use_container_width=True) and query.strip():
+        _add_reagent(query.strip())
+    st.caption(t("calc.find_hint"))
+
     rows = _recipe_rows()
     components = st.data_editor(pd.DataFrame(rows), column_config=labels, num_rows="dynamic",
                                 hide_index=True, width="stretch",
@@ -263,6 +294,18 @@ def guide():
     st.download_button(t("guide.dl_template"), csv_bytes(pd.read_csv(DEMO_CSV).iloc[:0]),
                        "results_template.csv", "text/csv")
     st.link_button(t("guide.link_source"), "https://github.com/streamlit/hello")
+
+    st.divider()
+    st.subheader(t("store.title"))
+    if store.enabled():
+        try:
+            detail = store.ping()
+        except Exception as exc:
+            st.error(t("store.error", error=str(exc).splitlines()[0][:200]))
+        else:
+            st.success(t("store.database") + " · " + detail)
+    else:
+        st.info(t("store.local"))
 
     st.divider()
     st.subheader(t("guide.account"))

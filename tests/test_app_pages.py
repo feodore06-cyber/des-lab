@@ -94,7 +94,7 @@ class PageTests(unittest.TestCase):
     def test_calculator_page_runs_and_balances(self):
         at = run(page_calculator)
         self.assertEqual(errors(at), [])
-        self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+        self.assertEqual(at.title[0].value, "Recipe Calculator")
         metrics = [m.value for m in at.metric]
         # default 10 g active basis: ChCl 1 : glyoxylic acid 2, both 98 wt% solids, no separate water
         self.assertEqual(metrics[0], "10.2041 g")   # 4.9520 g ChCl + 5.2521 g glyoxylic acid
@@ -168,6 +168,33 @@ class PageTests(unittest.TestCase):
         self.assertIn("Load the 3 example runs (Chuanyu's records) into my folder", [b.label for b in other.button])
 
     # ----------------------------------------------------------------------- guide
+    def test_calculator_can_add_a_reagent_by_cas_number(self):
+        import chem
+
+        record = {"cid": 6209, "name": "Choline Chloride", "formula": "C5H14ClNO", "mw": 139.62,
+                  "iupac": "", "smiles": "", "hbd": 1.0, "hba": 2.0, "xlogp": None, "tpsa": None,
+                  "cas": "67-48-1", "url": "https://pubchem.ncbi.nlm.nih.gov/compound/6209"}
+        saved = (chem.find_cids, chem.compound)
+        chem.find_cids = lambda term: [6209] if term.replace(" ", "") == "67-48-1" else []
+        chem.compound = lambda cid: record
+        try:
+            at = run(page_calculator)
+            at.text_input(key="calc_find").set_value("67-48-1").run()
+            at.button(key="calc_find_add").click().run()
+            self.assertEqual(errors(at), [])
+            rows = at.session_state["recipe_rows"]
+            self.assertEqual(rows[-1]["name"], "Choline Chloride")
+            self.assertAlmostEqual(rows[-1]["mw"], 139.62)
+            # an unknown CAS must not add anything
+            before = len(rows)
+            chem.find_cids = lambda term: []
+            at.text_input(key="calc_find").set_value("99-99-9").run()
+            at.button(key="calc_find_add").click().run()
+            self.assertEqual(len(at.session_state["recipe_rows"]), before)
+            self.assertTrue(at.warning)
+        finally:
+            chem.find_cids, chem.compound = saved
+
     def test_lookup_page_shows_a_compound_and_adds_it_to_the_recipe(self):
         import chem
 
@@ -311,12 +338,12 @@ class PageTests(unittest.TestCase):
         at.text_input[1].set_value(auth.DEFAULT_PASSWORD)
         press(at, "Sign in")
         self.assertEqual(session_user(at), "Thena")
-        self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+        self.assertEqual(at.title[0].value, "Recipe Calculator")
 
     def test_language_switch_translates_every_page(self):
         calc = run(page_calculator, lang="zh")
         self.assertEqual(errors(calc), [])
-        self.assertEqual(calc.title[0].value, "DES 配比计算")
+        self.assertEqual(calc.title[0].value, "配比计算")
         labels = [m.label for m in calc.metric]
         self.assertIn("配制总质量", labels)
         self.assertIn("比有效组分多称", labels)
@@ -337,7 +364,7 @@ class PageTests(unittest.TestCase):
 
     def test_language_switch_keeps_english_by_default(self):
         at = run(page_calculator)
-        self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+        self.assertEqual(at.title[0].value, "Recipe Calculator")
         self.assertEqual(i18n.lang(), "en")
 
     def test_create_account_starts_with_an_empty_record_folder(self):
@@ -367,7 +394,7 @@ class PageTests(unittest.TestCase):
         press(at, "Create my account")
         self.assertEqual(errors(at), [])
         self.assertEqual(session_user(at), "Wei")
-        self.assertEqual(at.title[0].value, "DES Recipe Calculator")
+        self.assertEqual(at.title[0].value, "Recipe Calculator")
         self.assertTrue(auth.user_dir("Wei").is_dir(), "record folder should exist immediately")
         self.assertIsNone(auth.load_results("Wei"), "a new account must start with no rows")
         self.assertIsNone(auth.load_results("Thena"), "and must not inherit anyone else's rows")

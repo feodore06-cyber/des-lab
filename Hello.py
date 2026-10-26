@@ -27,6 +27,10 @@ import views
 from i18n import t
 
 ROOT = Path(__file__).parent
+# ---- product identity: change these two lines to rename the whole app ----
+APP_NAME = "BioMat Lab"
+APP_TAGLINE = "Experiment Workbench"
+APP_TITLE = f"{APP_NAME} {chr(183)} {APP_TAGLINE}"
 LOGO_PATH = ROOT / "static/astar_logo.png"
 LOGO_URL = "app/static/astar_logo.png"
 
@@ -248,18 +252,18 @@ STYLE = """
 </style>
 """
 
-SPLASH = """
+SPLASH = f"""
 <div id="dsh-splash">
   <div class="dsh-shine-wrap">
-    <img src="app/static/astar_logo.png" alt="A*STAR — Agency for Science, Technology and Research, Singapore">
+    <img src="app/static/astar_logo.png" alt="A*STAR - Agency for Science, Technology and Research, Singapore">
     <span class="dsh-beam" aria-hidden="true"></span>
   </div>
   <div class="dsh-bar"><span></span></div>
-  <div class="dsh-tag">DES Lab · Experiment Workbench</div>
+  <div class="dsh-tag">{APP_NAME} · {APP_TAGLINE}</div>
 </div>
 """
 
-st.set_page_config(page_title="DES Lab · Experiment Workbench", page_icon=str(LOGO_PATH), layout="wide")
+st.set_page_config(page_title=APP_TITLE, page_icon=str(LOGO_PATH), layout="wide")
 st.markdown(STYLE, unsafe_allow_html=True)
 
 # Show the A*STAR intro once per browser session (about 3 seconds, then it fades away).

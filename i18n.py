@@ -16,7 +16,7 @@ OPTIONS = {"en": "English", "zh": "中文"}
 
 EN = {
     # ------------------------------------------------------------------ app / sidebar
-    "app.page_calc": "DES Recipe Calculator",
+    "app.page_calc": "Recipe Calculator",
     "app.page_results": "Results & Figures",
     "app.page_guide": "Guide & Templates",
     "app.page_lookup": "Chemical Lookup",
@@ -52,7 +52,7 @@ EN = {
     "signup.pw_mismatch": "The two passwords do not match.",
     # ------------------------------------------------------------------ calculator
     "calc.step": "01 / PREPARE",
-    "calc.title": "DES Recipe Calculator",
+    "calc.title": "Recipe Calculator",
     "calc.intro": "Enter molar ratios and the real reagent assays to get a traceable weighing list.",
     "calc.info": ("The numbers below are a calculation example, not a recommended formulation. Update them from "
                   "your reagent labels; a mass balance cannot prove that a mixture has formed a DES."),
@@ -61,6 +61,11 @@ EN = {
     "calc.ideal_help": ("On: every reagent is treated as 100% active, so the reagent to weigh equals the active "
                         "mass. With no extra water the total prepared mass then equals the target mass. Off: type "
                         "the real assay from each bottle into the table below."),
+    "calc.reagent_added": "Added {name} to the table with M_r {mw} g/mol (one molar part, 98 wt%).",
+    "calc.find_label": "Add a reagent by name or CAS number",
+    "calc.find_ph": "e.g. 氯化胆碱, choline chloride, 67-48-1",
+    "calc.find_add": "Look up & add",
+    "calc.find_hint": "Reads the molar mass straight from PubChem, so you do not have to type it. Nothing is added if the name is not found.",
     "calc.preset_chcl": "ChCl",
     "calc.preset_ga": "Glyoxylic acid (solid)",
     "calc.col_name": "Component / reagent form",
@@ -175,6 +180,10 @@ EN = {
     "res.download_png": "Download PNG · 300 dpi",
     "res.download_svg": "Download SVG · vector",
     # ------------------------------------------------------------------ guide
+    "store.title": "Where your records live",
+    "store.database": "Connected to a Postgres database (Supabase) - records survive restarts and redeploys.",
+    "store.local": "Local files in user_data/ - records stay on this computer. Add a database to keep them on a hosted deployment.",
+    "store.error": "The database is configured but the connection failed: {error}",
     "guide.step": "03 / GUIDE",
     "guide.title": "How to use",
     "guide.body": """
@@ -245,7 +254,7 @@ This is a local workbench built on Streamlit's official `hello` repository, keep
 
 ZH = {
     # ------------------------------------------------------------------ app / sidebar
-    "app.page_calc": "DES 配比计算",
+    "app.page_calc": "配比计算",
     "app.page_results": "实验结果与图表",
     "app.page_guide": "使用说明与账号",
     "app.page_lookup": "化学品查询",
@@ -280,13 +289,18 @@ ZH = {
     "signup.pw_mismatch": "两次输入的密码不一致。",
     # ------------------------------------------------------------------ calculator
     "calc.step": "01 / 配制",
-    "calc.title": "DES 配比计算",
+    "calc.title": "配比计算",
     "calc.intro": "输入摩尔比和试剂的真实含量，得到一张可追溯的称量清单。",
     "calc.info": ("下面的数字只是计算示例，不是推荐配方。请按试剂瓶标签修改；质量平衡不能证明混合物已经形成 DES。"),
     "calc.s1": "**1 · 各试剂纯度**",
     "calc.ideal": "假设 100% 纯度（理想）",
     "calc.ideal_help": ("打开：所有试剂都按 100% 有效计算，应称试剂就等于有效组分质量；不额外加水时，配制总质量"
                         "等于目标质量。关闭：在下表里按瓶签填写真实含量。"),
+    "calc.reagent_added": "已把 {name} 加进表格：M_r {mw} g/mol（1 摩尔份，按 98% 纯度）。",
+    "calc.find_label": "按名称或 CAS 号添加试剂",
+    "calc.find_ph": "例如 氯化胆碱、choline chloride、67-48-1",
+    "calc.find_add": "查询并添加",
+    "calc.find_hint": "摩尔质量直接从 PubChem 读取，不用手抄。查不到就不会添加。",
     "calc.preset_chcl": "氯化胆碱 ChCl",
     "calc.preset_ga": "乙醛酸（固体）",
     "calc.col_name": "组分 / 试剂形式",
@@ -384,6 +398,10 @@ ZH = {
     "res.download_png": "下载 PNG · 300 dpi",
     "res.download_svg": "下载 SVG · 矢量图",
     # ------------------------------------------------------------------ guide
+    "store.title": "记录存在哪里",
+    "store.database": "已连接 Postgres 数据库（Supabase）——重启或重新部署都不会丢。",
+    "store.local": "存在本机 user_data/ 文件夹——只在这台电脑上。部署到云端时需要数据库才不丢。",
+    "store.error": "配置了数据库但连接失败：{error}",
     "guide.step": "03 / 说明",
     "guide.title": "使用说明",
     "guide.body": """
@@ -471,7 +489,7 @@ EN.update({
     "lookup.open": "Open the PubChem page",
     "lookup.add": "Add to my recipe",
     "lookup.added": "Added {name} (M_r {mw} g/mol) to the recipe as one molar part.",
-    "lookup.added_hint": "Open DES Recipe Calculator to set the molar ratio and purity.",
+    "lookup.added_hint": "Open Recipe Calculator to set the molar ratio and purity.",
     "lookup.unknown_value": "not listed",
 })
 
@@ -501,7 +519,7 @@ ZH.update({
     "lookup.open": "打开 PubChem 页面",
     "lookup.add": "加进我的配方",
     "lookup.added": "已把 {name}（M_r {mw} g/mol）作为 1 摩尔份加进配方。",
-    "lookup.added_hint": "到「DES 配比计算」页设置摩尔比和纯度即可。",
+    "lookup.added_hint": "到「配比计算」页设置摩尔比和纯度即可。",
     "lookup.unknown_value": "暂无",
 })
 

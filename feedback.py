@@ -16,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 
 import auth
+import store
 
 CATEGORIES = ("bug", "idea", "data", "other")
 COLUMNS = ["timestamp", "user", "category", "message", "page", "contact", "app_version"]
@@ -43,6 +44,9 @@ def add(user: str, category: str, message: str, page: str = "", contact: str = "
         "contact": (contact or "").strip(),
         "app_version": APP_VERSION,
     }], columns=COLUMNS)
+    if store.enabled():
+        store.append_row(user or "anonymous", "feedback", row.iloc[0].to_dict())
+        return "database"
     path = feedback_path()
     if path.exists():
         row.to_csv(path, mode="a", header=False, index=False, encoding="utf-8-sig")
@@ -52,6 +56,13 @@ def add(user: str, category: str, message: str, page: str = "", contact: str = "
 
 
 def load_all() -> pd.DataFrame | None:
+    if store.enabled():
+        frame = store.load_all("feedback")
+        if frame.empty:
+            return None
+        if "timestamp" in frame.columns:
+            frame = frame.sort_values("timestamp", ascending=False).reset_index(drop=True)
+        return frame
     path = feedback_path()
     if not path.exists():
         return None
