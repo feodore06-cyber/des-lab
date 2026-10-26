@@ -45,8 +45,11 @@ def add(user: str, category: str, message: str, page: str = "", contact: str = "
         "app_version": APP_VERSION,
     }], columns=COLUMNS)
     if store.enabled():
-        store.append_row(user or "anonymous", "feedback", row.iloc[0].to_dict())
-        return "database"
+        try:
+            store.append_row(user or "anonymous", "feedback", row.iloc[0].to_dict())
+            return "database"
+        except Exception:
+            pass  # database unreachable: keep the report in a local CSV
     path = feedback_path()
     if path.exists():
         row.to_csv(path, mode="a", header=False, index=False, encoding="utf-8-sig")

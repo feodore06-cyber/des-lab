@@ -211,11 +211,14 @@ def invite_required() -> bool:
 def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Path | str:
     """Store a results table: in Postgres when configured, otherwise in the user's folder."""
     if store.enabled():
-        if append:
-            store.append(username, "results", frame)
-        else:
-            store.replace(username, "results", frame)
-        return "database"
+        try:
+            if append:
+                store.append(username, "results", frame)
+            else:
+                store.replace(username, "results", frame)
+            return "database"
+        except Exception:
+            pass  # database unreachable: fall through to the local CSV so nothing is lost
     path = results_path(username)
     if append and path.exists():
         try:
@@ -243,11 +246,14 @@ def _import_results_csv(username: str) -> None:
 def load_results(username: str) -> pd.DataFrame | None:
     """The saved rows for this user; local CSVs are imported once when a database is switched on."""
     if store.enabled():
-        frame = store.load(username, "results")
-        if frame.empty:
-            _import_results_csv(username)
+        try:
             frame = store.load(username, "results")
-        return None if frame.empty else frame
+            if frame.empty:
+                _import_results_csv(username)
+                frame = store.load(username, "results")
+            return None if frame.empty else frame
+        except Exception:
+            pass  # database unreachable: fall back to the local CSV below
     path = results_path(username)
     if not path.exists():
         return None
@@ -261,12 +267,15 @@ def save_recipe(username: str, frame: pd.DataFrame) -> Path | str:
     """Keep a copy of a weighing list, in the database when configured."""
     tag = frame.attrs.get("tag") or time.strftime("%Y%m%d-%H%M%S")
     if store.enabled():
-        tagged = frame.copy()
-        tagged["saved_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        tagged["tag"] = tag
-        tagged["saved_by"] = username
-        store.append(username, "recipe", tagged)
-        return "database"
+        try:
+            tagged = frame.copy()
+            tagged["saved_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            tagged["tag"] = tag
+            tagged["saved_by"] = username
+            store.append(username, "recipe", tagged)
+            return "database"
+        except Exception:
+            pass  # database unreachable: fall back to a local CSV
     folder = user_dir(username) / "recipes"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"recipe_{tag}.csv"
