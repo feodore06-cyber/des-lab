@@ -39,6 +39,14 @@ create table if not exists accounts (
     created timestamptz not null default now(),
     last_login timestamptz
 );
+create table if not exists reset_tokens (
+    token_hash text primary key,
+    username text not null,
+    created timestamptz not null default now(),
+    expires timestamptz not null,
+    used boolean not null default false
+);
+create index if not exists reset_tokens_user on reset_tokens (username);
 """
 
 
@@ -245,5 +253,48 @@ def accounts_rows() -> list[dict]:
             "last_login": last_login.strftime("%Y-%m-%d %H:%M") if last_login else "never",
         }
         for name, created, last_login in rows
+    ]
+
+
+# ------------------------------------------------------------- password resets
+def token_create(username: str, token_hash: str, expires) -> None:
+    """Store one pending link; older unused links for the same account are dropped."""
+    with _connect() as conn:
+        conn.execute("delete from reset_tokens where username = %s and used = false", (username,))
+        conn.execute(
+            "insert into reset_tokens (token_hash, username, expires) values (%s, %s, %s)",
+            (token_hash, username, expires),
+        )
+        conn.commit()
+
+
+def token_lookup(token_hash: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "select username, expires, used from reset_tokens where token_hash = %s", (token_hash,)
+        ).fetchone()
+    if not row:
+        return None
+    return {"username": row[0], "expires": row[1], "used": row[2]}
+
+
+def token_use(token_hash: str) -> None:
+    with _connect() as conn:
+        conn.execute("update reset_tokens set used = true where token_hash = %s", (token_hash,))
+        conn.commit()
+
+
+def tokens_pending() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "select username, created, expires from reset_tokens where used = false order by created desc"
+        ).fetchall()
+    return [
+        {
+            "username": name,
+            "created": created.strftime("%Y-%m-%d %H:%M") if created else "",
+            "expires": expires.strftime("%Y-%m-%d %H:%M") if expires else "",
+        }
+        for name, created, expires in rows
     ]
 

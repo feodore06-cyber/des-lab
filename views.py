@@ -361,6 +361,23 @@ def guide():
         st.caption(t("guide.accounts_admin_only"))
     st.caption(t("guide.records_note"))
 
+    st.subheader(t("guide.resets"))
+    if auth.is_admin(user):
+        st.caption(t("guide.resets_hint"))
+        names = sorted(auth.load_users())
+        if names:
+            with st.form("admin_reset"):
+                who = st.selectbox(t("guide.resets_pick"), names, key="reset_who")
+                if st.form_submit_button(t("guide.resets_create")):
+                    token = auth.create_reset_token(who)
+                    st.session_state["last_reset_link"] = auth.reset_link(token) if token else ""
+            link = st.session_state.get("last_reset_link")
+            if link:
+                st.code(link, language="text")
+                st.caption(t("guide.resets_link"))
+    else:
+        st.caption(t("guide.accounts_admin_only"))
+
     left, right = st.columns(2)
     with left:
         st.markdown(t("guide.change"))

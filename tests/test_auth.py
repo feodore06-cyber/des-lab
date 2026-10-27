@@ -138,5 +138,25 @@ class AuthTests(unittest.TestCase):
         self.assertTrue(auth.verify("Thena", auth.DEFAULT_PASSWORD))
         self.assertEqual(auth.display_name("Thena"), "Thena")
 
+    def test_reset_token_lifecycle(self):
+        auth.ensure_store()
+        token = auth.create_reset_token("thena")
+        self.assertTrue(token)
+        self.assertIsNone(auth.create_reset_token("nobody@example.com"), "no account enumeration")
+        self.assertEqual(auth.reset_password(token, "a-new-password"), "Thena")
+        self.assertTrue(auth.verify("Thena", "a-new-password"))
+        self.assertFalse(auth.verify("Thena", auth.DEFAULT_PASSWORD))
+        self.assertIsNone(auth.reset_password(token, "another-password"), "a link works once")
+        self.assertIsNone(auth.reset_password("not-a-token", "whatever"))
+
+    def test_expired_tokens_are_refused(self):
+        auth.ensure_store()
+        token = auth.create_reset_token("Thena")
+        digest = auth.hashlib.sha256(token.encode()).hexdigest()
+        tokens = auth._tokens_json()
+        tokens[digest]["expires"] = "2020-01-01T00:00:00+00:00"
+        auth._save_tokens_json(tokens)
+        self.assertIsNone(auth.reset_password(token, "a-new-password"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

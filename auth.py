@@ -12,6 +12,7 @@ these accounts and expect it to protect data.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timedelta, timezone
 import hmac
 import json
 import os
@@ -262,6 +263,121 @@ def display_name(identifier: str | None) -> str:
     return name
 
 
+# ------------------------------------------------------------ password resets
+RESET_PARAM = "reset_token"
+RESET_TTL_MIN = 60
+RESET_FILE = "reset_tokens.json"
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _reset_path() -> Path:
+    return data_root() / RESET_FILE
+
+
+def _tokens_json() -> dict:
+    path = _reset_path()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("tokens", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_tokens_json(tokens: dict) -> None:
+    path = _reset_path()
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"tokens": tokens}, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _token_store(username: str, digest: str, expires) -> None:
+    if store.enabled():
+        try:
+            store.token_create(username, digest, expires)
+            return
+        except Exception:
+            pass
+    tokens = {k: v for k, v in _tokens_json().items() if v.get("username") != username or v.get("used")}
+    tokens[digest] = {"username": username, "expires": expires.isoformat(), "used": False}
+    _save_tokens_json(tokens)
+
+
+def _token_read(digest: str) -> dict | None:
+    if store.enabled():
+        try:
+            record = store.token_lookup(digest)
+        except Exception:
+            record = None
+        if record:
+            expires = record["expires"]
+            return {"username": record["username"], "used": record["used"],
+                    "expires": expires if expires.tzinfo else expires.replace(tzinfo=timezone.utc)}
+    record = _tokens_json().get(digest)
+    if not record:
+        return None
+    try:
+        expires = datetime.fromisoformat(record["expires"])
+    except (KeyError, ValueError):
+        return None
+    return {"username": record.get("username"), "used": bool(record.get("used")), "expires": expires}
+
+
+def _token_mark_used(digest: str) -> None:
+    if store.enabled():
+        try:
+            store.token_use(digest)
+        except Exception:
+            pass
+    tokens = _tokens_json()
+    if digest in tokens:
+        tokens[digest]["used"] = True
+        _save_tokens_json(tokens)
+
+
+def create_reset_token(identifier: str) -> str | None:
+    """Issue a one-time password-reset token. Unknown accounts get None (no account enumeration)."""
+    name = _find_user(load_users(), identifier)
+    if not name:
+        return None
+    token = secrets.token_urlsafe(32)
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    _token_store(name, digest, _now() + timedelta(minutes=RESET_TTL_MIN))
+    return token
+
+
+def reset_password(token: str, new_password: str) -> str | None:
+    """Redeem a token and set a new password. Returns the account name, or None."""
+    if not token or len(new_password) < 6:
+        return None
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    record = _token_read(digest)
+    if not record or record.get("used") or record["expires"] < _now():
+        return None
+    change_password(record["username"], new_password)
+    _token_mark_used(digest)
+    return record["username"]
+
+
+def reset_link(token: str) -> str:
+    """A full URL when the host can be detected, otherwise the bare query string."""
+    base = _flag("DESLAB_BASE_URL")
+    if not base:
+        try:
+            headers = st.context.headers
+            host = headers.get("Host")
+            proto = headers.get("X-Forwarded-Proto", "https")
+            if host:
+                base = f"{proto}://{host}"
+        except Exception:
+            base = None
+    suffix = f"?{RESET_PARAM}={token}"
+    return base.rstrip("/") + "/" + suffix if base else suffix
+
+
 def current_user() -> str | None:
     return st.session_state.get(SESSION_KEY)
 
@@ -420,6 +536,54 @@ def _signup_form() -> None:
         st.rerun()
 
 
+def _reset_request_form() -> None:
+    """Ask for an address and issue a one-time link. The answer never reveals whether it exists."""
+    with st.form("reset_request"):
+        ident = st.text_input(t("reset.identifier"), help=t("reset.request_hint"))
+        submitted = st.form_submit_button(t("reset.request_submit"), use_container_width=True)
+    if submitted:
+        token = create_reset_token(ident)
+        st.info(t("reset.sent"))
+        if token is None:
+            return
+        try:
+            from mailer import send_reset
+        except Exception:
+            send_reset = None
+        if send_reset is not None and send_reset(ident, reset_link(token)):
+            st.caption(t("reset.mail_sent"))
+        else:
+            st.caption(t("reset.no_mail"))
+    if st.button(t("reset.back"), use_container_width=True, key="go_signin_from_reset"):
+        st.session_state[MODE_KEY] = SIGNIN
+        st.rerun()
+
+
+def _reset_form(token: str) -> None:
+    """Set a new password from a one-time link."""
+    st.markdown("### " + t("reset.title"))
+    st.caption(t("reset.sub"))
+    with st.form("reset_commit"):
+        first = st.text_input(t("reset.new_pw"), type="password")
+        second = st.text_input(t("reset.repeat"), type="password")
+        submitted = st.form_submit_button(t("reset.submit"), type="primary", use_container_width=True)
+    if submitted:
+        if first != second:
+            st.error(t("signup.pw_mismatch"))
+        elif len(first) < 6:
+            st.error(t("guide.pw_short"))
+        else:
+            who = reset_password(token, first)
+            if who:
+                st.success(t("reset.done"))
+                if st.button(t("reset.back"), use_container_width=True, key="go_signin_after_reset"):
+                    st.query_params.clear()
+                    st.session_state.pop(MODE_KEY, None)
+                    st.rerun()
+            else:
+                st.error(t("reset.bad"))
+
+
 def login_form(logo_url: str | None = None) -> None:
     """Render the sign-in gate. Caller stops the script when it returns.
 
@@ -439,6 +603,21 @@ def login_form(logo_url: str | None = None) -> None:
             )
     switcher_left, switcher_mid, switcher_right = st.columns([1, 1.9, 1])
     language_switch(switcher_mid)
+
+    token = st.query_params.get(RESET_PARAM, "")
+    if isinstance(token, list):
+        token = token[0] if token else ""
+    if token:
+        left, middle, right = st.columns([1, 1.15, 1])
+        with middle:
+            _reset_form(token)
+        return
+
+    if st.session_state.get(MODE_KEY) == "reset_request":
+        left, middle, right = st.columns([1, 1.15, 1])
+        with middle:
+            _reset_request_form()
+        return
 
     if st.session_state.get(MODE_KEY) == SIGNUP:
         left, middle, right = st.columns([1, 1.15, 1])
@@ -475,6 +654,9 @@ def login_form(logo_url: str | None = None) -> None:
             else:
                 st.error(t("login.bad"))
         st.divider()
+        if st.button(t("login.forgot"), use_container_width=True, key="go_forgot"):
+            st.session_state[MODE_KEY] = "reset_request"
+            st.rerun()
         st.caption(t("login.new_teammate"))
         if st.button(t("login.create"), use_container_width=True, key="go_signup"):
             st.session_state[MODE_KEY] = SIGNUP

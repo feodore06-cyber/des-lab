@@ -267,6 +267,28 @@ class PageTests(unittest.TestCase):
         self.assertIn("Only administrators", " ".join(str(c.value) for c in other.caption))
         self.assertTrue(usernames, "the admin table should list the existing accounts")
 
+    def test_a_reset_link_lets_the_user_set_a_new_password(self):
+        auth.ensure_store()
+        token = auth.create_reset_token("Thena")
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.query_params["reset_token"] = token
+        at.run()
+        self.assertEqual(errors(at), [])
+        self.assertIn("Reset password", " ".join(str(m.value) for m in at.markdown))
+        at.text_input[0].set_value("a-fresh-password").run()
+        at.text_input[1].set_value("a-fresh-password").run()
+        press(at, "Set new password")
+        self.assertEqual(errors(at), [])
+        self.assertTrue(auth.verify("Thena", "a-fresh-password"))
+
+    def test_an_admin_can_generate_a_reset_link_for_a_teammate(self):
+        at = run(page_guide, user="Chuanyu")
+        self.assertEqual(errors(at), [])
+        press(at, "Create a reset link")
+        self.assertEqual(errors(at), [])
+        self.assertTrue(at.code, "the link should be shown to the admin")
+        self.assertIn("reset_token=", at.code[0].value)
+
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()
