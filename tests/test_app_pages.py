@@ -217,6 +217,32 @@ class PageTests(unittest.TestCase):
         finally:
             chem.find_cids, chem.compound = saved
 
+    def test_a_fresh_hosted_deployment_still_offers_sign_up(self):
+        # no users.json, hosted mode: the first account must still be creatable
+        os.environ[auth.HOSTED_ENV] = "1"
+        os.environ[auth.INVITE_ENV] = "code-123"
+        auth.users_path().unlink(missing_ok=True)  # a brand new container has no users.json
+        try:
+            at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+            at.run()
+            self.assertEqual(errors(at), [])
+            self.assertTrue(any("No accounts are configured" in str(e.value) for e in at.error))
+            labels = [b.label for b in at.button]
+            self.assertIn("Create a new account", labels, "the sign-up button must be reachable")
+            press(at, "Create a new account")
+            self.assertEqual(len(at.text_input), 5, "name + username + password + repeat + invite")
+            at.text_input[0].set_value("Wei Fan")
+            at.text_input[1].set_value("Wei")
+            at.text_input[2].set_value("wei-password")
+            at.text_input[3].set_value("wei-password")
+            at.text_input[4].set_value("code-123")
+            press(at, "Create my account")
+            self.assertEqual(errors(at), [])
+            self.assertEqual(session_user(at), "Wei", "the first account is created and signed in")
+        finally:
+            os.environ.pop(auth.HOSTED_ENV, None)
+            os.environ.pop(auth.INVITE_ENV, None)
+
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()

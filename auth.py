@@ -363,7 +363,15 @@ def login_form(logo_url: str | None = None) -> None:
         return
 
     if not load_users():
+        # A fresh hosted deployment starts with no accounts. Without this block the sign-up button
+        # would be unreachable and nobody could ever create the first account.
         st.error(t("login.no_accounts"))
+        left, middle, right = st.columns([1, 1.15, 1])
+        with middle:
+            st.caption(t("login.new_teammate"))
+            if st.button(t("login.create"), use_container_width=True, key="go_signup"):
+                st.session_state[MODE_KEY] = SIGNUP
+                st.rerun()
         return
 
     left, middle, right = st.columns([1, 1.15, 1])
