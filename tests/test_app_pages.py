@@ -217,6 +217,18 @@ class PageTests(unittest.TestCase):
         finally:
             chem.find_cids, chem.compound = saved
 
+    def test_settings_are_read_from_streamlit_secrets_not_only_env_vars(self):
+        # Streamlit Cloud delivers secrets through st.secrets and never exports them as env vars
+        auth.users_path().unlink(missing_ok=True)
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.secrets["DESLAB_HOSTED"] = "1"
+        at.secrets["DESLAB_INVITE_CODE"] = "secret-code-42"
+        at.run()
+        self.assertEqual(errors(at), [])
+        press(at, "Create a new account")
+        self.assertEqual(len(at.text_input), 5, "the invite field proves the secret was read")
+        self.assertIn("Invite code", [f.label for f in at.text_input])
+
     def test_a_fresh_hosted_deployment_still_offers_sign_up(self):
         # no users.json, hosted mode: the first account must still be creatable
         os.environ[auth.HOSTED_ENV] = "1"

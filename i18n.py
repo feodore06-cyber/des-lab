@@ -39,6 +39,13 @@ EN = {
     "login.bad": "Unknown username or wrong password.",
     "login.no_accounts": ("No accounts are configured for this deployment. Add an `[accounts]` table to the "
                           "app's secrets (see DEPLOY.md) and reload."),
+
+    "signup.display": "Your name (shown in the greeting)",
+    "signup.display_help": "For example Weifan. Leave it empty to use your username.",
+    "guide.display": "Your name",
+    "guide.display_help": "Shown in the greeting at the top of every page. Your username stays the same.",
+    "guide.display_save": "Save name",
+    "guide.display_saved": "Saved - you will be greeted as {name}.",
     "signup.title": "Create account",
     "signup.sub": "A new account starts empty: your own record folder, no shared rows.",
     "signup.username_help": "1-32 characters: letters, digits, dot, dash or underscore.",
@@ -279,6 +286,13 @@ ZH = {
     "login.need_both": "请填写用户名和密码。",
     "login.bad": "用户名或密码不正确。",
     "login.no_accounts": "这个部署还没有配置账号。请在应用的 secrets 里添加 `[accounts]`（见 DEPLOY.md）后刷新。",
+
+    "signup.display": "你的名字（显示在欢迎语里）",
+    "signup.display_help": "例如 Weifan。留空就用用户名。",
+    "guide.display": "你的名字",
+    "guide.display_help": "显示在每页顶部的欢迎语里；用户名不变。",
+    "guide.display_save": "保存名字",
+    "guide.display_saved": "已保存——以后会称呼你 {name}。",
     "signup.title": "创建账号",
     "signup.sub": "新账号是空的：只有你自己的记录文件夹，不会继承任何人的数据。",
     "signup.username_help": "1–32 个字符：字母、数字、点、短横线或下划线。",

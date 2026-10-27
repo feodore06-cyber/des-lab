@@ -165,7 +165,7 @@ def verify(username: str, password: str) -> bool:
 # ------------------------------------------------------------------- session
 def admins() -> set:
     """Who may read the feedback inbox: DESLAB_ADMINS or the [admins] secret, else the default."""
-    raw = os.environ.get(ADMIN_ENV)
+    raw = _flag(ADMIN_ENV)
     if not raw:
         try:
             secret = st.secrets.get("admins")
@@ -215,13 +215,29 @@ def login(username: str, password: str) -> bool:
 
 
 # ---------------------------------------------------------------- record files
+def _flag(name: str) -> str | None:
+    """Read a deployment setting from the environment or from Streamlit secrets.
+
+    Streamlit Community Cloud does NOT export secrets as environment variables, so reading
+    os.environ alone silently ignored DESLAB_HOSTED / DESLAB_INVITE_CODE / DESLAB_ADMINS there.
+    """
+    value = os.environ.get(name)
+    if value:
+        return str(value)
+    try:
+        value = st.secrets.get(name)
+    except Exception:
+        return None
+    return str(value) if value else None
+
+
 def hosted_mode() -> bool:
     """True when running on a host whose filesystem does not persist (Streamlit Cloud, ...)."""
-    return bool(os.environ.get(HOSTED_ENV))
+    return bool(_flag(HOSTED_ENV))
 
 
 def invite_required() -> bool:
-    return bool(os.environ.get(INVITE_ENV))
+    return bool(_flag(INVITE_ENV))
 
 
 def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Path | str:
@@ -311,7 +327,7 @@ def _signup_form() -> None:
         username = st.text_input(t("login.username"), help=t("signup.username_help"))
         password = st.text_input(t("login.password"), type="password", help=t("signup.password_help"))
         confirm = st.text_input(t("signup.repeat"), type="password")
-        invite_needed = os.environ.get(INVITE_ENV)
+        invite_needed = _flag(INVITE_ENV)
         invite = st.text_input(t("signup.invite"), type="password") if invite_needed else ""
         submitted = st.form_submit_button(t("signup.submit"), type="primary", use_container_width=True)
     if submitted:
