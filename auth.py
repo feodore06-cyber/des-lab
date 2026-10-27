@@ -35,6 +35,8 @@ INVITE_ENV = "DESLAB_INVITE_CODE"      # when set, sign-up requires this code
 HOSTED_ENV = "DESLAB_HOSTED"           # when set, warn that storage is ephemeral
 ADMIN_ENV = "DESLAB_ADMINS"             # comma separated list of admin usernames
 DEFAULT_ADMINS = ("Chuanyu",)
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+EMAIL_MAX = 120
 
 # Teammates seeded on the very first launch. Change the password in the app
 # (Guide & Templates -> Account) as soon as the real team is set up.
@@ -55,11 +57,30 @@ def users_path() -> Path:
     return data_root() / "users.json"
 
 
-def user_dir(username: str) -> Path:
-    """Record folder for one user; rejects anything that is not a plain handle."""
-    if not isinstance(username, str) or not USERNAME_RE.fullmatch(username):
+def folder_name(username: str) -> str:
+    """A filesystem-safe folder name for an account.
+
+    Accounts are e-mail addresses now; ``@`` is legal on disk but awkward in paths and shells, so it
+    becomes ``_at_``. Separators and ``..`` are refused outright, because a folder name must never be
+    able to escape ``records/``.
+    """
+    if not isinstance(username, str) or not username.strip():
         raise ValueError("invalid user name")
-    path = data_root() / "records" / username
+    name = username.strip()
+    if USERNAME_RE.fullmatch(name):
+        return name
+    if "/" in name or "\\" in name or ".." in name or "\x00" in name:
+        raise ValueError("invalid user name")
+    safe = name.replace("@", "_at_")
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", safe)
+    if not safe or safe in {".", ".."}:
+        raise ValueError("invalid user name")
+    return safe
+
+
+def user_dir(username: str) -> Path:
+    """Record folder for one account; creates it on first use."""
+    path = data_root() / "records" / folder_name(username)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -158,33 +179,55 @@ def ensure_store() -> dict:
     return users
 
 
-def add_user(username: str, password: str) -> None:
-    username = username.strip()
-    if not USERNAME_RE.fullmatch(username):
+def _find_user(users: dict, identifier: str) -> str | None:
+    """Find an account by name or e-mail, ignoring case."""
+    wanted = (identifier or "").strip()
+    if wanted in users:
+        return wanted
+    lowered = wanted.lower()
+    for name in users:
+        if name.lower() == lowered:
+            return name
+    return None
+
+
+def add_user(identifier: str, password: str) -> str:
+    """Create an account. The identifier is an e-mail address (new style) or a username (legacy)."""
+    identifier = (identifier or "").strip()
+    if "@" in identifier:
+        identifier = identifier.lower()
+        if not EMAIL_RE.fullmatch(identifier) or len(identifier) > EMAIL_MAX:
+            raise ValueError("Enter a valid email address.")
+    elif not USERNAME_RE.fullmatch(identifier):
         raise ValueError("Use 1-32 characters: letters, digits, dot, dash or underscore.")
     if len(password) < 6:
         raise ValueError("Use a password with at least 6 characters.")
     users = ensure_store()
-    if username in users:
-        raise ValueError(f"{username} already exists.")
-    users[username] = _entry(password)
+    existing = _find_user(users, identifier)
+    if existing:
+        raise ValueError(f"{identifier} already exists.")
+    users[identifier] = _entry(password)
     save_users(users)
-    user_dir(username)  # create the empty record folder straight away
+    user_dir(identifier)  # create the empty record folder straight away
+    return identifier
 
 
 def change_password(username: str, password: str) -> None:
     users = ensure_store()
-    if username not in users:
+    name = _find_user(users, username)
+    if not name:
         raise ValueError("unknown user")
+    username = name
     if len(password) < 6:
         raise ValueError("Use a password with at least 6 characters.")
     users[username] = _entry(password)
     save_users(users)
 
 
-def verify(username: str, password: str) -> bool:
+def verify(identifier: str, password: str) -> bool:
     users = load_users()
-    entry = users.get((username or "").strip())
+    name = _find_user(users, identifier)
+    entry = users.get(name) if name else None
     if not entry:
         return False
     candidate = _hash(password, entry["salt"], int(entry.get("iterations", ITERATIONS)))
@@ -209,6 +252,14 @@ def admins() -> set:
 
 def is_admin(username: str | None) -> bool:
     return bool(username) and username in admins()
+
+
+def display_name(identifier: str | None) -> str:
+    """The greeting shows the part before @ for e-mail accounts, otherwise the username."""
+    name = (identifier or "").strip()
+    if "@" in name:
+        return name.split("@", 1)[0]
+    return name
 
 
 def current_user() -> str | None:
@@ -341,7 +392,7 @@ def _signup_form() -> None:
     st.markdown("### " + t("signup.title"))
     st.caption(t("signup.sub"))
     with st.form("signup", clear_on_submit=False):
-        username = st.text_input(t("login.username"), help=t("signup.username_help"))
+        username = st.text_input(t("signup.email"), help=t("signup.email_help"))
         password = st.text_input(t("login.password"), type="password", help=t("signup.password_help"))
         confirm = st.text_input(t("signup.repeat"), type="password")
         invite_needed = _flag(INVITE_ENV)
@@ -412,7 +463,7 @@ def login_form(logo_url: str | None = None) -> None:
         st.markdown("### " + t("login.title"))
         st.caption(t("login.sub"))
         with st.form("login", clear_on_submit=False):
-            username = st.text_input(t("login.username"))
+            username = st.text_input(t("login.identifier"))
             password = st.text_input(t("login.password"), type="password")
             submitted = st.form_submit_button(t("login.submit"), type="primary", use_container_width=True)
         if submitted:

@@ -112,5 +112,31 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(path.parent.parent, auth.user_dir("Thena"))
 
 
+    def test_email_accounts_ignore_case(self):
+        auth.add_user("Weifan.Tan@Example.com", "a-good-password")
+        self.assertTrue(auth.verify("weifan.tan@example.com", "a-good-password"))
+        self.assertTrue(auth.verify("WEIFAN.TAN@EXAMPLE.COM", "a-good-password"))
+        self.assertFalse(auth.verify("weifan.tan@example.com", "wrong-password"))
+        self.assertEqual(auth.display_name("weifan.tan@example.com"), "weifan.tan")
+
+    def test_email_addresses_are_validated(self):
+        for bad in ("wei@", "@example.com", "wei@example", "wei example@x.com", "wei@@example.com"):
+            with self.assertRaises(ValueError, msg=bad):
+                auth.add_user(bad, "a-good-password")
+        auth.add_user("ok@example.com", "a-good-password")
+        with self.assertRaises(ValueError):
+            auth.add_user("OK@example.com", "a-good-password")  # same address, other case
+
+    def test_a_name_without_at_is_still_a_username(self):
+        # the team's existing accounts (Thena, Chuanyu) keep working this way
+        auth.add_user("weifan", "a-good-password")
+        self.assertTrue(auth.verify("weifan", "a-good-password"))
+        self.assertEqual(auth.display_name("weifan"), "weifan")
+
+    def test_usernames_still_work_for_existing_teammates(self):
+        auth.ensure_store()
+        self.assertTrue(auth.verify("Thena", auth.DEFAULT_PASSWORD))
+        self.assertEqual(auth.display_name("Thena"), "Thena")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

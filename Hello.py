@@ -308,7 +308,7 @@ if auth.hosted_mode() and not store.enabled():
 # A greeting for whoever just signed in, at the top of every page.
 st.markdown(
     '<div class="dsh-welcome">'
-    f'<span class="dsh-welcome-hi">{t("app.welcome", user=user)}</span>'
+    f'<span class="dsh-welcome-hi">{t("app.welcome", user=auth.display_name(user))}</span>'
     f'<span class="dsh-welcome-sub">{t("app.welcome_sub")}</span>'
     "</div>",
     unsafe_allow_html=True,

@@ -31,6 +31,10 @@ EN = {
     # ------------------------------------------------------------------ login / signup
     "login.title": "Sign in",
     "login.sub": "Each teammate signs in to their own record folder.",
+    "login.identifier": "Email or username",
+    "signup.email": "Email",
+    "signup.email_help": "Used to sign in, and later for the welcome and password-reset mail.",
+    "Enter a valid email address.": "Enter a valid email address.",
     "login.username": "Username",
     "login.password": "Password",
     "login.submit": "Sign in",
@@ -288,6 +292,10 @@ ZH = {
     # ------------------------------------------------------------------ login / signup
     "login.title": "登录",
     "login.sub": "每位成员登录后进入自己的记录文件夹。",
+    "login.identifier": "邮箱或用户名",
+    "signup.email": "邮箱",
+    "signup.email_help": "用它登录；以后还会用它接收欢迎邮件和重置密码邮件。",
+    "Enter a valid email address.": "请输入有效的邮箱地址。",
     "login.username": "用户名",
     "login.password": "密码",
     "login.submit": "登录",
