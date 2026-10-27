@@ -1,4 +1,6 @@
-streamlit==1.63.0
-pandas==3.0.5
-matplotlib==3.11.2
-psycopg[binary]>=3.1
+# Ranges rather than exact pins: hosted images differ in Python version, and an exact pin that has
+# no wheel for that version makes the deploy fail before the app even starts.
+streamlit>=1.40,<2
+pandas>=2.2,<4
+matplotlib>=3.8,<4
+psycopg[binary]>=3.1,<4
