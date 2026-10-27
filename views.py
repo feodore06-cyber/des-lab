@@ -330,6 +330,35 @@ def guide():
         st.info(t("guide.signin_hint"))
         return
     st.markdown(t("guide.signed_in", user=user, path=auth.user_dir(user)))
+
+    st.divider()
+    st.subheader(t("guide.accounts"))
+    if auth.is_admin(user):
+        rows = []
+        try:
+            if store.enabled():
+                rows = store.accounts_rows()
+            else:
+                rows = [{"username": name, "created": entry.get("created", ""),
+                         "last_login": entry.get("last_login", "")}
+                        for name, entry in auth.load_users().items()]
+        except Exception as exc:
+            st.error(t("guide.accounts_error", error=str(exc).splitlines()[0][:160]))
+        if rows:
+            week_ago = pd.Timestamp.now() - pd.Timedelta(days=7)
+            recent = sum(1 for row in rows
+                         if row["created"] and pd.to_datetime(row["created"], errors="coerce") >= week_ago)
+            active = sum(1 for row in rows if row["last_login"] and row["last_login"] != "never")
+            a, b, c = st.columns(3)
+            a.metric(t("guide.accounts_total"), len(rows))
+            b.metric(t("guide.accounts_recent"), recent)
+            c.metric(t("guide.accounts_active"), active)
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+            st.caption(t("guide.accounts_hint"))
+        else:
+            st.info(t("guide.accounts_none"))
+    else:
+        st.caption(t("guide.accounts_admin_only"))
     st.caption(t("guide.records_note"))
 
     left, right = st.columns(2)

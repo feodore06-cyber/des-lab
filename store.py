@@ -31,6 +31,14 @@ create table if not exists records (
     created_at timestamptz not null default now()
 );
 create index if not exists records_lookup on records (username, kind, id);
+create table if not exists accounts (
+    username text primary key,
+    salt text not null,
+    hash text not null,
+    iterations integer not null,
+    created timestamptz not null default now(),
+    last_login timestamptz
+);
 """
 
 
@@ -177,3 +185,65 @@ def count(username: str | None = None, kind: str | None = None) -> int:
 def add_columns(username: str, kind: str, columns: Iterable[str]) -> None:
     """Postgres needs no schema change for new columns: they live inside the jsonb payload."""
     return None
+
+
+# ------------------------------------------------------------------ accounts
+def accounts_all() -> dict:
+    """Every account as ``{username: entry}``; ``entry`` keeps the same shape the JSON store uses."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "select username, salt, hash, iterations, created, last_login from accounts order by created"
+        ).fetchall()
+    accounts = {}
+    for username, salt, digest, iterations, created, last_login in rows:
+        accounts[username] = {
+            "salt": salt,
+            "hash": digest,
+            "iterations": iterations,
+            "created": created.strftime("%Y-%m-%d %H:%M:%S") if created else "",
+            "last_login": last_login.strftime("%Y-%m-%d %H:%M:%S") if last_login else "",
+        }
+    return accounts
+
+
+def account_upsert(username: str, entry: dict) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            insert into accounts (username, salt, hash, iterations)
+            values (%s, %s, %s, %s)
+            on conflict (username) do update
+              set salt = excluded.salt, hash = excluded.hash, iterations = excluded.iterations
+            """,
+            (username, entry["salt"], entry["hash"], int(entry.get("iterations", 200_000))),
+        )
+        conn.commit()
+
+
+def account_delete(username: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from accounts where username = %s", (username,))
+        conn.commit()
+
+
+def account_touch_login(username: str) -> None:
+    with _connect() as conn:
+        conn.execute("update accounts set last_login = now() where username = %s", (username,))
+        conn.commit()
+
+
+def accounts_rows() -> list[dict]:
+    """Rows for the admin table, newest first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "select username, created, last_login from accounts order by created desc"
+        ).fetchall()
+    return [
+        {
+            "username": name,
+            "created": created.strftime("%Y-%m-%d") if created else "",
+            "last_login": last_login.strftime("%Y-%m-%d %H:%M") if last_login else "never",
+        }
+        for name, created, last_login in rows
+    ]
+

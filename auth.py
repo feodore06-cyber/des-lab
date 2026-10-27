@@ -74,14 +74,14 @@ def _hash(password: str, salt_hex: str, iterations: int = ITERATIONS) -> str:
                                iterations).hex()
 
 
-def _entry(password: str, display: str = "") -> dict:
+def _entry(password: str) -> dict:
     salt = secrets.token_hex(16)
     return {"salt": salt, "hash": _hash(password, salt), "iterations": ITERATIONS,
-            "created": time.strftime("%Y-%m-%d %H:%M:%S"), "display": display.strip()}
+            "created": time.strftime("%Y-%m-%d %H:%M:%S")}
 
 
 # --------------------------------------------------------------------- store
-def load_users() -> dict:
+def _load_users_json() -> dict:
     path = users_path()
     if not path.exists():
         return {}
@@ -91,11 +91,40 @@ def load_users() -> dict:
         return {}
 
 
+def load_users() -> dict:
+    """Accounts live in the database when one is configured, otherwise in users.json.
+
+    A container filesystem is temporary, so a hosted deployment would lose every account on each
+    redeploy while they only lived in the file. The first run with a database imports the file once.
+    """
+    if store.enabled():
+        try:
+            accounts = store.accounts_all()
+            if accounts:
+                return accounts
+            local = _load_users_json()
+            if local:
+                for name, entry in local.items():
+                    store.account_upsert(name, entry)
+                return local
+            return {}
+        except Exception:
+            pass  # database unreachable: fall back to the file below
+    return _load_users_json()
+
+
 def save_users(users: dict) -> None:
+    """Write the accounts to users.json and, when configured, to the database."""
     path = users_path()
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps({"users": users}, indent=2, ensure_ascii=False), encoding="utf-8")
     tmp.replace(path)
+    if store.enabled():
+        try:
+            for name, entry in users.items():
+                store.account_upsert(name, entry)
+        except Exception:
+            pass  # keep working with the local file if the database is down
 
 
 def seeded_accounts() -> dict:
@@ -129,7 +158,7 @@ def ensure_store() -> dict:
     return users
 
 
-def add_user(username: str, password: str, display: str = "") -> None:
+def add_user(username: str, password: str) -> None:
     username = username.strip()
     if not USERNAME_RE.fullmatch(username):
         raise ValueError("Use 1-32 characters: letters, digits, dot, dash or underscore.")
@@ -138,7 +167,7 @@ def add_user(username: str, password: str, display: str = "") -> None:
     users = ensure_store()
     if username in users:
         raise ValueError(f"{username} already exists.")
-    users[username] = _entry(password, display)
+    users[username] = _entry(password)
     save_users(users)
     user_dir(username)  # create the empty record folder straight away
 
@@ -182,22 +211,6 @@ def is_admin(username: str | None) -> bool:
     return bool(username) and username in admins()
 
 
-def display_name(username: str | None) -> str:
-    """The name shown in the greeting: what the person typed at sign-up, else their username."""
-    if not username:
-        return ""
-    entry = load_users().get(username) or {}
-    return (entry.get("display") or "").strip() or username
-
-
-def set_display_name(username: str, display: str) -> None:
-    users = ensure_store()
-    if username not in users:
-        raise ValueError("unknown user")
-    users[username]["display"] = (display or "").strip()[:40]
-    save_users(users)
-
-
 def current_user() -> str | None:
     return st.session_state.get(SESSION_KEY)
 
@@ -210,6 +223,11 @@ def logout() -> None:
 def login(username: str, password: str) -> bool:
     if verify(username, password):
         st.session_state[SESSION_KEY] = username.strip()
+        if store.enabled():
+            try:
+                store.account_touch_login(username.strip())
+            except Exception:
+                pass
         return True
     return False
 
@@ -323,7 +341,6 @@ def _signup_form() -> None:
     st.markdown("### " + t("signup.title"))
     st.caption(t("signup.sub"))
     with st.form("signup", clear_on_submit=False):
-        display = st.text_input(t("signup.display"), help=t("signup.display_help"))
         username = st.text_input(t("login.username"), help=t("signup.username_help"))
         password = st.text_input(t("login.password"), type="password", help=t("signup.password_help"))
         confirm = st.text_input(t("signup.repeat"), type="password")
@@ -340,7 +357,7 @@ def _signup_form() -> None:
             st.error(t("signup.pw_mismatch"))
         else:
             try:
-                add_user(name, password, display)
+                add_user(name, password)
             except ValueError as exc:
                 st.error(t(str(exc)))
             else:
