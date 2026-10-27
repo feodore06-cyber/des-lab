@@ -33,6 +33,7 @@ APP_NAME = "BioMat Lab"
 APP_TAGLINE = "Experiment Workbench"
 APP_TITLE = f"{APP_NAME} {chr(183)} {APP_TAGLINE}"
 LOGO_PATH = ROOT / "static/astar_logo.png"
+LOGO_MARK_PATH = ROOT / "static/astar_mark.png"  # just the a* mark, for the tab icon
 LOGO_URL = "app/static/astar_logo.png"
 
 # A*STAR brand colours sampled from the supplied logo: blue #002F86, red #D8291B.
@@ -278,7 +279,7 @@ SPLASH = f"""
 </div>
 """
 
-st.set_page_config(page_title=APP_TITLE, page_icon=str(LOGO_PATH), layout="wide")
+st.set_page_config(page_title=APP_TITLE, page_icon=str(LOGO_MARK_PATH), layout="wide")
 st.markdown(STYLE, unsafe_allow_html=True)
 
 # Show the A*STAR intro once per browser session (about 3 seconds, then it fades away).
@@ -296,7 +297,7 @@ if not user:
     st.stop()
 
 # From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.
-st.logo(str(LOGO_PATH), size="large", link="https://www.a-star.edu.sg/")
+st.logo(str(LOGO_MARK_PATH), size="large", link="https://www.a-star.edu.sg/")  # the a* mark reads better at sidebar size than the full lockup
 
 # English / 中文 switch - it lives in the sidebar and in session state, so it survives reruns.
 i18n.language_switch(st.sidebar)

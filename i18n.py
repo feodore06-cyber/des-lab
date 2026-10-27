@@ -22,6 +22,7 @@ EN = {
     "app.page_lookup": "Chemical Lookup",
     "app.sidebar_signed_in": "Signed in as **{user}**",
     "app.sidebar_records": "Records: `user_data/records/{user}/`",
+    "app.sidebar_db": "Records: database (shared, survives restarts)",
     "app.logout": "Log out",
     "app.sidebar_footer1": "Experiment workbench / LOCAL EDITION",
     "app.sidebar_footer2": "Runs locally · traceable recipes · CSV / PNG / SVG",
@@ -40,7 +41,7 @@ EN = {
     "login.no_accounts": ("No accounts are configured for this deployment. Add an `[accounts]` table to the "
                           "app's secrets (see DEPLOY.md) and reload."),
 
-    "signup.display": "Your name (shown in the greeting)",
+    "signup.display": "Your name",
     "signup.display_help": "For example Weifan. Leave it empty to use your username.",
     "guide.display": "Your name",
     "guide.display_help": "Shown in the greeting at the top of every page. Your username stays the same.",
@@ -270,6 +271,7 @@ ZH = {
     "app.page_lookup": "化学品查询",
     "app.sidebar_signed_in": "当前登录：**{user}**",
     "app.sidebar_records": "记录目录：`user_data/records/{user}/`",
+    "app.sidebar_db": "记录：数据库（共享，重启不丢）",
     "app.logout": "退出登录",
     "app.sidebar_footer1": "实验工作台 / 本机版",
     "app.sidebar_footer2": "本机运行 · 配方可追溯 · CSV / PNG / SVG",
@@ -287,7 +289,7 @@ ZH = {
     "login.bad": "用户名或密码不正确。",
     "login.no_accounts": "这个部署还没有配置账号。请在应用的 secrets 里添加 `[accounts]`（见 DEPLOY.md）后刷新。",
 
-    "signup.display": "你的名字（显示在欢迎语里）",
+    "signup.display": "你的名字",
     "signup.display_help": "例如 Weifan。留空就用用户名。",
     "guide.display": "你的名字",
     "guide.display_help": "显示在每页顶部的欢迎语里；用户名不变。",
