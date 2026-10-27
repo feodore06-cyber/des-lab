@@ -132,10 +132,72 @@ def _deliver(message: EmailMessage) -> bool:
         return False
 
 
-def send(message: EmailMessage) -> bool:
-    if not configured():
+def _brevo_settings() -> dict:
+    block = {}
+    try:
+        import streamlit as st
+
+        block = dict(st.secrets.get("brevo") or {})
+    except Exception:
+        block = {}
+    api_key = os.environ.get("DESLAB_BREVO_KEY") or block.get("api_key")
+    sender = (os.environ.get("DESLAB_BREVO_SENDER") or block.get("sender")
+              or setting("user") or "")
+    name = os.environ.get("DESLAB_BREVO_SENDER_NAME") or block.get("sender_name") or "BioMat Lab"
+    return {"api_key": str(api_key) if api_key else "", "sender": str(sender), "sender_name": str(name)}
+
+
+def _post_json(url: str, payload: dict, headers: dict) -> tuple[int, str]:
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    body = _json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return response.status, response.read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8", "ignore")
+
+
+def _deliver_brevo(message: EmailMessage) -> bool:
+    """HTTPS delivery through Brevo (no SMTP, no two-factor setup needed)."""
+    settings = _brevo_settings()
+    if not (settings["api_key"] and settings["sender"]):
         return False
-    return _deliver(message)
+    payload = {
+        "sender": {"name": settings["sender_name"], "email": settings["sender"]},
+        "to": [{"email": address.strip()} for address in str(message["To"]).split(",") if address.strip()],
+        "subject": str(message["Subject"]),
+        "textContent": message.get_content(),
+    }
+    status, text = _post_json("https://api.brevo.com/v3/smtp/email", payload,
+                              {"api-key": settings["api_key"], "content-type": "application/json",
+                               "accept": "application/json"})
+    if status in (200, 201, 202):
+        return True
+    print(f"brevo delivery failed: HTTP {status} {text[:200]}", file=sys.stderr)
+    return False
+
+
+def provider() -> str:
+    if _brevo_settings()["api_key"]:
+        return "brevo"
+    if configured():
+        return "smtp"
+    return "none"
+
+
+def send(message: EmailMessage) -> bool:
+    if not message.get("From"):
+        message["From"] = f"{setting('from_name')} <{setting('user') or _brevo_settings()['sender']}>"
+    kind = provider()
+    if kind == "brevo":
+        return _deliver_brevo(message)
+    if kind == "smtp":
+        return _deliver(message)
+    return False
 
 
 def send_welcome(to: str, name: str) -> bool:
@@ -151,6 +213,9 @@ def send_reset(to: str, link: str) -> bool:
 
 def check() -> str:
     """A one-line status for the Guide page."""
-    if not configured():
-        return "not configured"
-    return f"{setting('user')} via {setting('host')}:{setting('port')}"
+    kind = provider()
+    if kind == "brevo":
+        return f"brevo · {_brevo_settings()['sender']}"
+    if kind == "smtp":
+        return f"smtp · {setting('user')} via {setting('host')}:{setting('port')}"
+    return "not configured"
