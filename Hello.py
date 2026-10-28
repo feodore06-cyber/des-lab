@@ -292,48 +292,62 @@ if not st.session_state.get("_intro_shown"):
 # before this point, so the sign-in page has no sidebar at all - just the form in the middle.
 auth.ensure_store()
 user = auth.current_user()
-if not user:
-    # Signed out: register a single page with position="hidden", so no navigation and no sidebar are
-    # rendered at all. Otherwise Streamlit reuses the sidebar registered by an earlier signed-in run
-    # and a stranger can read the whole app structure from the sign-in screen.
-    page = st.navigation(
-        [st.Page(lambda: auth.login_form(LOGO_URL), title=t("login.title"), icon="🔒", default=True)],
-        position="hidden",
-    )
-    page.run()
-    st.stop()
 
-# From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.
-st.logo(str(LOGO_MARK_PATH), size="large", link="https://www.a-star.edu.sg/")  # the a* mark reads better at sidebar size than the full lockup
 
-# English / 中文 switch - it lives in the sidebar and in session state, so it survives reruns.
-i18n.language_switch(st.sidebar)
+def _gate(view):
+    """Every page keeps its URL in every state; signed out it shows the sign-in form instead.
 
-if auth.hosted_mode() and not store.enabled():
-    st.sidebar.warning(t("app.hosted_warning"), icon="⚠️")
+    Registering only the sign-in page while signed out made /results (and bookmarks of it) answer
+    "Page not found", because Streamlit derives the URL map from the navigation it is given.
+    """
 
-# A greeting for whoever just signed in, at the top of every page.
-st.markdown(
-    '<div class="dsh-welcome">'
-    f'<span class="dsh-welcome-hi">{t("app.welcome", user=auth.display_name(user))}</span>'
-    f'<span class="dsh-welcome-sub">{t("app.welcome_sub")}</span>'
-    "</div>",
-    unsafe_allow_html=True,
+    def run():
+        if auth.current_user():
+            view()
+        else:
+            auth.login_form(LOGO_URL)
+
+    return run
+
+
+page = st.navigation(
+    [
+        st.Page(_gate(views.calculator), title=t("app.page_calc"), icon="🧪", default=True),
+        st.Page(_gate(views.results), title=t("app.page_results"), icon="📊", url_path="results"),
+        st.Page(_gate(views.feedback), title=t("app.page_feedback"), icon="💬", url_path="feedback"),
+        st.Page(_gate(views.guide), title=t("app.page_guide"), icon="📖", url_path="guide"),
+    ],
+    # signed out the sidebar is hidden entirely, so a stranger cannot read the app structure
+    position="sidebar" if user else "hidden",
 )
 
-page = st.navigation([
-    st.Page(views.calculator, title=t("app.page_calc"), icon="🧪", default=True),
-    st.Page(views.results, title=t("app.page_results"), icon="📊", url_path="results"),
-    st.Page(views.feedback, title=t("app.page_feedback"), icon="💬", url_path="feedback"),
-    st.Page(views.guide, title=t("app.page_guide"), icon="📖", url_path="guide"),
-])
+if user:
+    st.logo(str(LOGO_MARK_PATH), size="large",
+            link="https://www.a-star.edu.sg/")  # the mark reads better at sidebar size than the lockup
+
+    # English / 中文 switch - it lives in the sidebar and in session state, so it survives reruns.
+    i18n.language_switch(st.sidebar)
+
+    if auth.hosted_mode() and not store.enabled():
+        st.sidebar.warning(t("app.hosted_warning"), icon="⚠️")
+
+    # A greeting for whoever just signed in, at the top of every page.
+    st.markdown(
+        '<div class="dsh-welcome">'
+        f'<span class="dsh-welcome-hi">{t("app.welcome", user=auth.display_name(user))}</span>'
+        f'<span class="dsh-welcome-sub">{t("app.welcome_sub")}</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
 page.run()
 
-st.sidebar.divider()
-st.sidebar.caption(t("app.sidebar_signed_in", user=user))
-st.sidebar.caption(t("app.sidebar_db") if store.enabled()
-                   else t("app.sidebar_records", user=user))
-if st.sidebar.button(t("app.logout"), use_container_width=True, key="logout"):
-    auth.logout()
-    st.rerun()
-st.sidebar.caption(t("app.sidebar_footer2"))
+if user:
+    st.sidebar.divider()
+    st.sidebar.caption(t("app.sidebar_signed_in", user=user))
+    st.sidebar.caption(t("app.sidebar_db") if store.enabled()
+                       else t("app.sidebar_records", user=user))
+    if st.sidebar.button(t("app.logout"), use_container_width=True, key="logout"):
+        auth.logout()
+        st.rerun()
+    st.sidebar.caption(t("app.sidebar_footer2"))
