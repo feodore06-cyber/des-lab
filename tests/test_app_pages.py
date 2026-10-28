@@ -269,7 +269,8 @@ class PageTests(unittest.TestCase):
         other = run(page_guide, user="Thena")
         self.assertEqual(errors(other), [])
         self.assertNotIn("New in 7 days", [m.label for m in other.metric])
-        self.assertIn("Only administrators", " ".join(str(c.value) for c in other.caption))
+        captions = " ".join(str(c.value) for c in other.caption)
+        self.assertIn("Interns cannot manage accounts", captions)
         self.assertTrue(usernames, "the admin table should list the existing accounts")
 
     def test_a_reset_link_lets_the_user_set_a_new_password(self):

@@ -30,6 +30,9 @@ from i18n import language_switch, t
 
 ITERATIONS = 200_000
 SESSION_KEY = "auth_user"
+ROLE_SUPERVISOR = "supervisor"
+ROLE_INTERN = "intern"
+EXPIRY_KEY = "expires_at"
 MODE_KEY = "login_mode"          # "signin" or "signup"
 DATA_DIR_ENV = "DESLAB_DATA_DIR"
 INVITE_ENV = "DESLAB_INVITE_CODE"      # when set, sign-up requires this code
@@ -192,7 +195,8 @@ def _find_user(users: dict, identifier: str) -> str | None:
     return None
 
 
-def add_user(identifier: str, password: str) -> str:
+def add_user(identifier: str, password: str, role: str = ROLE_INTERN,
+             supervisor: str | None = None, expires=None) -> str:
     """Create an account. The identifier is an e-mail address (new style) or a username (legacy)."""
     identifier = (identifier or "").strip()
     if "@" in identifier:
@@ -208,9 +212,17 @@ def add_user(identifier: str, password: str) -> str:
     if existing:
         raise ValueError(f"{identifier} already exists.")
     entry = _entry(password)
+    entry["role"] = role
+    entry["supervisor"] = supervisor or ""
+    entry[EXPIRY_KEY] = _parse_moment(expires).isoformat() if expires else ""
     users[identifier] = entry
     save_users(users)
     user_dir(identifier)  # create the empty record folder straight away
+    if store.enabled():
+        try:
+            store.account_set_team(identifier, role, supervisor, _parse_moment(expires) if expires else None)
+        except Exception:
+            pass
     # never leave a fresh deployment without an administrator: the first account gets the role
     if not admins():
         set_admin(identifier, True)
@@ -291,6 +303,90 @@ def _clear_attempts(name: str) -> None:
         users[name]["locked_until"] = ""
         users[name]["last_login"] = time.strftime("%Y-%m-%d %H:%M:%S")
         save_users(users)
+
+
+# ---------------------------------------------------------------- team scope
+def _parse_moment(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def profile(username: str | None) -> dict:
+    """Role, supervisor and expiry of one account (database first, local file second)."""
+    if not username:
+        return {"role": ROLE_INTERN, "supervisor": None, "expires_at": None, "is_admin": False}
+    if store.enabled():
+        try:
+            return store.account_profile(username)
+        except Exception:
+            pass
+    entry = load_users().get(username) or {}
+    return {"role": entry.get("role", ROLE_INTERN), "supervisor": entry.get("supervisor"),
+            "expires_at": _parse_moment(entry.get(EXPIRY_KEY)), "is_admin": bool(entry.get("is_admin"))}
+
+
+def role_of(username: str | None) -> str:
+    return profile(username)["role"]
+
+
+def is_supervisor(username: str | None) -> bool:
+    return bool(username) and (profile(username)["role"] == ROLE_SUPERVISOR or is_admin(username))
+
+
+def is_expired(username: str | None) -> bool:
+    expires = profile(username)["expires_at"]
+    return bool(expires and expires < _now())
+
+
+def team_members(supervisor: str | None) -> list:
+    """The accounts that belong to one supervisor - never anyone else's."""
+    if not supervisor:
+        return []
+    if store.enabled():
+        try:
+            return store.team_of(supervisor)
+        except Exception:
+            pass
+    return [name for name, entry in load_users().items() if entry.get("supervisor") == supervisor]
+
+
+def data_owners(username: str | None) -> list:
+    """Whose rows this account may read: its own, plus its own interns when it is a supervisor.
+
+    An administrator gets no extra rows here on purpose: platform duties must never expose another
+    team's experiment data.
+    """
+    if not username:
+        return []
+    owners = [username]
+    if is_supervisor(username):
+        owners += [name for name in team_members(username) if name != username]
+    return owners
+
+
+def set_team(username: str, role: str = ROLE_INTERN, supervisor: str | None = None, expires=None) -> None:
+    moment = _parse_moment(expires) if expires else None
+    if store.enabled():
+        store.account_set_team(username, role, supervisor, moment)
+        return
+    users = load_users()
+    if username in users:
+        users[username]["role"] = role
+        users[username]["supervisor"] = supervisor
+        users[username][EXPIRY_KEY] = moment.isoformat() if moment else ""
+        save_users(users)
+
+
+def expired_accounts() -> list:
+    """Accounts past their expiry date, for the team page."""
+    return [name for name in load_users() if is_expired(name)]
 
 
 # ------------------------------------------------------------------- session
@@ -467,6 +563,12 @@ def current_user() -> str | None:
     name = st.session_state.get(SESSION_KEY)
     if not name:
         return None
+    if is_expired(name):
+        st.session_state.pop(SESSION_KEY, None)
+        st.session_state.pop(SESSION_SEEN, None)
+        st.session_state[LOGIN_ERROR] = "expired_account"
+        st.session_state["login_expired_user"] = name
+        return None
     seen = st.session_state.get(SESSION_SEEN)
     if seen and time.time() - float(seen) > SESSION_TIMEOUT_H * 3600:
         st.session_state.pop(SESSION_KEY, None)
@@ -491,6 +593,11 @@ def login(username: str, password: str) -> bool:
     if until and until > _now():
         st.session_state[LOGIN_ERROR] = "locked"
         st.session_state["login_locked_until"] = until.strftime("%H:%M")
+        return False
+
+    if name and is_expired(name):
+        st.session_state[LOGIN_ERROR] = "expired_account"
+        st.session_state["login_expired_user"] = name
         return False
 
     if verify(username, password):
@@ -573,23 +680,70 @@ def _import_results_csv(username: str) -> None:
 
 
 def load_results(username: str) -> pd.DataFrame | None:
-    """The saved rows for this user; local CSVs are imported once when a database is switched on."""
+    """Rows this account may read: its own, plus its own interns' when it is a supervisor.
+
+    Every row carries ``_owner`` so a later save can put edits back where they belong.
+    """
+    owners = data_owners(username)
+    if not owners:
+        return None
     if store.enabled():
         try:
-            frame = store.load(username, "results")
-            if frame.empty:
-                _import_results_csv(username)
-                frame = store.load(username, "results")
+            frame = store.load_many(owners, "results")
+            if frame.empty and len(owners) == 1:
+                _import_results_csv(owners[0])
+                frame = store.load_many(owners, "results")
             return None if frame.empty else frame
         except Exception:
-            pass  # database unreachable: fall back to the local CSV below
-    path = results_path(username)
-    if not path.exists():
+            pass  # database unreachable: fall back to the local folders
+    parts = []
+    for owner in owners:
+        path = results_path(owner)
+        if not path.exists():
+            continue
+        try:
+            part = pd.read_csv(path, encoding="utf-8-sig")
+        except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+            continue
+        part["_owner"] = owner
+        parts.append(part)
+    if not parts:
         return None
-    try:
-        return pd.read_csv(path, encoding="utf-8-sig")
-    except (OSError, pd.errors.ParserError, UnicodeDecodeError):
-        return None
+    return pd.concat(parts, ignore_index=True, sort=False)
+
+
+def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Path | str:
+    """Write rows back to their owners; never into another team's space."""
+    allowed = set(data_owners(username))
+    work = frame.copy()
+    if "_owner" not in work.columns:
+        work["_owner"] = username
+    work["_owner"] = work["_owner"].fillna(username).astype(str)
+    work.loc[~work["_owner"].isin(allowed), "_owner"] = username
+
+    if store.enabled():
+        try:
+            for owner, part in work.groupby("_owner", sort=False):
+                payload = part.drop(columns=["_owner"], errors="ignore")
+                if append:
+                    store.append(owner, "results", payload)
+                else:
+                    store.replace(owner, "results", payload)
+            return "database"
+        except Exception:
+            pass  # database unreachable: keep the rows in the local files
+
+    for owner, part in work.groupby("_owner", sort=False):
+        payload = part.drop(columns=["_owner"], errors="ignore")
+        path = results_path(owner)
+        if append and path.exists():
+            try:
+                existing = pd.read_csv(path, encoding="utf-8-sig")
+                payload = pd.concat([existing, payload], ignore_index=True, sort=False)
+            except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+                pass
+        payload.to_csv(path, index=False, encoding="utf-8-sig")
+    return results_path(username)
 
 
 def save_recipe(username: str, frame: pd.DataFrame) -> Path | str:

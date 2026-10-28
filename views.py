@@ -314,8 +314,9 @@ def _records_tab(user: str | None) -> None:
                     st.success(t("res.import_done", rows=len(incoming)))
 
     st.caption(t("res.editor_hint"))
+    locked = ["_owner"] if "_owner" in frame.columns else []
     edited = st.data_editor(frame, num_rows="dynamic", hide_index=True, width="stretch",
-                            key="records_editor")
+                            disabled=locked, key="records_editor")
     a, b, c = st.columns([1, 1, 1])
     if a.button(t("res.save_table"), type="primary", key="save_table"):
         cleaned = edited.dropna(how="all")
@@ -336,7 +337,7 @@ def _records_tab(user: str | None) -> None:
 def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary: pd.DataFrame) -> None:
     """Say plainly what is wrong or thin in the data before anyone plots it."""
     problems = []
-    columns = [c for c in frame.columns if c != "_source_file"]
+    columns = [c for c in frame.columns if c not in ("_source_file", "_owner")]
     duplicates = int(frame.duplicated(subset=columns).sum())
     if duplicates:
         problems.append(t("res.q_dupes", n=duplicates))
@@ -564,34 +565,41 @@ def guide():
 
     st.divider()
     st.subheader(t("guide.team"))
-    if not auth.is_admin(user):
-        st.caption(t("guide.accounts_admin_only"))
+    if not (auth.is_admin(user) or auth.is_supervisor(user)):
+        st.caption(t("guide.team_intern_note"))
         return
 
-    rows = []
+    # a supervisor sees only their own interns; an administrator sees the whole roster
     try:
-        if store.enabled():
-            rows = store.accounts_rows()
-        else:
-            rows = [{"username": name, "created": entry.get("created", ""),
-                     "last_login": entry.get("last_login", "")}
-                    for name, entry in auth.load_users().items()]
+        all_rows = store.accounts_rows() if store.enabled() else [
+            {"username": name, "created": entry.get("created", ""),
+             "last_login": entry.get("last_login", ""), "is_admin": bool(entry.get("is_admin")),
+             "role": entry.get("role", "intern"), "supervisor": entry.get("supervisor", ""),
+             "expires": entry.get("expires_at", "")}
+            for name, entry in auth.load_users().items()
+        ]
     except Exception as exc:
         st.error(t("guide.accounts_error", error=str(exc).splitlines()[0][:160]))
-    if rows:
+        all_rows = []
+    mine = [row for row in all_rows
+            if auth.is_admin(user) or row.get("supervisor") == user or row["username"] == user]
+
+    if mine:
         week_ago = pd.Timestamp.now() - pd.Timedelta(days=7)
-        recent = sum(1 for row in rows
+        recent = sum(1 for row in mine
                      if row["created"] and pd.to_datetime(row["created"], errors="coerce") >= week_ago)
-        active = sum(1 for row in rows if row["last_login"] and row["last_login"] != "never")
+        active = sum(1 for row in mine if row["last_login"] and row["last_login"] != "never")
         a, b, c = st.columns(3)
-        a.metric(t("guide.accounts_total"), len(rows))
+        a.metric(t("guide.accounts_total"), len(mine))
         b.metric(t("guide.accounts_recent"), recent)
         c.metric(t("guide.accounts_active"), active)
-        table = pd.DataFrame(rows)
+        table = pd.DataFrame(mine).reindex(
+            columns=["username", "role", "supervisor", "expires", "created", "last_login", "is_admin"])
+        table["expires"] = [value if value else t("guide.no_expiry") for value in table["expires"]]
         edited = st.data_editor(table, hide_index=True, width="stretch",
                                 disabled=[c for c in table.columns if c != "is_admin"],
                                 key="team_editor")
-        if st.button(t("guide.save_roles"), key="save_roles"):
+        if auth.is_admin(user) and st.button(t("guide.save_roles"), key="save_roles"):
             for _, row in edited.iterrows():
                 auth.set_admin(str(row["username"]), bool(row["is_admin"]))
             st.success(t("guide.roles_saved"))
@@ -601,13 +609,24 @@ def guide():
 
     with st.expander(t("guide.add_intern"), expanded=True):
         st.caption(t("guide.intern_hint"))
+        supervisors = sorted({row.get("supervisor") or row["username"] for row in all_rows
+                              if row.get("role") == "supervisor"})
         with st.form("add_intern", clear_on_submit=True):
             who = st.text_input(t("guide.intern_id"), placeholder="name@lab.org")
             initial = st.text_input(t("guide.intern_pw"), type="password")
+            a, b = st.columns(2)
+            if auth.is_admin(user) and supervisors:
+                owner = a.selectbox(t("guide.col_supervisor"), supervisors, key="intern_owner")
+            else:
+                owner = user
+                a.text_input(t("guide.col_supervisor"), value=user, disabled=True)
+            until = b.date_input(t("guide.intern_expiry"),
+                                 value=(pd.Timestamp.now() + pd.Timedelta(days=180)).date())
             if st.form_submit_button(t("guide.intern_create"), type="primary"):
                 password = initial.strip() or secrets.token_urlsafe(9)
                 try:
-                    created = auth.add_user(who, password)
+                    created = auth.add_user(who, password, role="intern", supervisor=owner,
+                                            expires=pd.Timestamp(until).to_pydatetime())
                 except ValueError as exc:
                     st.error(t(str(exc)))
                 else:
@@ -616,6 +635,7 @@ def guide():
                         mailed = mailer.send_welcome(created, auth.display_name(created))
                     st.success(t("guide.intern_created", user=created))
                     st.code(f"{t('login.password')}: {password}", language="text")
+                    st.caption(t("guide.intern_expiry_note", date=until.strftime("%Y-%m-%d")))
                     st.caption(t("guide.intern_mailed", user=created) if mailed
                                else t("guide.intern_nomail"))
 
@@ -635,7 +655,7 @@ def guide():
 
     with st.expander(t("guide.reset_fallback"), expanded=False):
         st.caption(t("guide.reset_fallback_hint"))
-        names = sorted(auth.load_users())
+        names = sorted(row["username"] for row in mine)
         if names:
             with st.form("admin_reset"):
                 who_reset = st.selectbox(t("guide.resets_pick"), names, key="reset_who")

@@ -42,6 +42,9 @@ create table if not exists accounts (
 alter table accounts add column if not exists failed_attempts integer not null default 0;
 alter table accounts add column if not exists locked_until timestamptz;
 alter table accounts add column if not exists is_admin boolean not null default false;
+alter table accounts add column if not exists role text not null default 'intern';
+alter table accounts add column if not exists supervisor text;
+alter table accounts add column if not exists expires_at timestamptz;
 create table if not exists reset_tokens (
     token_hash text primary key,
     username text not null,
@@ -272,11 +275,59 @@ def account_login_failed(username: str, failed: int, locked_until) -> None:
         conn.commit()
 
 
+def team_of(supervisor: str) -> list[str]:
+    """Accounts that belong to one supervisor (never anyone else's)."""
+    with _connect() as conn:
+        rows = conn.execute("select username from accounts where supervisor = %s", (supervisor,)).fetchall()
+    return [row[0] for row in rows]
+
+
+def account_profile(username: str) -> dict:
+    with _connect() as conn:
+        row = conn.execute(
+            "select role, supervisor, expires_at, is_admin from accounts where username = %s", (username,)
+        ).fetchone()
+    if not row:
+        return {"role": "intern", "supervisor": None, "expires_at": None, "is_admin": False}
+    expires = row[2]
+    if expires is not None and expires.tzinfo is None:
+        from datetime import timezone
+
+        expires = expires.replace(tzinfo=timezone.utc)
+    return {"role": row[0] or "intern", "supervisor": row[1], "expires_at": expires,
+            "is_admin": bool(row[3])}
+
+
+def account_set_team(username: str, role: str, supervisor: str | None, expires_at) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "update accounts set role = %s, supervisor = %s, expires_at = %s where username = %s",
+            (role, supervisor, expires_at, username),
+        )
+        conn.commit()
+
+
+def load_many(usernames: list[str], kind: str) -> pd.DataFrame:
+    """Rows for several accounts at once, newest last, with the owner recorded per row."""
+    if not usernames:
+        return pd.DataFrame()
+    with _connect() as conn:
+        rows = conn.execute(
+            "select username, payload from records where kind = %s and username = any(%s) order by id",
+            (kind, list(usernames)),
+        ).fetchall()
+    if not rows:
+        return pd.DataFrame()
+    frame = pd.DataFrame([{**payload, "_owner": owner} for owner, payload in rows])
+    return frame
+
+
 def accounts_rows() -> list[dict]:
     """Rows for the team table, newest first."""
     with _connect() as conn:
         rows = conn.execute(
-            "select username, created, last_login, is_admin from accounts order by created desc"
+            "select username, created, last_login, is_admin, role, supervisor, expires_at"
+            " from accounts order by created desc"
         ).fetchall()
     return [
         {
@@ -284,8 +335,11 @@ def accounts_rows() -> list[dict]:
             "created": created.strftime("%Y-%m-%d") if created else "",
             "last_login": last_login.strftime("%Y-%m-%d %H:%M") if last_login else "never",
             "is_admin": bool(is_admin),
+            "role": role or "intern",
+            "supervisor": supervisor or "",
+            "expires": expires.strftime("%Y-%m-%d") if expires else "",
         }
-        for name, created, last_login, is_admin in rows
+        for name, created, last_login, is_admin, role, supervisor, expires in rows
     ]
 
 

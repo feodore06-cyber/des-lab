@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Account store, hashing and per-user record files."""
 import os
+from datetime import datetime, timedelta, timezone
 import sys
 
 os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
@@ -189,6 +190,69 @@ class AuthTests(unittest.TestCase):
         self.assertTrue(auth.is_admin("intern@example.com"))
         auth.set_admin("intern@example.com", False)
         self.assertFalse(auth.is_admin("intern@example.com"))
+
+    def _two_teams(self):
+        auth.ensure_store()
+        auth.add_user("sup.a@x.com", "password-a", role="supervisor")
+        auth.add_user("sup.b@x.com", "password-b", role="supervisor")
+        auth.add_user("intern.a1@x.com", "password-a1", supervisor="sup.a@x.com")
+        auth.add_user("intern.a2@x.com", "password-a2", supervisor="sup.a@x.com")
+        auth.add_user("intern.b1@x.com", "password-b1", supervisor="sup.b@x.com")
+        auth.save_results("intern.a1@x.com", pd.DataFrame([{"formulation": "A1", "lignin_yield_pct": 1.0}]))
+        auth.save_results("intern.a2@x.com", pd.DataFrame([{"formulation": "A2", "lignin_yield_pct": 1.2}]))
+        auth.save_results("intern.b1@x.com", pd.DataFrame([{"formulation": "B1", "lignin_yield_pct": 2.0}]))
+
+    def test_a_supervisor_sees_only_their_own_interns(self):
+        self._two_teams()
+        a_rows = auth.load_results("sup.a@x.com")
+        b_rows = auth.load_results("sup.b@x.com")
+        self.assertEqual(sorted(a_rows["formulation"]), ["A1", "A2"])
+        self.assertEqual(sorted(b_rows["formulation"]), ["B1"])
+        self.assertNotIn("B1", set(a_rows["formulation"]))
+        self.assertNotIn("A1", set(b_rows["formulation"]))
+
+    def test_an_intern_sees_only_their_own_rows(self):
+        self._two_teams()
+        rows = auth.load_results("intern.a1@x.com")
+        self.assertEqual(list(rows["formulation"]), ["A1"], "not the sibling intern's rows")
+
+    def test_an_administrator_gains_no_extra_experiment_data(self):
+        self._two_teams()
+        auth.set_admin("sup.b@x.com", True)
+        self.assertEqual(auth.data_owners("sup.b@x.com"), ["sup.b@x.com", "intern.b1@x.com"],
+                         "admin rights must not widen the data scope")
+
+    def test_expired_accounts_cannot_sign_in(self):
+        auth.ensure_store()
+        past = datetime.now(timezone.utc) - timedelta(days=1)
+        auth.add_user("intern.old@x.com", "password-old", supervisor="Chuanyu", expires=past)
+        self.assertTrue(auth.is_expired("intern.old@x.com"))
+        self.assertTrue(auth.verify("intern.old@x.com", "password-old"), "the password is still valid")
+        self.assertFalse(auth.login("intern.old@x.com", "password-old"), "but sign-in is refused")
+
+    def test_a_future_expiry_still_allows_sign_in(self):
+        auth.ensure_store()
+        future = datetime.now(timezone.utc) + timedelta(days=30)
+        auth.add_user("intern.new@x.com", "password-new", supervisor="Chuanyu", expires=future)
+        self.assertFalse(auth.is_expired("intern.new@x.com"))
+        self.assertTrue(auth.login("intern.new@x.com", "password-new"))
+
+    def test_saving_a_merged_table_keeps_each_row_with_its_owner(self):
+        self._two_teams()
+        merged = auth.load_results("sup.a@x.com")
+        merged.loc[merged["_owner"] == "intern.a1@x.com", "lignin_yield_pct"] = 9.99
+        auth.save_results("sup.a@x.com", merged, append=False)
+        a1 = auth.load_results("intern.a1@x.com")
+        self.assertAlmostEqual(float(a1.iloc[0]["lignin_yield_pct"]), 9.99)
+        b1 = auth.load_results("intern.b1@x.com")
+        self.assertAlmostEqual(float(b1.iloc[0]["lignin_yield_pct"]), 2.0, "the other team is untouched")
+
+    def test_a_row_cannot_be_written_into_another_team(self):
+        self._two_teams()
+        intruder = pd.DataFrame([{"_owner": "intern.b1@x.com", "formulation": "HACK",
+                                  "lignin_yield_pct": 0.0}])
+        auth.save_results("sup.a@x.com", intruder, append=True)
+        self.assertNotIn("HACK", set(auth.load_results("intern.b1@x.com")["formulation"]))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
