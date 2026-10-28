@@ -8,6 +8,10 @@ font = "sans serif"
 [browser]
 gatherUsageStats = false
 
+[client]
+# Visitors get the read-only menu: no Rerun / Clear cache / Deploy items that only developers need.
+toolbarMode = "viewer"
+
 [server]
 # NOTE: no `address` here on purpose. Hosted platforms choose the bind address themselves;
 # Start.ps1 passes --server.address 127.0.0.1 (or 0.0.0.0 with -Share) for local runs.
