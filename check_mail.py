@@ -3,7 +3,7 @@
 
 Usage (PowerShell):
     $env:DESLAB_BREVO_KEY = "xkeysib-..."
-    .\.venv\Scripts\python.exe check_mail.py you@example.com
+    .\\venv\\Scripts\\python.exe check_mail.py you@example.com
 
 It answers three questions in order, so a failure points at the exact step to fix:
     1. is the API key accepted?
