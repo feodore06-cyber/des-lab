@@ -28,6 +28,7 @@ import chem
 import feedback as feedback_mod
 import store
 import i18n
+import mailer
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 from lab_plots import figure_bytes, make_figure
@@ -360,6 +361,23 @@ def guide():
     else:
         st.caption(t("guide.accounts_admin_only"))
     st.caption(t("guide.records_note"))
+
+    st.subheader(t("guide.mail"))
+    if auth.is_admin(user):
+        state = mailer.check()
+        if mailer.provider() == "none":
+            st.info(t("guide.mail_off"))
+        else:
+            st.success(t("guide.mail_on", state=state))
+            with st.form("mail_test"):
+                dest = st.text_input(t("guide.mail_to"), value=user if "@" in user else "")
+                if st.form_submit_button(t("guide.mail_send")):
+                    if mailer.send_welcome(dest.strip(), auth.display_name(user) or user):
+                        st.success(t("guide.mail_sent", to=dest))
+                    else:
+                        st.error(t("guide.mail_failed"))
+    else:
+        st.caption(t("guide.accounts_admin_only"))
 
     st.subheader(t("guide.resets"))
     if auth.is_admin(user):
