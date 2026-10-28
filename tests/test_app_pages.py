@@ -130,7 +130,7 @@ class PageTests(unittest.TestCase):
     def test_results_page_sample_runs(self):
         at = run(page_results)
         self.assertEqual(errors(at), [])
-        at.radio[0].set_value(SAMPLE_RUNS).run()
+        at.radio(key="source").set_value(SAMPLE_RUNS).run()
         self.assertEqual(errors(at), [])
         summary = at.dataframe[-1].value
         self.assertEqual(list(summary["n"]), [1, 1, 1])
@@ -144,7 +144,7 @@ class PageTests(unittest.TestCase):
 
     def test_results_page_demo_has_error_bars(self):
         at = run(page_results)
-        at.radio[0].set_value("Fictitious demo (9 rows)").run()
+        at.radio(key="source").set_value("Fictitious demo (9 rows)").run()
         self.assertEqual(errors(at), [])
         summary = at.dataframe[-1].value
         self.assertEqual(list(summary["n"]), [3, 3, 3])
@@ -154,7 +154,7 @@ class PageTests(unittest.TestCase):
     def test_results_page_starts_empty_for_a_new_user(self):
         at = run(page_results)
         self.assertEqual(errors(at), [])
-        self.assertEqual(at.radio[0].value, "My saved data", "saved data should be the default source")
+        self.assertEqual(at.radio(key="source").value, "My saved data", "saved data should be the default source")
         self.assertIn("Load the 3 example runs (Chuanyu's records) into my folder", [b.label for b in at.button])
 
     def test_results_page_reads_only_the_signed_in_users_records(self):
@@ -513,8 +513,8 @@ class PageTests(unittest.TestCase):
         res = run(page_results, lang="zh")
         self.assertEqual(errors(res), [])
         self.assertEqual(res.title[0].value, "实验结果与图表")
-        self.assertEqual(res.radio[0].label, "数据来源")
-        self.assertEqual(res.radio[0].value, "我保存的数据")
+        self.assertEqual(res.radio(key="source").label, "数据来源")
+        self.assertEqual(res.radio(key="source").value, "我保存的数据")
 
         guide = run(page_guide, lang="zh")
         self.assertEqual(errors(guide), [])

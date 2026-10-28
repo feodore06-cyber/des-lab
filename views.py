@@ -18,6 +18,7 @@
 Kept in a separate module so every page can be run and tested headlessly with
 streamlit.testing.v1.AppTest. All user-facing text goes through i18n.t().
 """
+import io
 import re
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ import streamlit as st
 
 import auth
 import chem
+import excel_io
 import feedback as feedback_mod
 import store
 import i18n
@@ -217,6 +219,14 @@ def _next_sample_id(frame: pd.DataFrame) -> str:
     return f"EXP-{len(frame) + 1:02d}"
 
 
+def _read_any(name: str, content: bytes) -> tuple[pd.DataFrame, dict | None]:
+    """Read a CSV or an Excel sheet; Excel also returns what had to be guessed."""
+    if excel_io.is_excel(name):
+        result = excel_io.read_table(content)
+        return result["frame"], result
+    return pd.read_csv(io.BytesIO(content), encoding="utf-8-sig"), None
+
+
 def _record_tab(user: str | None) -> None:
     """Type one run in by hand: the yield is computed, the row goes into the records."""
     if not user:
@@ -275,6 +285,33 @@ def _records_tab(user: str | None) -> None:
     frame = pd.DataFrame(columns=RECORD_COLUMNS) if empty else saved
     ordered = [c for c in RECORD_COLUMNS if c in frame.columns]
     frame = frame.reindex(columns=ordered + [c for c in frame.columns if c not in ordered])
+    with st.expander(t("res.import_excel"), expanded=False):
+        upload = st.file_uploader(t("res.import_pick"), type=["csv", "xlsx", "xlsm", "xls"],
+                                  key="records_upload")
+        mode_label = st.radio(t("res.save_mode"), [t("res.save_append"), t("res.save_replace")],
+                              horizontal=True, key="import_mode")
+        if upload is None:
+            st.caption(t("res.import_none"))
+        else:
+            try:
+                incoming, info = _read_any(upload.name, upload.getvalue())
+            except (ValueError, UnicodeError, pd.errors.ParserError) as exc:
+                st.error(t("res.read_error", error=t(str(exc))))
+                incoming, info = None, None
+            if incoming is not None:
+                if info:
+                    st.caption(t("res.import_found", sheet=info["sheet"], row=info["header_row"],
+                                 rows=info["rows"]))
+                    if info["mapping"]:
+                        st.caption(" · ".join(f"{k} → {v}" for k, v in info["mapping"].items()))
+                    if info["unknown"]:
+                        st.caption(t("res.import_unknown") + ": " + ", ".join(map(str, info["unknown"])))
+                st.dataframe(incoming.head(20), hide_index=True, width="stretch")
+                if st.button(t("res.import_confirm"), type="primary", key="import_confirm"):
+                    append = mode_label == t("res.save_append")
+                    auth.save_results(user, incoming, append=append)
+                    st.success(t("res.import_done", rows=len(incoming)))
+
     st.caption(t("res.editor_hint"))
     edited = st.data_editor(frame, num_rows="dynamic", hide_index=True, width="stretch",
                             key="records_editor")
@@ -353,12 +390,20 @@ def _chart_tab(user: str | None) -> None:
         files = [("demo_lignin.csv", DEMO_CSV.read_bytes())]
         encoding, data_kind = "utf-8-sig", "synthetic_demo"
     else:
-        uploads = st.file_uploader(t("res.uploader"), type="csv", accept_multiple_files=True)
+        uploads = st.file_uploader(t("res.uploader"), type=["csv", "xlsx", "xlsm", "xls"],
+                                   accept_multiple_files=True)
         encoding = st.selectbox(t("res.encoding"), ["utf-8-sig", "gb18030"], help=t("res.encoding_help"))
         if not uploads:
             st.info(t("res.upload_hint"))
             return
-        files = [(f.name, f.getvalue()) for f in uploads]
+        files = []
+        for upload in uploads:
+            frame_in, info = _read_any(upload.name, upload.getvalue())
+            if info:
+                st.caption(t("res.import_found", sheet=info["sheet"], row=info["header_row"],
+                             rows=info["rows"]) + "  ·  " + t("res.import_mapping") + ": " +
+                           ", ".join(f"{k} → {v}" for k, v in info["mapping"].items()))
+            files.append((upload.name, excel_io.to_csv_bytes(frame_in) if info else upload.getvalue()))
         data_kind = "user_uploaded"
 
     try:
