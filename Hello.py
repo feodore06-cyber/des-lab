@@ -293,7 +293,14 @@ if not st.session_state.get("_intro_shown"):
 auth.ensure_store()
 user = auth.current_user()
 if not user:
-    auth.login_form(LOGO_URL)
+    # Signed out: register a single page with position="hidden", so no navigation and no sidebar are
+    # rendered at all. Otherwise Streamlit reuses the sidebar registered by an earlier signed-in run
+    # and a stranger can read the whole app structure from the sign-in screen.
+    page = st.navigation(
+        [st.Page(lambda: auth.login_form(LOGO_URL), title=t("login.title"), icon="🔒", default=True)],
+        position="hidden",
+    )
+    page.run()
     st.stop()
 
 # From here on the app is shown: pin the brand to the top of the sidebar, then register the pages.
@@ -320,11 +327,6 @@ page = st.navigation([
     st.Page(views.feedback, title=t("app.page_feedback"), icon="💬", url_path="feedback"),
     st.Page(views.guide, title=t("app.page_guide"), icon="📖", url_path="guide"),
 ])
-# A permanent, prominent way in: a floating Feedback button that opens a dialog (no page reload,
-# so the sign-in survives).
-if st.button("💬 " + t("fb.fab"), key="open_feedback"):
-    views.feedback_dialog()
-
 page.run()
 
 st.sidebar.divider()
