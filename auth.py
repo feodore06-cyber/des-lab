@@ -235,6 +235,60 @@ def verify(identifier: str, password: str) -> bool:
     return hmac.compare_digest(candidate, entry["hash"])
 
 
+# ------------------------------------------------------- brute-force protection
+MAX_ATTEMPTS = 5          # wrong passwords before the account is locked
+LOCK_MINUTES = 15         # how long the lock lasts
+SESSION_TIMEOUT_H = 12    # an idle session signs itself out
+LOGIN_ERROR = "login_error"
+SESSION_SEEN = "auth_seen"
+
+
+def _lock_state(name: str) -> dict:
+    if store.enabled():
+        try:
+            return store.account_lock_state(name)
+        except Exception:
+            pass
+    entry = load_users().get(name) or {}
+    raw = entry.get("locked_until")
+    locked = None
+    if raw:
+        try:
+            locked = datetime.fromisoformat(str(raw))
+        except ValueError:
+            locked = None
+    return {"failed": int(entry.get("failed_attempts", 0) or 0), "locked_until": locked}
+
+
+def _record_attempt(name: str, failed: int, locked_until) -> None:
+    if store.enabled():
+        try:
+            store.account_login_failed(name, failed, locked_until)
+            return
+        except Exception:
+            pass
+    users = load_users()
+    if name in users:
+        users[name]["failed_attempts"] = failed
+        users[name]["locked_until"] = locked_until.isoformat() if locked_until else ""
+        save_users(users)
+
+
+def _clear_attempts(name: str) -> None:
+    if store.enabled():
+        try:
+            store.account_touch_login(name)
+            return
+        except Exception:
+            pass
+    users = load_users()
+    if name in users:
+        users[name]["failed_attempts"] = 0
+        users[name]["locked_until"] = ""
+        users[name]["last_login"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        save_users(users)
+
+
 # ------------------------------------------------------------------- session
 def admins() -> set:
     """Who may read the feedback inbox: DESLAB_ADMINS or the [admins] secret, else the default."""
@@ -379,23 +433,51 @@ def reset_link(token: str) -> str:
 
 
 def current_user() -> str | None:
-    return st.session_state.get(SESSION_KEY)
+    """The signed-in account; an idle session signs itself out after SESSION_TIMEOUT_H hours."""
+    name = st.session_state.get(SESSION_KEY)
+    if not name:
+        return None
+    seen = st.session_state.get(SESSION_SEEN)
+    if seen and time.time() - float(seen) > SESSION_TIMEOUT_H * 3600:
+        st.session_state.pop(SESSION_KEY, None)
+        st.session_state.pop(SESSION_SEEN, None)
+        st.session_state[LOGIN_ERROR] = "expired"
+        return None
+    st.session_state[SESSION_SEEN] = time.time()
+    return name
 
 
 def logout() -> None:
     st.session_state.pop(SESSION_KEY, None)
     st.session_state.pop(MODE_KEY, None)
+    st.session_state.pop(SESSION_SEEN, None)
 
 
 def login(username: str, password: str) -> bool:
+    """Sign in, with a temporary lock after MAX_ATTEMPTS wrong passwords."""
+    name = _find_user(load_users(), username)
+    state = _lock_state(name) if name else {"failed": 0, "locked_until": None}
+    until = state.get("locked_until")
+    if until and until > _now():
+        st.session_state[LOGIN_ERROR] = "locked"
+        st.session_state["login_locked_until"] = until.strftime("%H:%M")
+        return False
+
     if verify(username, password):
-        st.session_state[SESSION_KEY] = username.strip()
-        if store.enabled():
-            try:
-                store.account_touch_login(username.strip())
-            except Exception:
-                pass
+        st.session_state.pop(LOGIN_ERROR, None)
+        st.session_state.pop("login_locked_until", None)
+        st.session_state[SESSION_KEY] = name or username.strip()
+        st.session_state[SESSION_SEEN] = time.time()
+        _clear_attempts(name or username.strip())
         return True
+
+    if name:
+        failed = int(state.get("failed", 0)) + 1
+        lock_at = _now() + timedelta(minutes=LOCK_MINUTES) if failed >= MAX_ATTEMPTS else None
+        _record_attempt(name, failed, lock_at)
+        if lock_at:
+            st.session_state[LOGIN_ERROR] = "locked"
+            st.session_state["login_locked_until"] = lock_at.strftime("%H:%M")
     return False
 
 
@@ -652,7 +734,13 @@ def login_form(logo_url: str | None = None) -> None:
                 st.session_state.pop(MODE_KEY, None)
                 st.rerun()
             else:
-                st.error(t("login.bad"))
+                kind = st.session_state.get(LOGIN_ERROR)
+                if kind == "locked":
+                    st.error(t("login.locked", until=st.session_state.get("login_locked_until", "")))
+                elif kind == "expired":
+                    st.info(t("login.expired"))
+                else:
+                    st.error(t("login.bad"))
         st.divider()
         if st.button(t("login.forgot"), use_container_width=True, key="go_forgot"):
             st.session_state[MODE_KEY] = "reset_request"

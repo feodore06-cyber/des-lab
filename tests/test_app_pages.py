@@ -289,6 +289,16 @@ class PageTests(unittest.TestCase):
         self.assertTrue(at.code, "the link should be shown to the admin")
         self.assertIn("reset_token=", at.code[0].value)
 
+    def test_an_idle_session_signs_itself_out(self):
+        import time as _time
+
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.session_state[auth.SESSION_SEEN] = _time.time() - (auth.SESSION_TIMEOUT_H + 1) * 3600
+        at.run()
+        self.assertEqual(errors(at), [])
+        self.assertEqual([t.value for t in at.title], [], "an expired session sees the sign-in page")
+
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()

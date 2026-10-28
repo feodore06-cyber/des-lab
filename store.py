@@ -39,6 +39,8 @@ create table if not exists accounts (
     created timestamptz not null default now(),
     last_login timestamptz
 );
+alter table accounts add column if not exists failed_attempts integer not null default 0;
+alter table accounts add column if not exists locked_until timestamptz;
 create table if not exists reset_tokens (
     token_hash text primary key,
     username text not null,
@@ -236,7 +238,36 @@ def account_delete(username: str) -> None:
 
 def account_touch_login(username: str) -> None:
     with _connect() as conn:
-        conn.execute("update accounts set last_login = now() where username = %s", (username,))
+        conn.execute(
+            "update accounts set last_login = now(), failed_attempts = 0, locked_until = null"
+            " where username = %s",
+            (username,),
+        )
+        conn.commit()
+
+
+def account_lock_state(username: str) -> dict:
+    """How many failures so far and until when the account is locked."""
+    with _connect() as conn:
+        row = conn.execute(
+            "select failed_attempts, locked_until from accounts where username = %s", (username,)
+        ).fetchone()
+    if not row:
+        return {"failed": 0, "locked_until": None}
+    locked = row[1]
+    if locked is not None and locked.tzinfo is None:
+        from datetime import timezone
+
+        locked = locked.replace(tzinfo=timezone.utc)
+    return {"failed": int(row[0] or 0), "locked_until": locked}
+
+
+def account_login_failed(username: str, failed: int, locked_until) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "update accounts set failed_attempts = %s, locked_until = %s where username = %s",
+            (int(failed), locked_until, username),
+        )
         conn.commit()
 
 

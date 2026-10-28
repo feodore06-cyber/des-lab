@@ -158,5 +158,21 @@ class AuthTests(unittest.TestCase):
         auth._save_tokens_json(tokens)
         self.assertIsNone(auth.reset_password(token, "a-new-password"))
 
+    def test_five_wrong_passwords_lock_the_account(self):
+        auth.ensure_store()
+        for _ in range(auth.MAX_ATTEMPTS):
+            self.assertFalse(auth.login("Thena", "definitely-wrong"))
+        state = auth._lock_state("Thena")
+        self.assertGreaterEqual(state["failed"], auth.MAX_ATTEMPTS)
+        self.assertIsNotNone(state["locked_until"])
+        self.assertFalse(auth.login("Thena", auth.DEFAULT_PASSWORD), "locked accounts stay locked")
+
+    def test_a_good_login_resets_the_failure_counter(self):
+        auth.ensure_store()
+        for _ in range(3):
+            auth.login("Thena", "definitely-wrong")
+        self.assertTrue(auth.login("Thena", auth.DEFAULT_PASSWORD))
+        self.assertEqual(auth._lock_state("Thena")["failed"], 0)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

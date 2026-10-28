@@ -69,6 +69,8 @@ EN = {
     "login.create": "Create a new account",
     "login.need_both": "Enter both your username and password.",
     "login.bad": "Unknown username or wrong password.",
+    "login.locked": "Too many wrong passwords. Try again after {until}.",
+    "login.expired": "Your session expired. Please sign in again.",
     "login.no_accounts": ("No accounts are configured for this deployment. Add an `[accounts]` table to the "
                           "app's secrets (see DEPLOY.md) and reload."),
 
@@ -357,6 +359,8 @@ ZH = {
     "login.create": "创建新账号",
     "login.need_both": "请填写用户名和密码。",
     "login.bad": "用户名或密码不正确。",
+    "login.locked": "密码错误次数过多，请在 {until} 之后重试。",
+    "login.expired": "登录已超时，请重新登录。",
     "login.no_accounts": "这个部署还没有配置账号。请在应用的 secrets 里添加 `[accounts]`（见 DEPLOY.md）后刷新。",
 
     "signup.display": "你的名字",
