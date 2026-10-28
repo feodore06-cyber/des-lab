@@ -18,6 +18,7 @@ class MailerTests(unittest.TestCase):
     def setUp(self):
         self.saved = {k: os.environ.get(k) for k in
                       ("DESLAB_SMTP_USER", "DESLAB_SMTP_PASSWORD", "DESLAB_BREVO_KEY")}
+        os.environ["DESLAB_MAIL_DISABLE"] = "1"  # ignore the developer's real secrets file
         for key in self.saved:
             os.environ.pop(key, None)
 

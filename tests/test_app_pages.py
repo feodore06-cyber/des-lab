@@ -37,6 +37,11 @@ def page_results():
     views.results()
 
 
+def page_signup():
+    import auth
+    auth._signup_form()
+
+
 def page_feedback():
     import views
     views.feedback()
@@ -298,6 +303,24 @@ class PageTests(unittest.TestCase):
         at.run()
         self.assertEqual(errors(at), [])
         self.assertEqual([t.value for t in at.title], [], "an expired session sees the sign-in page")
+
+    def test_signup_sends_one_welcome_mail_to_the_new_address(self):
+        import mailer
+
+        calls = []
+        original = mailer.send_welcome
+        mailer.send_welcome = lambda to, name: calls.append((to, name)) or True
+        try:
+            at = AppTest.from_function(page_signup, default_timeout=TIMEOUT)
+            at.run()
+            at.text_input[0].set_value("new.person@example.com").run()
+            at.text_input[1].set_value("a-good-password").run()
+            at.text_input[2].set_value("a-good-password").run()
+            press(at, "Create my account")
+            self.assertEqual(calls, [("new.person@example.com", "new.person")])
+            self.assertTrue(auth.verify("new.person@example.com", "a-good-password"))
+        finally:
+            mailer.send_welcome = original
 
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)

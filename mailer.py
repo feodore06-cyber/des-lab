@@ -27,7 +27,14 @@ DEFAULTS = {"host": "smtp.gmail.com", "port": "587", "from_name": "BioMat Lab"}
 APP_URL_SETTING = "DESLAB_APP_URL"
 
 
+def _disabled() -> bool:
+    """DESLAB_MAIL_DISABLE=1 ignores the secrets file (used by the test suite)."""
+    return os.environ.get("DESLAB_MAIL_DISABLE", "").strip() not in ("", "0", "false")
+
+
 def _section() -> dict:
+    if _disabled():
+        return {}
     try:
         import streamlit as st
 
@@ -134,12 +141,14 @@ def _deliver(message: EmailMessage) -> bool:
 
 def _brevo_settings() -> dict:
     block = {}
-    try:
-        import streamlit as st
+    if not _disabled():
+        try:
+            import streamlit as st
 
-        block = dict(st.secrets.get("brevo") or {})
-    except Exception:
-        block = {}
+            block = dict(st.secrets.get("brevo") or {})
+        except Exception:
+            block = {}
+    # environment wins, so a one-off check_mail.py run never needs the secrets file
     api_key = os.environ.get("DESLAB_BREVO_KEY") or block.get("api_key")
     sender = (os.environ.get("DESLAB_BREVO_SENDER") or block.get("sender")
               or setting("user") or "")

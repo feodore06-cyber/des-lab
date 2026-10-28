@@ -610,6 +610,13 @@ def _signup_form() -> None:
             except ValueError as exc:
                 st.error(t(str(exc)))
             else:
+                # welcome mail is best effort: a broken mail server must never block a sign-up
+                try:
+                    from mailer import send_welcome
+                except Exception:
+                    send_welcome = None
+                if send_welcome is not None and "@" in name:  # e-mail accounts only; usernames have no inbox
+                    send_welcome(name, display_name(name))
                 if login(name, password):
                     st.session_state.pop(MODE_KEY, None)
                     st.rerun()
