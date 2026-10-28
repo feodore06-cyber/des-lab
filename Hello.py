@@ -45,13 +45,19 @@ STYLE = """
   /* NOTE: never animate the app container's opacity from 0. If such an animation fails to
      run (background tab, animations disabled, a re-render resetting it) the whole app would
      stay invisible behind a white shell. The intro overlay below is the only moving part. */
-  h1 { font-weight: 800; letter-spacing: -0.02em; color: #0B1F4B; }
-  h2, h3 { font-weight: 700; letter-spacing: -0.01em; color: #0B1F4B; }
+  /* serif display type: the single strongest signal that this is a research tool, not a template */
+  h1, h2, h3, [data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2,
+  [data-testid="stMarkdownContainer"] h3 {
+    font-family: Georgia, "Times New Roman", "Songti SC", serif !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.015em;
+    color: #0B1F4B;
+  }
   h1 + div p, h1 ~ p { color: #33415C; }
 
   /* ---------- sidebar ---------- */
   [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #F8FAFE 0%, #EEF2FA 100%);
+    background: #FAFBFE;
     border-right: 1px solid #E3E9F4;
   }
   /* st.logo defaults to a tiny mark; scale the brand up so the wordmark reads */
@@ -75,14 +81,12 @@ STYLE = """
     display: flex;
     flex-direction: column;
     gap: .15rem;
-    margin: 0 0 1.2rem;
-    padding: .8rem 1.05rem;
-    border-left: 4px solid #002F86;
-    border-radius: 10px;
-    background: linear-gradient(90deg, rgba(0, 47, 134, .07), rgba(216, 41, 27, .03));
+    margin: 0 0 1.4rem;
+    padding: 0 0 0 1rem;
+    border-left: 3px solid #002F86;
   }
-  .dsh-welcome-hi { font: 700 1.12rem/1.35 "Segoe UI", system-ui, sans-serif; color: #0B1F4B; }
-  .dsh-welcome-sub { font: 400 .85rem/1.4 "Segoe UI", system-ui, sans-serif; color: #5A6478; }
+  .dsh-welcome-hi { font: 650 1.05rem/1.35 Georgia, "Times New Roman", serif; color: #0B1F4B; }
+  .dsh-welcome-sub { font: 400 .8rem/1.45 system-ui, "Segoe UI", sans-serif; color: #5A6478; }
 
   /* ---------- floating feedback button ---------- */
   .dsh-fab {
@@ -133,38 +137,41 @@ STYLE = """
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
     background: #FFFFFF;
-    border: 1px solid #E4EAF6;
-    border-radius: 14px;
-    padding: 14px 16px 12px 16px;
-    box-shadow: 0 1px 3px rgba(0, 47, 134, .06);
+    border: 1px solid #DCE4F2;
+    border-radius: 8px;
+    padding: 12px 14px 10px 14px;
   }
-  div[data-testid="stMetricLabel"] p { color: #55637D; font-weight: 600; }
-  div[data-testid="stMetricValue"] { color: #002F86; font-weight: 700; }
+  div[data-testid="stMetricLabel"] p {
+    color: #55637D; font-weight: 600; font-size: .76rem;
+    text-transform: uppercase; letter-spacing: .07em;
+  }
+  div[data-testid="stMetricValue"] {
+    color: #0B1F4B; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
   [data-testid="stExpander"] {
     border: 1px solid #E4EAF6;
-    border-radius: 12px;
+    border-radius: 8px;
     background: #FCFDFF;
   }
   [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
     border: 1px solid #E4EAF6;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
   }
-  [data-testid="stAlert"] { border-radius: 12px; }
+  [data-testid="stAlert"] { border-radius: 8px; }
 
   /* ---------- buttons ---------- */
   .stButton > button, .stDownloadButton > button, .stLinkButton > a {
-    border-radius: 10px;
+    border-radius: 6px;
     border: 1px solid #C9D5EC;
     font-weight: 600;
-    transition: all .18s ease;
   }
   .stDownloadButton > button:hover, .stButton > button:hover, .stLinkButton > a:hover {
     border-color: #002F86;
     color: #002F86;
-    box-shadow: 0 2px 10px rgba(0, 47, 134, .12);
-    transform: translateY(-1px);
   }
+  .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea,
+  [data-baseweb="select"] > div { border-radius: 6px; }
   /* keep the app chrome clean, but leave the ⋮ menu usable */
   [data-testid="stAppDeployButton"] { display: none; }
   [data-testid="stDecoration"] { display: none; }
@@ -312,10 +319,10 @@ def _gate(view):
 
 page = st.navigation(
     [
-        st.Page(_gate(views.calculator), title=t("app.page_calc"), icon="🧪", default=True),
-        st.Page(_gate(views.results), title=t("app.page_results"), icon="📊", url_path="results"),
-        st.Page(_gate(views.feedback), title=t("app.page_feedback"), icon="💬", url_path="feedback"),
-        st.Page(_gate(views.guide), title=t("app.page_guide"), icon="📖", url_path="guide"),
+        st.Page(_gate(views.calculator), title=t("app.page_calc"), default=True),
+        st.Page(_gate(views.results), title=t("app.page_results"), url_path="results"),
+        st.Page(_gate(views.feedback), title=t("app.page_feedback"), url_path="feedback"),
+        st.Page(_gate(views.guide), title=t("app.page_guide"), url_path="guide"),
     ],
     # signed out the sidebar is hidden entirely, so a stranger cannot read the app structure
     position="sidebar" if user else "hidden",

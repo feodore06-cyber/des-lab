@@ -92,5 +92,43 @@ class ExcelTests(unittest.TestCase):
         self.assertEqual(result["rows"], 3)
 
 
+    def test_structured_english_sheet_maps_every_new_field(self):
+        rows = [
+            ["Sample ID", "Feedstock", "HBA", "HBD", "Molar ratio", "Purity (wt%)", "Water (wt%)",
+             "Biomass (g)", "Lignin (mg)", "Temperature (C)", "Time (min)"],
+            ["EXP-11", "wood flour", "ChCl", "Glyoxylic acid", 2.0, 98, 5, 2.88, 56.0, 80, 60],
+        ]
+        result = excel_io.read_table(workbook(rows))
+        frame = result["frame"]
+        self.assertEqual(frame.loc[0, "des_hba"], "ChCl")
+        self.assertEqual(frame.loc[0, "des_hbd"], "Glyoxylic acid")
+        self.assertAlmostEqual(float(frame.loc[0, "molar_ratio"]), 2.0)
+        self.assertAlmostEqual(float(frame.loc[0, "purity_wt_pct"]), 98.0)
+        self.assertAlmostEqual(float(frame.loc[0, "water_wt_pct"]), 5.0)
+        self.assertEqual(frame.loc[0, "feedstock"], "wood flour")
+        self.assertAlmostEqual(float(frame.loc[0, "lignin_yield_pct"]), 1.9444, places=3)
+        self.assertEqual(frame.loc[0, "formulation"], "ChCl:Glyoxylic acid 1:2")
+
+    def test_chinese_structured_sheet_is_understood(self):
+        rows = [
+            ["样品编号", "原料", "氢键受体", "氢键供体", "摩尔比", "纯度", "水分", "生物质 (g)", "木质素 (mg)"],
+            ["EXP-12", "木粉", "氯化胆碱", "乙醛酸", 2, 98, 0, 2.5, 50.0],
+        ]
+        frame = excel_io.read_table(workbook(rows))["frame"]
+        self.assertEqual(frame.loc[0, "des_hba"], "ChCl")
+        self.assertEqual(frame.loc[0, "des_hbd"], "Glyoxylic acid")
+        self.assertAlmostEqual(float(frame.loc[0, "molar_ratio"]), 2.0)
+        self.assertAlmostEqual(float(frame.loc[0, "lignin_yield_pct"]), 2.0, places=3)
+
+    def test_a_legacy_label_column_is_upgraded_on_import(self):
+        rows = [
+            ["sample_id", "formulation", "biomass_g", "lignin_mg"],
+            ["EXP-13", "ChCl-GA 2:1", 2.0, 15.0],
+        ]
+        frame = excel_io.read_table(workbook(rows))["frame"]
+        self.assertEqual(frame.loc[0, "des_hba"], "ChCl")
+        self.assertEqual(frame.loc[0, "des_hbd"], "Glyoxylic acid")
+        self.assertAlmostEqual(float(frame.loc[0, "molar_ratio"]), 0.5)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

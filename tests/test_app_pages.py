@@ -354,7 +354,9 @@ class PageTests(unittest.TestCase):
         at = run(page_results)
         self.assertEqual(errors(at), [])
         at.text_input(key="run_sample").set_value("EXP-09").run()
-        at.text_input(key="run_formulation").set_value("ChCl:GA 1:2").run()
+        at.text_input(key="run_hba").set_value("ChCl").run()
+        at.text_input(key="run_hbd").set_value("Glyoxylic acid").run()
+        at.number_input(key="run_ratio").set_value(2.0).run()
         at.number_input(key="run_biomass").set_value(2.88).run()
         at.number_input(key="run_lignin").set_value(56.0).run()
         at.number_input(key="run_replicate").set_value(1).run()
@@ -366,6 +368,12 @@ class PageTests(unittest.TestCase):
         row = saved.iloc[0]
         self.assertEqual(row["sample_id"], "EXP-09")
         self.assertAlmostEqual(float(row["lignin_yield_pct"]), 1.9444, places=3)
+        # the structured, machine-readable fields are the point of the record form
+        self.assertEqual(row["des_hba"], "ChCl")
+        self.assertEqual(row["des_hbd"], "Glyoxylic acid")
+        self.assertAlmostEqual(float(row["molar_ratio"]), 2.0)
+        self.assertAlmostEqual(float(row["purity_wt_pct"]), 98.0)
+        self.assertEqual(row["formulation"], "ChCl:Glyoxylic acid 1:2")
 
     def test_the_records_tab_offers_save_and_a_guarded_delete(self):
         at = run(page_results)

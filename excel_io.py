@@ -13,11 +13,16 @@ from typing import Iterable
 
 import pandas as pd
 
+import schema
+
 # canonical name -> patterns that identify it (lower-case, no spaces/punctuation)
 SYNONYMS: dict[str, tuple[str, ...]] = {
     "sample_id": ("sampleid", "sample", "id", "code", "number", "no", "样品编号", "样品", "编号", "试样"),
-    "formulation": ("formulation", "des", "solvent", "system", "condition", "ratio", "配方", "体系", "条件",
-                    "摩尔比", "比例"),
+    "formulation": ("formulation", "des", "solvent", "system", "condition", "配方", "体系", "条件"),
+    "feedstock": ("feedstock", "substrate", "rawmaterial", "biomasssource", "原料", "生物质种类"),
+    "des_hba": ("hba", "hydrogenbondacceptor", "acceptor", "氢键受体", "组分a"),
+    "des_hbd": ("hbd", "hydrogenbonddonor", "donor", "氢键供体", "组分b"),
+    "molar_ratio": ("molarratio", "hbdhba", "ratio", "摩尔比", "比例", "配比"),
     "biomass_g": ("biomassg", "biomass", "biomassmass", "feedstock", "substrate", "生物质", "生物质质量",
                   "原料", "木粉"),
     "lignin_mg": ("ligninmg", "ligninmass", "lignin", "recoveredlignin", "木质素", "木质素质量", "回收木质素"),
@@ -25,6 +30,8 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
                          "木质素得率", "产率"),
     "temperature_C": ("temperaturec", "temperature", "temp", "温度"),
     "time_min": ("timemin", "time", "duration", "reactiontime", "时间", "反应时间"),
+    "purity_wt_pct": ("purity", "puritywt", "puritypct", "assay", "纯度", "含量"),
+    "water_wt_pct": ("water", "waterwt", "waterpct", "moisture", "水分", "含水"),
     "replicate": ("replicate", "rep", "run", "trial", "重复", "重复编号", "平行"),
     "notes": ("notes", "note", "comment", "remark", "备注", "说明"),
 }
@@ -139,6 +146,11 @@ def read_table(content: bytes, sheet: str | None = None) -> dict:
             frame[column] = frame[column].ffill()
 
     frame = add_missing_yield(frame)
+    # a sheet that only carries the old free-text label still yields the structured fields, and a
+    # sheet that only carries structured columns gets a human-readable label
+    frame = schema.backfill(frame)
+    if "formulation" not in frame.columns and {"des_hba", "des_hbd"} <= set(frame.columns):
+        frame["formulation"] = [schema.build_formulation(row) for _, row in frame.iterrows()]
     frame = frame.dropna(how="all").reset_index(drop=True)
     return {
         "frame": frame,

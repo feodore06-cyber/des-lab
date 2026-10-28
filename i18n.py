@@ -162,6 +162,21 @@ EN = {
                        "[glyoxylic acid 74.04](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150). Both "
                        "presets are 98 wt% solids with no separate water; the remaining 2% is impurity, not water."),
     # ------------------------------------------------------------------ results
+
+    "res.feedstock": "Feedstock",
+    "res.feedstock_ph": "e.g. wood flour, rice straw",
+    "res.des_block": "**DES composition** (numbers, not free text - this is what the model learns from)",
+    "res.hba": "H-bond acceptor",
+    "res.hbd": "H-bond donor",
+    "res.ratio": "Molar ratio HBD:HBA",
+    "res.ratio_help": "1:2 means two moles of donor per mole of acceptor, so enter 2.",
+    "res.purity": "Reagent purity (wt%)",
+    "res.water": "Added water (wt%)",
+    "res.formulation_preview": "Label written with the row: {label}",
+    "res.need_composition": "Fill in the two DES components and a molar ratio above zero.",
+    "res.q_no_composition": "{n} row(s) have no DES composition (acceptor / donor / ratio).",
+    "res.q_bad_ratio": "{n} row(s) have a molar ratio of zero or below.",
+    "res.q_out_of_range": "{n} row(s) have {column} outside its allowed range.",
     "res.tab_new": "Record a run",
     "res.tab_saved": "My records",
     "res.tab_chart": "Analyse & figure",
@@ -517,6 +532,21 @@ ZH = {
                        "[乙醛酸 74.04](https://www.sigmaaldrich.com/PM/en/product/aldrich/260150)。"
                        "两者都按 98% 固体、无独立水分处理；剩下的 2% 是杂质，不是水。"),
     # ------------------------------------------------------------------ results
+
+    "res.feedstock": "原料",
+    "res.feedstock_ph": "例如 木粉、稻秆",
+    "res.des_block": "**DES 组成**（填数字，不要写成一句话——模型学的就是这些）",
+    "res.hba": "氢键受体",
+    "res.hbd": "氢键供体",
+    "res.ratio": "摩尔比 HBD:HBA",
+    "res.ratio_help": "1:2 表示每 1 摩尔受体配 2 摩尔供体，所以这里填 2。",
+    "res.purity": "试剂纯度 (wt%)",
+    "res.water": "额外加水 (wt%)",
+    "res.formulation_preview": "写入这一行的标签：{label}",
+    "res.need_composition": "请填写两种 DES 组分，并把摩尔比填成大于 0 的数。",
+    "res.q_no_composition": "有 {n} 行缺少 DES 组成（受体/供体/摩尔比）。",
+    "res.q_bad_ratio": "有 {n} 行的摩尔比为 0 或负数。",
+    "res.q_out_of_range": "有 {n} 行的 {column} 超出允许范围。",
     "res.tab_new": "录入实验",
     "res.tab_saved": "我的记录",
     "res.tab_chart": "分析与作图",

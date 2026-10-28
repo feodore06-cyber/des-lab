@@ -30,6 +30,7 @@ import streamlit as st
 import auth
 import chem
 import excel_io
+import schema
 import feedback as feedback_mod
 import store
 import i18n
@@ -189,8 +190,9 @@ def calculator():
         st.markdown(t("calc.formula_3"))
 
 
-RECORD_COLUMNS = ["sample_id", "formulation", "biomass_g", "lignin_mg", "lignin_yield_pct",
-                  "temperature_C", "time_min", "replicate", "notes", "recorded_at"]
+RECORD_COLUMNS = ["sample_id", "formulation", "feedstock", "des_hba", "des_hbd", "molar_ratio",
+                  "purity_wt_pct", "water_wt_pct", "biomass_g", "temperature_C", "time_min",
+                  "lignin_mg", "lignin_yield_pct", "replicate", "notes", "recorded_at"]
 ORDER_KEYS = ("given", "label", "mean_desc", "mean_asc")
 
 
@@ -329,31 +331,57 @@ def _record_tab(user: str | None) -> None:
     with st.form("record_run", clear_on_submit=True):
         left, right = st.columns(2)
         sample_id = left.text_input(t("res.sample_id"), value=_next_sample_id(saved), key="run_sample")
-        formulation = right.text_input(t("res.formulation"), placeholder="ChCl:GA 1:2", key="run_formulation")
+        feedstock = right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
+                                     key="run_feedstock")
+        st.markdown(t("res.des_block"))
         a, b, c = st.columns(3)
-        biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1, format="%.4f", key="run_biomass")
-        lignin = b.number_input(t("res.lignin_mg"), min_value=0.0, value=0.0, step=0.1, format="%.3f", key="run_lignin")
+        hba = a.text_input(t("res.hba"), value="ChCl", key="run_hba")
+        hbd = b.text_input(t("res.hbd"), value="Glyoxylic acid", key="run_hbd")
+        ratio = c.number_input(t("res.ratio"), min_value=0.0, value=2.0, step=0.5,
+                               format="%.2f", key="run_ratio", help=t("res.ratio_help"))
+        a, b, c = st.columns(3)
+        purity = a.number_input(t("res.purity"), min_value=0.0, max_value=100.0, value=98.0,
+                                step=1.0, format="%.1f", key="run_purity")
+        water = b.number_input(t("res.water"), min_value=0.0, max_value=100.0, value=0.0,
+                               step=0.5, format="%.2f", key="run_water")
         replicate = c.number_input(t("res.replicate"), min_value=1, value=1, step=1, key="run_replicate")
-        a, b = st.columns(2)
-        temperature = a.number_input(t("res.temperature"), min_value=0.0, value=80.0, step=5.0, format="%.1f", key="run_temp")
-        minutes = b.number_input(t("res.time"), min_value=0.0, value=60.0, step=5.0, format="%.0f", key="run_time")
+        a, b, c, d = st.columns(4)
+        biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1,
+                                 format="%.4f", key="run_biomass")
+        lignin = b.number_input(t("res.lignin_mg"), min_value=0.0, value=0.0, step=0.1,
+                                format="%.3f", key="run_lignin")
+        temperature = c.number_input(t("res.temperature"), min_value=0.0, value=80.0, step=5.0,
+                                     format="%.1f", key="run_temp")
+        minutes = d.number_input(t("res.time"), min_value=0.0, value=60.0, step=5.0,
+                                 format="%.0f", key="run_time")
         notes = st.text_input(t("res.notes"), key="run_notes")
         submitted = st.form_submit_button(t("res.save_run"), type="primary", use_container_width=True)
     preview = _yield_pct(biomass, lignin)
+    label = schema.build_formulation({"des_hba": hba, "des_hbd": hbd, "molar_ratio": ratio})
+    if label:
+        st.caption(t("res.formulation_preview", label=label))
     if preview is not None:
         st.caption(t("res.yield_preview", pct=f"{preview:.2f}"))
     if submitted:
         if biomass <= 0 or lignin <= 0:
             st.warning(t("res.need_numbers"))
+        elif ratio <= 0 or not hba.strip() or not hbd.strip():
+            st.warning(t("res.need_composition"))
         else:
             row = {
                 "sample_id": sample_id.strip() or _next_sample_id(saved),
-                "formulation": formulation.strip(),
+                "formulation": label,
+                "feedstock": feedstock.strip(),
+                "des_hba": hba.strip(),
+                "des_hbd": hbd.strip(),
+                "molar_ratio": float(ratio),
+                "purity_wt_pct": float(purity),
+                "water_wt_pct": float(water),
                 "biomass_g": biomass,
-                "lignin_mg": lignin,
-                "lignin_yield_pct": preview,
                 "temperature_C": temperature,
                 "time_min": minutes,
+                "lignin_mg": lignin,
+                "lignin_yield_pct": preview,
                 "replicate": int(replicate),
                 "notes": notes.strip(),
                 "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
@@ -439,6 +467,21 @@ def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary
                    if int(row["n"]) <= 1]
         if singles:
             problems.append(t("res.q_single", groups=", ".join(singles)))
+    if {"des_hba", "des_hbd", "molar_ratio"} & set(frame.columns):
+        missing = int(frame[[c for c in ("des_hba", "des_hbd", "molar_ratio") if c in frame.columns]]
+                      .isna().any(axis=1).sum()) if not frame.empty else 0
+        if missing:
+            problems.append(t("res.q_no_composition", n=missing))
+    if "molar_ratio" in frame.columns:
+        bad = int((pd.to_numeric(frame["molar_ratio"], errors="coerce") <= 0).sum())
+        if bad:
+            problems.append(t("res.q_bad_ratio", n=bad))
+    for column, low, high in (("purity_wt_pct", 0, 100), ("water_wt_pct", 0, 100)):
+        if column in frame.columns:
+            values = pd.to_numeric(frame[column], errors="coerce")
+            bad = int(((values <= low) | (values > high)).sum()) if column == "purity_wt_pct" else int((values > high).sum())
+            if bad:
+                problems.append(t("res.q_out_of_range", n=bad, column=column))
     if "lignin_yield_pct" in frame.columns and {"biomass_g", "lignin_mg"} <= set(frame.columns):
         mismatch = 0
         for _, row in frame.iterrows():

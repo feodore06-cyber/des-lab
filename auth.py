@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import schema
 import store
 
 from i18n import language_switch, t
@@ -723,7 +724,7 @@ def load_results(username: str) -> pd.DataFrame | None:
 def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Path | str:
     """Write rows back to their owners; never into another team's space."""
     allowed = set(data_owners(username))
-    work = frame.copy()
+    work = schema.backfill(frame)  # fills des_hba / des_hbd / molar_ratio from an old label
     if "_owner" not in work.columns:
         work["_owner"] = username
     work["_owner"] = work["_owner"].fillna(username).astype(str)
