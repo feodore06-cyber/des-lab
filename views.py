@@ -274,6 +274,42 @@ def _store_where() -> str:
         return "unknown"
 
 
+def _dataset_zip(frame: pd.DataFrame) -> bytes:
+    """One row per experiment in three forms: JSONL (for training), CSV (for spreadsheets),
+    and a data dictionary (what every column means and looks like)."""
+    import json
+    import zipfile
+
+    export = frame.copy()
+    if "_owner" in export.columns:
+        export = export.rename(columns={"_owner": "recorded_by"})
+    lines = []
+    for record in export.to_dict("records"):
+        clean = {str(key): (None if (isinstance(value, float) and pd.isna(value)) else value)
+                 for key, value in record.items()}
+        lines.append(json.dumps(clean, ensure_ascii=False, default=str))
+    jsonl = "\n".join(lines).encode("utf-8")
+
+    dictionary = ["# Dataset dictionary", "",
+                  f"- rows: {len(export)}", f"- columns: {len(export.columns)}", "",
+                  "## Columns", ""]
+    for column in export.columns:
+        values = export[column].dropna()
+        kind = "text" if values.map(lambda v: isinstance(v, str)).all() else "number"
+        sample = "no values"
+        if len(values):
+            sample = str(values.iloc[0])[:40]
+        dictionary.append(f"- **{column}** ({kind}): e.g. {sample}")
+    dictionary_text = "\n".join(dictionary).encode("utf-8")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("experiments.jsonl", jsonl)
+        archive.writestr("experiments.csv", export.to_csv(index=False).encode("utf-8-sig"))
+        archive.writestr("data_dictionary.md", dictionary_text)
+    return buffer.getvalue()
+
+
 def _read_any(name: str, content: bytes) -> tuple[pd.DataFrame, dict | None]:
     """Read a CSV or an Excel sheet; Excel also returns what had to be guessed."""
     if excel_io.is_excel(name):
@@ -381,6 +417,9 @@ def _records_tab(user: str | None) -> None:
         auth.save_results(user, cleaned, append=False)
         st.success(t("res.save_table_done", rows=len(cleaned)))
     b.download_button(t("res.download_table"), csv_bytes(frame), "my_records.csv", "text/csv")
+    dataset = _dataset_zip(frame) if not frame.empty else _dataset_zip(pd.DataFrame(columns=RECORD_COLUMNS))
+    b.download_button(t("res.download_dataset"), dataset, "dataset_for_ai.zip",
+                      "application/zip", key="download_dataset")
     with c:
         confirm = st.checkbox(t("res.clear_confirm"), key="clear_confirm")
         if st.button(t("res.clear_all"), disabled=not confirm, key="clear_all"):
