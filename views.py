@@ -668,7 +668,6 @@ def guide():
                               if row.get("role") == "supervisor"})
         with st.form("add_intern", clear_on_submit=True):
             who = st.text_input(t("guide.intern_id"), placeholder="name@lab.org")
-            initial = st.text_input(t("guide.intern_pw"), type="password")
             a, b = st.columns(2)
             if auth.is_admin(user) and supervisors:
                 owner = a.selectbox(t("guide.col_supervisor"), supervisors, key="intern_owner")
@@ -678,7 +677,9 @@ def guide():
             until = b.date_input(t("guide.intern_expiry"),
                                  value=(pd.Timestamp.now() + pd.Timedelta(days=180)).date())
             if st.form_submit_button(t("guide.intern_create"), type="primary"):
-                password = initial.strip() or secrets.token_urlsafe(9)
+                # the password is always generated: a supervisor-typed one is usually weak, and the
+                # generated one is shown once below, so there is nothing to forget or guess
+                password = secrets.token_urlsafe(9)
                 try:
                     created = auth.add_user(who, password, role="intern", supervisor=owner,
                                             expires=pd.Timestamp(until).to_pydatetime())
