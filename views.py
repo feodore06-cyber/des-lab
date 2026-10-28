@@ -20,6 +20,7 @@ streamlit.testing.v1.AppTest. All user-facing text goes through i18n.t().
 """
 import io
 import re
+import secrets
 import time
 from pathlib import Path
 
@@ -542,45 +543,83 @@ def guide():
         st.info(t("store.local"))
 
     st.divider()
-    st.subheader(t("guide.account"))
+    st.subheader(t("guide.my_account"))
     user = auth.current_user()
     if not user:
         st.info(t("guide.signin_hint"))
         return
     st.markdown(t("guide.signed_in", user=user, path=auth.user_dir(user)))
+    with st.form("change_password", clear_on_submit=True):
+        first = st.text_input(t("guide.new_pw"), type="password")
+        second = st.text_input(t("guide.repeat_pw"), type="password")
+        if st.form_submit_button(t("guide.change_btn")):
+            if first != second:
+                st.error(t("guide.pw_mismatch"))
+            elif len(first) < 6:
+                st.error(t("guide.pw_short"))
+            else:
+                auth.change_password(user, first)
+                st.success(t("guide.pw_done"))
+    st.caption(t("guide.forgot_hint"))
 
     st.divider()
-    st.subheader(t("guide.accounts"))
-    if auth.is_admin(user):
-        rows = []
-        try:
-            if store.enabled():
-                rows = store.accounts_rows()
-            else:
-                rows = [{"username": name, "created": entry.get("created", ""),
-                         "last_login": entry.get("last_login", "")}
-                        for name, entry in auth.load_users().items()]
-        except Exception as exc:
-            st.error(t("guide.accounts_error", error=str(exc).splitlines()[0][:160]))
-        if rows:
-            week_ago = pd.Timestamp.now() - pd.Timedelta(days=7)
-            recent = sum(1 for row in rows
-                         if row["created"] and pd.to_datetime(row["created"], errors="coerce") >= week_ago)
-            active = sum(1 for row in rows if row["last_login"] and row["last_login"] != "never")
-            a, b, c = st.columns(3)
-            a.metric(t("guide.accounts_total"), len(rows))
-            b.metric(t("guide.accounts_recent"), recent)
-            c.metric(t("guide.accounts_active"), active)
-            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-            st.caption(t("guide.accounts_hint"))
-        else:
-            st.info(t("guide.accounts_none"))
-    else:
+    st.subheader(t("guide.team"))
+    if not auth.is_admin(user):
         st.caption(t("guide.accounts_admin_only"))
-    st.caption(t("guide.records_note"))
+        return
 
-    st.subheader(t("guide.mail"))
-    if auth.is_admin(user):
+    rows = []
+    try:
+        if store.enabled():
+            rows = store.accounts_rows()
+        else:
+            rows = [{"username": name, "created": entry.get("created", ""),
+                     "last_login": entry.get("last_login", "")}
+                    for name, entry in auth.load_users().items()]
+    except Exception as exc:
+        st.error(t("guide.accounts_error", error=str(exc).splitlines()[0][:160]))
+    if rows:
+        week_ago = pd.Timestamp.now() - pd.Timedelta(days=7)
+        recent = sum(1 for row in rows
+                     if row["created"] and pd.to_datetime(row["created"], errors="coerce") >= week_ago)
+        active = sum(1 for row in rows if row["last_login"] and row["last_login"] != "never")
+        a, b, c = st.columns(3)
+        a.metric(t("guide.accounts_total"), len(rows))
+        b.metric(t("guide.accounts_recent"), recent)
+        c.metric(t("guide.accounts_active"), active)
+        table = pd.DataFrame(rows)
+        edited = st.data_editor(table, hide_index=True, width="stretch",
+                                disabled=[c for c in table.columns if c != "is_admin"],
+                                key="team_editor")
+        if st.button(t("guide.save_roles"), key="save_roles"):
+            for _, row in edited.iterrows():
+                auth.set_admin(str(row["username"]), bool(row["is_admin"]))
+            st.success(t("guide.roles_saved"))
+        st.caption(t("guide.accounts_hint") + "  " + t("guide.records_note"))
+    else:
+        st.info(t("guide.accounts_none"))
+
+    with st.expander(t("guide.add_intern"), expanded=True):
+        st.caption(t("guide.intern_hint"))
+        with st.form("add_intern", clear_on_submit=True):
+            who = st.text_input(t("guide.intern_id"), placeholder="name@lab.org")
+            initial = st.text_input(t("guide.intern_pw"), type="password")
+            if st.form_submit_button(t("guide.intern_create"), type="primary"):
+                password = initial.strip() or secrets.token_urlsafe(9)
+                try:
+                    created = auth.add_user(who, password)
+                except ValueError as exc:
+                    st.error(t(str(exc)))
+                else:
+                    mailed = False
+                    if "@" in created and mailer.provider() != "none":
+                        mailed = mailer.send_welcome(created, auth.display_name(created))
+                    st.success(t("guide.intern_created", user=created))
+                    st.code(f"{t('login.password')}: {password}", language="text")
+                    st.caption(t("guide.intern_mailed", user=created) if mailed
+                               else t("guide.intern_nomail"))
+
+    with st.expander(t("guide.mail"), expanded=False):
         state = mailer.check()
         if mailer.provider() == "none":
             st.info(t("guide.mail_off"))
@@ -593,51 +632,20 @@ def guide():
                         st.success(t("guide.mail_sent", to=dest))
                     else:
                         st.error(t("guide.mail_failed"))
-    else:
-        st.caption(t("guide.accounts_admin_only"))
 
-    st.subheader(t("guide.resets"))
-    if auth.is_admin(user):
-        st.caption(t("guide.resets_hint"))
+    with st.expander(t("guide.reset_fallback"), expanded=False):
+        st.caption(t("guide.reset_fallback_hint"))
         names = sorted(auth.load_users())
         if names:
             with st.form("admin_reset"):
-                who = st.selectbox(t("guide.resets_pick"), names, key="reset_who")
+                who_reset = st.selectbox(t("guide.resets_pick"), names, key="reset_who")
                 if st.form_submit_button(t("guide.resets_create")):
-                    token = auth.create_reset_token(who)
+                    token = auth.create_reset_token(who_reset)
                     st.session_state["last_reset_link"] = auth.reset_link(token) if token else ""
             link = st.session_state.get("last_reset_link")
             if link:
                 st.code(link, language="text")
                 st.caption(t("guide.resets_link"))
-    else:
-        st.caption(t("guide.accounts_admin_only"))
-
-    left, right = st.columns(2)
-    with left:
-        st.markdown(t("guide.change"))
-        with st.form("change_password", clear_on_submit=True):
-            first = st.text_input(t("guide.new_pw"), type="password")
-            second = st.text_input(t("guide.repeat_pw"), type="password")
-            if st.form_submit_button(t("guide.change_btn")):
-                if first != second:
-                    st.error(t("guide.pw_mismatch"))
-                elif len(first) < 6:
-                    st.error(t("guide.pw_short"))
-                else:
-                    auth.change_password(user, first)
-                    st.success(t("guide.pw_done"))
-    with right:
-        st.markdown(t("guide.add"))
-        with st.form("add_teammate", clear_on_submit=True):
-            name = st.text_input(t("guide.username"), placeholder=t("guide.username_ph"))
-            initial = st.text_input(t("guide.initial_pw"), type="password")
-            if st.form_submit_button(t("guide.add_btn")):
-                try:
-                    auth.add_user(name, initial)
-                    st.success(t("guide.added", user=name.strip()))
-                except ValueError as exc:
-                    st.error(t(str(exc)))
 
 
 def _feedback_form(suffix: str = "page") -> None:

@@ -262,7 +262,7 @@ class PageTests(unittest.TestCase):
     def test_admins_see_the_account_list_and_others_do_not(self):
         admin = run(page_guide, user="Chuanyu")
         self.assertEqual(errors(admin), [])
-        self.assertIn("Accounts", [s.value for s in admin.subheader])
+        self.assertIn("Team", [s.value for s in admin.subheader])
         self.assertIn("New in 7 days", [m.label for m in admin.metric])
         usernames = set(str(v) for v in admin.dataframe[0].value.get("username", []))
 
@@ -431,7 +431,7 @@ class PageTests(unittest.TestCase):
         self.assertIn("Chuanyu", markup)
         self.assertIn("Download my experiment data CSV", [b.label for b in at.download_button])
         self.assertIn("Change password", [b.label for b in at.button])
-        self.assertIn("Add teammate", [b.label for b in at.button])
+        self.assertIn("Create the account", [b.label for b in at.button])
 
     # -------------------------------------------------------------------- entrance
     def test_entry_page_branding_and_intro_once(self):
@@ -519,7 +519,7 @@ class PageTests(unittest.TestCase):
         guide = run(page_guide, lang="zh")
         self.assertEqual(errors(guide), [])
         self.assertEqual(guide.title[0].value, "使用说明")
-        self.assertIn("账号与团队", [s.value for s in guide.subheader])
+        self.assertIn("团队", [s.value for s in guide.subheader])
 
     def test_language_switch_keeps_english_by_default(self):
         at = run(page_calculator)

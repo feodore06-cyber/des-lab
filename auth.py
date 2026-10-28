@@ -207,9 +207,13 @@ def add_user(identifier: str, password: str) -> str:
     existing = _find_user(users, identifier)
     if existing:
         raise ValueError(f"{identifier} already exists.")
-    users[identifier] = _entry(password)
+    entry = _entry(password)
+    users[identifier] = entry
     save_users(users)
     user_dir(identifier)  # create the empty record folder straight away
+    # never leave a fresh deployment without an administrator: the first account gets the role
+    if not admins():
+        set_admin(identifier, True)
     return identifier
 
 
@@ -291,7 +295,20 @@ def _clear_attempts(name: str) -> None:
 
 # ------------------------------------------------------------------- session
 def admins() -> set:
-    """Who may read the feedback inbox: DESLAB_ADMINS or the [admins] secret, else the default."""
+    """Administrators: the configured list plus anyone flagged in the database.
+
+    Storing roles in the database means a supervisor can promote a successor from the Team page, and
+    a deployment can never end up with nobody who can manage it.
+    """
+    names: set = set()
+    if store.enabled():
+        try:
+            names |= store.account_admin_names()
+        except Exception:
+            pass
+    else:
+        # local file mode keeps the same flag inside users.json
+        names |= {name for name, entry in load_users().items() if entry.get("is_admin")}
     raw = _flag(ADMIN_ENV)
     if not raw:
         try:
@@ -301,8 +318,21 @@ def admins() -> set:
         if secret:
             raw = ",".join(secret) if isinstance(secret, (list, tuple)) else str(secret)
     if raw:
-        return {name.strip() for name in raw.split(",") if name.strip()}
-    return set(DEFAULT_ADMINS)
+        names |= {name.strip() for name in raw.split(",") if name.strip()}
+    elif not names:
+        names = set(DEFAULT_ADMINS)
+    return names
+
+
+def set_admin(username: str, flag: bool) -> None:
+    """Promote or demote an account; this is what the Team page writes."""
+    if store.enabled():
+        store.account_set_admin(username, flag)
+        return
+    users = load_users()
+    if username in users:
+        users[username]["is_admin"] = bool(flag)
+        save_users(users)
 
 
 def is_admin(username: str | None) -> bool:

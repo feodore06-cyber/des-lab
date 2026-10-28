@@ -41,6 +41,7 @@ create table if not exists accounts (
 );
 alter table accounts add column if not exists failed_attempts integer not null default 0;
 alter table accounts add column if not exists locked_until timestamptz;
+alter table accounts add column if not exists is_admin boolean not null default false;
 create table if not exists reset_tokens (
     token_hash text primary key,
     username text not null,
@@ -272,19 +273,32 @@ def account_login_failed(username: str, failed: int, locked_until) -> None:
 
 
 def accounts_rows() -> list[dict]:
-    """Rows for the admin table, newest first."""
+    """Rows for the team table, newest first."""
     with _connect() as conn:
         rows = conn.execute(
-            "select username, created, last_login from accounts order by created desc"
+            "select username, created, last_login, is_admin from accounts order by created desc"
         ).fetchall()
     return [
         {
             "username": name,
             "created": created.strftime("%Y-%m-%d") if created else "",
             "last_login": last_login.strftime("%Y-%m-%d %H:%M") if last_login else "never",
+            "is_admin": bool(is_admin),
         }
-        for name, created, last_login in rows
+        for name, created, last_login, is_admin in rows
     ]
+
+
+def account_admin_names() -> set:
+    with _connect() as conn:
+        rows = conn.execute("select username from accounts where is_admin").fetchall()
+    return {row[0] for row in rows}
+
+
+def account_set_admin(username: str, flag: bool) -> None:
+    with _connect() as conn:
+        conn.execute("update accounts set is_admin = %s where username = %s", (bool(flag), username))
+        conn.commit()
 
 
 # ------------------------------------------------------------- password resets

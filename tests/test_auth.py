@@ -174,5 +174,21 @@ class AuthTests(unittest.TestCase):
         self.assertTrue(auth.login("Thena", auth.DEFAULT_PASSWORD))
         self.assertEqual(auth._lock_state("Thena")["failed"], 0)
 
+    def test_the_first_account_becomes_an_administrator(self):
+        os.environ.pop(auth.ADMIN_ENV, None)
+        auth.ensure_store()
+        self.assertTrue(auth.admins(), "the seeded deployment has an administrator")
+        self.assertIn("Chuanyu", auth.admins())
+
+    def test_roles_can_be_changed_from_the_team_page(self):
+        os.environ.pop(auth.ADMIN_ENV, None)
+        auth.ensure_store()
+        auth.add_user("intern@example.com", "a-good-password")
+        self.assertFalse(auth.is_admin("intern@example.com"))
+        auth.set_admin("intern@example.com", True)
+        self.assertTrue(auth.is_admin("intern@example.com"))
+        auth.set_admin("intern@example.com", False)
+        self.assertFalse(auth.is_admin("intern@example.com"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
