@@ -644,6 +644,14 @@ def invite_required() -> bool:
     return bool(_flag(INVITE_ENV))
 
 
+def _forget_cached_reads() -> None:
+    """A write makes every cached view stale."""
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
+
+
 def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Path | str:
     """Store a results table: in Postgres when configured, otherwise in the user's folder."""
     if store.enabled():
@@ -723,6 +731,7 @@ def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Pat
 
     if store.enabled():
         try:
+            _forget_cached_reads()
             for owner, part in work.groupby("_owner", sort=False):
                 payload = part.drop(columns=["_owner"], errors="ignore")
                 if append:
@@ -733,6 +742,7 @@ def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Pat
         except Exception:
             pass  # database unreachable: keep the rows in the local files
 
+    _forget_cached_reads()
     for owner, part in work.groupby("_owner", sort=False):
         payload = part.drop(columns=["_owner"], errors="ignore")
         path = results_path(owner)

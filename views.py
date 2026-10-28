@@ -37,7 +37,6 @@ import mailer
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
-from lab_plots import figure_bytes, make_figure
 
 ROOT = Path(__file__).parent
 DEMO_CSV = ROOT / "sample_data/demo_lignin.csv"
@@ -220,6 +219,61 @@ def _next_sample_id(frame: pd.DataFrame) -> str:
     return f"EXP-{len(frame) + 1:02d}"
 
 
+@st.cache_data(show_spinner=False, ttl=600)
+def _cached_merge(files: tuple, encoding: str) -> pd.DataFrame:
+    """Merging the same files again is pure work: keep the result for a while."""
+    return merge_results([(name, content) for name, content in files], encoding)
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _cached_summary(frame: pd.DataFrame, groups: tuple, measurement: str):
+    return summarize(frame, list(groups), measurement)
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _cached_figure(clean: pd.DataFrame, summary: pd.DataFrame, groups: tuple, measurement: str,
+                   title: str, ylabel: str, bar_colour: str, point_colour: str,
+                   show_errors: bool, show_values: bool, show_points: bool,
+                   y_from, y_to, order: str):
+    """Drawing costs a few hundred milliseconds; cache it per input."""
+    ordered = lab_plots.order_summary(summary, order)
+    return lab_plots.make_figure(clean, ordered, list(groups), measurement, title, ylabel,
+                                 bar_colour=bar_colour, point_colour=point_colour,
+                                 show_errors=show_errors, show_values=show_values,
+                                 show_points=show_points, y_from=y_from, y_to=y_to)
+
+
+@st.cache_data(show_spinner=False, ttl=600)
+def _cached_figure_bytes(clean: pd.DataFrame, summary: pd.DataFrame, groups: tuple, measurement: str,
+                         title: str, ylabel: str, bar_colour: str, point_colour: str,
+                         show_errors: bool, show_values: bool, show_points: bool,
+                         y_from, y_to, order: str, fmt: str, dpi: int) -> bytes:
+    fig = _cached_figure(clean, summary, groups, measurement, title, ylabel, bar_colour, point_colour,
+                         show_errors, show_values, show_points, y_from, y_to, order)
+    return lab_plots.figure_bytes(fig, fmt, dpi=int(dpi))
+
+
+@st.cache_data(show_spinner=False, ttl=15)
+def _cached_saved(user: str, where: str):
+    """Reading the records costs a database round trip; cache it briefly.
+
+    ``where`` (the store location) is part of the key so two stores never share an entry.
+    """
+    return auth.load_results(user)
+
+
+@st.cache_data(show_spinner=False, ttl=60)
+def _cached_db_status() -> tuple:
+    return True, store.ping()
+
+
+def _store_where() -> str:
+    try:
+        return str(auth.data_root())
+    except Exception:
+        return "unknown"
+
+
 def _read_any(name: str, content: bytes) -> tuple[pd.DataFrame, dict | None]:
     """Read a CSV or an Excel sheet; Excel also returns what had to be guessed."""
     if excel_io.is_excel(name):
@@ -279,7 +333,7 @@ def _records_tab(user: str | None) -> None:
     if not user:
         st.info(t("guide.signin_hint"))
         return
-    saved = auth.load_results(user)
+    saved = _cached_saved(user, _store_where())
     empty = saved is None or saved.empty
     if empty:
         st.info(t("res.empty_records"))
@@ -372,7 +426,7 @@ def _chart_tab(user: str | None) -> None:
     kind = dict((text, key) for key, text in sources)[label]
 
     if kind == "saved":
-        saved = auth.load_results(user)
+        saved = _cached_saved(user, _store_where())
         if saved is None or saved.empty:
             st.info(t("res.empty"))
             if st.button(t("res.load_example"), key="import_runs"):
@@ -409,7 +463,7 @@ def _chart_tab(user: str | None) -> None:
         data_kind = "user_uploaded"
 
     try:
-        frame = merge_results(files, encoding)
+        frame = _cached_merge(tuple(files), encoding)
     except (ValueError, UnicodeError, pd.errors.ParserError) as exc:
         st.error(t("res.read_error", error=t(str(exc))))
         return
@@ -443,7 +497,7 @@ def _chart_tab(user: str | None) -> None:
     measurement = st.selectbox(t("res.measure"), candidates, index=preferred, key="measurement")
     st.caption(t("res.yield_caption"))
     try:
-        clean, summary, audit = summarize(frame, groups, measurement)
+        clean, summary, audit = _cached_summary(frame, tuple(groups), measurement)
     except (ValueError, TypeError) as exc:
         st.error(t(str(exc)))
         return
@@ -493,17 +547,18 @@ def _chart_tab(user: str | None) -> None:
         except ValueError:
             return None
 
-    ordered = lab_plots.order_summary(summary, order)
-    fig = make_figure(clean, ordered, groups, measurement, title, ylabel,
-                      bar_colour=bar_colour, point_colour=point_colour,
-                      show_errors=show_errors, show_points=show_points, show_values=show_values,
-                      y_from=_number(y_min_text), y_to=_number(y_max_text))
+    fig = _cached_figure(clean, summary, tuple(groups), measurement, title, ylabel,
+                         bar_colour, point_colour, bool(show_errors), bool(show_values),
+                         bool(show_points), _number(y_min_text), _number(y_max_text), order)
     st.pyplot(fig, width="stretch")
     st.caption(t("res.fig_caption"))
     a, b = st.columns(2)
-    a.download_button(t("res.download_png"), figure_bytes(fig, "png", dpi=int(dpi)),
+    common = (clean, summary, tuple(groups), measurement, title, ylabel, bar_colour, point_colour,
+              bool(show_errors), bool(show_values), bool(show_points),
+              _number(y_min_text), _number(y_max_text), order)
+    a.download_button(t("res.download_png"), _cached_figure_bytes(*common, "png", int(dpi)),
                       "experiment.png", "image/png")
-    b.download_button(t("res.download_svg"), figure_bytes(fig, "svg", dpi=int(dpi)),
+    b.download_button(t("res.download_svg"), _cached_figure_bytes(*common, "svg", int(dpi)),
                       "experiment.svg", "image/svg+xml")
 
 
@@ -535,7 +590,7 @@ def guide():
     st.subheader(t("store.title"))
     if store.enabled():
         try:
-            detail = store.ping()
+            _, detail = _cached_db_status()
         except Exception as exc:
             st.error(t("store.error", error=str(exc).splitlines()[0][:200]))
         else:

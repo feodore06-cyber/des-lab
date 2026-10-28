@@ -84,6 +84,13 @@ def session_user(at):
 
 class PageTests(unittest.TestCase):
     def setUp(self):
+        # cached reads are process-global; start every test with none
+        try:
+            import streamlit as st
+
+            st.cache_data.clear()
+        except Exception:
+            pass
         self.tmp = tempfile.TemporaryDirectory()
         os.environ[auth.DATA_DIR_ENV] = self.tmp.name
         auth.ensure_store()
