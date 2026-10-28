@@ -342,6 +342,39 @@ class PageTests(unittest.TestCase):
         finally:
             auth.load_results, store_module.enabled, auth.results_path = saved_load, saved_enabled, saved_path
 
+    def test_a_run_can_be_recorded_by_hand(self):
+        at = run(page_results)
+        self.assertEqual(errors(at), [])
+        at.text_input(key="run_sample").set_value("EXP-09").run()
+        at.text_input(key="run_formulation").set_value("ChCl:GA 1:2").run()
+        at.number_input(key="run_biomass").set_value(2.88).run()
+        at.number_input(key="run_lignin").set_value(56.0).run()
+        at.number_input(key="run_replicate").set_value(1).run()
+        press(at, "Save this run")
+        self.assertEqual(errors(at), [])
+        saved = auth.load_results("Chuanyu")
+        self.assertIsNotNone(saved)
+        self.assertEqual(len(saved), 1)
+        row = saved.iloc[0]
+        self.assertEqual(row["sample_id"], "EXP-09")
+        self.assertAlmostEqual(float(row["lignin_yield_pct"]), 1.9444, places=3)
+
+    def test_the_records_tab_offers_save_and_a_guarded_delete(self):
+        at = run(page_results)
+        labels = [b.label for b in at.button]
+        self.assertIn("Save the table", labels)
+        self.assertIn("Delete all my rows", labels)
+        delete = [b for b in at.button if b.label == "Delete all my rows"][0]
+        self.assertTrue(delete.disabled, "the destructive button starts disabled")
+        self.assertIn("Download my records (CSV)", [b.label for b in at.download_button])
+
+    def test_quality_warning_names_groups_without_replicates(self):
+        at = run(page_results)
+        at.radio(key="source").set_value(SAMPLE_RUNS).run()
+        self.assertEqual(errors(at), [])
+        warnings = " ".join(str(w.value) for w in at.warning)
+        self.assertIn("n=1", warnings)
+
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()

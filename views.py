@@ -18,6 +18,8 @@
 Kept in a separate module so every page can be run and tested headlessly with
 streamlit.testing.v1.AppTest. All user-facing text goes through i18n.t().
 """
+import re
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -31,6 +33,7 @@ import i18n
 import mailer
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
+import lab_plots
 from lab_plots import figure_bytes, make_figure
 
 ROOT = Path(__file__).parent
@@ -184,20 +187,152 @@ def calculator():
         st.markdown(t("calc.formula_3"))
 
 
-def results():
-    st.caption(t("res.step"))
-    st.title(t("res.title"))
-    st.write(t("res.intro"))
-    user = auth.current_user()
+RECORD_COLUMNS = ["sample_id", "formulation", "biomass_g", "lignin_mg", "lignin_yield_pct",
+                  "temperature_C", "time_min", "replicate", "notes", "recorded_at"]
+ORDER_KEYS = ("given", "label", "mean_desc", "mean_asc")
 
+
+def _yield_pct(biomass_g, lignin_mg):
+    """Lignin yield in percent, or None when the numbers cannot support it."""
+    try:
+        biomass = float(biomass_g)
+        lignin = float(lignin_mg)
+    except (TypeError, ValueError):
+        return None
+    if biomass <= 0 or lignin < 0:
+        return None
+    return round(lignin / (biomass * 1000.0) * 100.0, 4)
+
+
+def _next_sample_id(frame: pd.DataFrame) -> str:
+    if frame is None or frame.empty or "sample_id" not in frame:
+        return "EXP-01"
+    numbers = []
+    for value in frame["sample_id"].dropna().astype(str):
+        match = re.search(r"(\d+)\s*$", value)
+        if match:
+            numbers.append(int(match.group(1)))
+    if numbers:
+        return f"EXP-{max(numbers) + 1:02d}"
+    return f"EXP-{len(frame) + 1:02d}"
+
+
+def _record_tab(user: str | None) -> None:
+    """Type one run in by hand: the yield is computed, the row goes into the records."""
+    if not user:
+        st.info(t("guide.signin_hint"))
+        return
+    saved = auth.load_results(user)
+    saved = pd.DataFrame() if saved is None else saved
+    st.caption(t("res.new_hint"))
+    with st.form("record_run", clear_on_submit=True):
+        left, right = st.columns(2)
+        sample_id = left.text_input(t("res.sample_id"), value=_next_sample_id(saved), key="run_sample")
+        formulation = right.text_input(t("res.formulation"), placeholder="ChCl:GA 1:2", key="run_formulation")
+        a, b, c = st.columns(3)
+        biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1, format="%.4f", key="run_biomass")
+        lignin = b.number_input(t("res.lignin_mg"), min_value=0.0, value=0.0, step=0.1, format="%.3f", key="run_lignin")
+        replicate = c.number_input(t("res.replicate"), min_value=1, value=1, step=1, key="run_replicate")
+        a, b = st.columns(2)
+        temperature = a.number_input(t("res.temperature"), min_value=0.0, value=80.0, step=5.0, format="%.1f", key="run_temp")
+        minutes = b.number_input(t("res.time"), min_value=0.0, value=60.0, step=5.0, format="%.0f", key="run_time")
+        notes = st.text_input(t("res.notes"), key="run_notes")
+        submitted = st.form_submit_button(t("res.save_run"), type="primary", use_container_width=True)
+    preview = _yield_pct(biomass, lignin)
+    if preview is not None:
+        st.caption(t("res.yield_preview", pct=f"{preview:.2f}"))
+    if submitted:
+        if biomass <= 0 or lignin <= 0:
+            st.warning(t("res.need_numbers"))
+        else:
+            row = {
+                "sample_id": sample_id.strip() or _next_sample_id(saved),
+                "formulation": formulation.strip(),
+                "biomass_g": biomass,
+                "lignin_mg": lignin,
+                "lignin_yield_pct": preview,
+                "temperature_C": temperature,
+                "time_min": minutes,
+                "replicate": int(replicate),
+                "notes": notes.strip(),
+                "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
+            }
+            auth.save_results(user, pd.DataFrame([row]), append=True)
+            total = auth.load_results(user)
+            st.success(t("res.saved_run", sid=row["sample_id"], pct=f"{preview:.2f}",
+                         rows=0 if total is None else len(total)))
+
+
+def _records_tab(user: str | None) -> None:
+    """Edit, add and delete rows in place, then save the whole table."""
+    if not user:
+        st.info(t("guide.signin_hint"))
+        return
+    saved = auth.load_results(user)
+    empty = saved is None or saved.empty
+    if empty:
+        st.info(t("res.empty_records"))
+    frame = pd.DataFrame(columns=RECORD_COLUMNS) if empty else saved
+    ordered = [c for c in RECORD_COLUMNS if c in frame.columns]
+    frame = frame.reindex(columns=ordered + [c for c in frame.columns if c not in ordered])
+    st.caption(t("res.editor_hint"))
+    edited = st.data_editor(frame, num_rows="dynamic", hide_index=True, width="stretch",
+                            key="records_editor")
+    a, b, c = st.columns([1, 1, 1])
+    if a.button(t("res.save_table"), type="primary", key="save_table"):
+        cleaned = edited.dropna(how="all")
+        if {"biomass_g", "lignin_mg"} <= set(cleaned.columns):
+            cleaned = cleaned.copy()
+            cleaned["lignin_yield_pct"] = [_yield_pct(g, m)
+                                           for g, m in zip(cleaned["biomass_g"], cleaned["lignin_mg"])]
+        auth.save_results(user, cleaned, append=False)
+        st.success(t("res.save_table_done", rows=len(cleaned)))
+    b.download_button(t("res.download_table"), csv_bytes(frame), "my_records.csv", "text/csv")
+    with c:
+        confirm = st.checkbox(t("res.clear_confirm"), key="clear_confirm")
+        if st.button(t("res.clear_all"), disabled=not confirm, key="clear_all"):
+            auth.save_results(user, frame.iloc[:0], append=False)
+            st.warning(t("res.cleared"))
+
+
+def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary: pd.DataFrame) -> None:
+    """Say plainly what is wrong or thin in the data before anyone plots it."""
+    problems = []
+    columns = [c for c in frame.columns if c != "_source_file"]
+    duplicates = int(frame.duplicated(subset=columns).sum())
+    if duplicates:
+        problems.append(t("res.q_dupes", n=duplicates))
+    if not summary.empty:
+        singles = [str(", ".join(str(row[g]) for g in groups)) for _, row in summary.iterrows()
+                   if int(row["n"]) <= 1]
+        if singles:
+            problems.append(t("res.q_single", groups=", ".join(singles)))
+    if "lignin_yield_pct" in frame.columns and {"biomass_g", "lignin_mg"} <= set(frame.columns):
+        mismatch = 0
+        for _, row in frame.iterrows():
+            expected = _yield_pct(row.get("biomass_g"), row.get("lignin_mg"))
+            stored = pd.to_numeric(row.get("lignin_yield_pct"), errors="coerce")
+            if expected is not None and pd.notna(stored) and abs(float(stored) - expected) > 0.05:
+                mismatch += 1
+        if mismatch:
+            problems.append(t("res.q_yield_mismatch", n=mismatch))
+    if problems:
+        for text in problems:
+            st.warning(text)
+    else:
+        st.success(t("res.q_ok"))
+
+
+def _chart_tab(user: str | None) -> None:
+    """Merge a source, check the data, summarise it and draw the figure."""
     sources = []
     if user:
         sources.append(("saved", t("res.src_saved")))
     sources += [("sample", t("res.src_sample")), ("demo", t("res.src_demo")), ("upload", t("res.src_upload"))]
-    source_label = st.radio(t("res.source"), [label for _, label in sources], horizontal=True, key="source")
-    source = dict((label, key) for key, label in sources)[source_label]
+    label = st.radio(t("res.source"), [text for _, text in sources], horizontal=True, key="source")
+    kind = dict((text, key) for key, text in sources)[label]
 
-    if source == "saved":
+    if kind == "saved":
         saved = auth.load_results(user)
         if saved is None or saved.empty:
             st.info(t("res.empty"))
@@ -205,17 +340,15 @@ def results():
                 auth.save_results(user, pd.read_csv(MY_CSV), append=False)
                 st.rerun()
             return
-        # The rows may come from the database, where no local file exists, so serialise them here
-        # instead of reading a CSV path that only exists on a laptop.
         location = "database" if store.enabled() else str(auth.results_path(user))
         st.caption(t("res.loaded", rows=len(saved), path=location))
         files = [(f"{auth.folder_name(user)}_results.csv", csv_bytes(saved))]
         encoding, data_kind = "utf-8-sig", "user_saved"
-    elif source == "sample":
+    elif kind == "sample":
         st.info(t("res.sample_info"))
         files = [("my_des_runs.csv", MY_CSV.read_bytes())]
         encoding, data_kind = "utf-8-sig", "my_experiments"
-    elif source == "demo":
+    elif kind == "demo":
         st.warning(t("res.demo_warning"))
         files = [("demo_lignin.csv", DEMO_CSV.read_bytes())]
         encoding, data_kind = "utf-8-sig", "synthetic_demo"
@@ -243,20 +376,10 @@ def results():
     b.metric(t("res.m_files"), len(files))
     duplicate_count = int(frame.duplicated(subset=columns).sum())
     c.metric(t("res.m_dupes"), duplicate_count)
-    if duplicate_count:
-        st.warning(t("res.dupes"))
+
     with st.expander(t("res.raw"), expanded=False):
         st.dataframe(frame, hide_index=True, width="stretch")
         st.download_button(t("res.download_merged"), csv_bytes(frame), "merged_results.csv", "text/csv")
-        if user and data_kind == "user_uploaded":
-            st.divider()
-            st.caption(t("res.save_path", path=auth.results_path(user)))
-            modes = [("append", t("res.save_append")), ("replace", t("res.save_replace"))]
-            save_label = st.radio(t("res.save_mode"), [label for _, label in modes], horizontal=True, key="save_mode")
-            if st.button(t("res.save_button"), key="save_results"):
-                append = dict((label, key) for key, label in modes)[save_label] == "append"
-                path = auth.save_results(user, frame, append=append)
-                st.success(t("res.saved_n", rows=len(frame), path=path))
 
     default_groups = [c for c in ["formulation", "temperature_C", "time_min"] if c in columns]
     groups = st.multiselect(t("res.groups"), columns, default=default_groups, key="groups")
@@ -285,24 +408,70 @@ def results():
     if summary.empty:
         st.error(t("res.no_valid"))
         return
+
+    st.subheader(t("res.quality"))
+    _quality_report(frame, groups, measurement, summary)
+
     st.subheader(t("res.summary"))
     st.dataframe(summary, hide_index=True, width="stretch")
     st.caption(t("res.summary_caption"))
     summary_export = summary.assign(measurement=measurement, data_kind=data_kind)
     st.download_button(t("res.download_summary"), csv_bytes(summary_export), "summary.csv", "text/csv")
-    if len(summary) > 30:
-        st.info(t("res.too_many"))
-        return
-    a, b = st.columns(2)
-    title = a.text_input(t("res.fig_title"),
-                         value=t("res.fig_title_demo") if data_kind == "synthetic_demo" else t("res.fig_title_real"))
-    ylabel = b.text_input(t("res.yaxis"), value=_y_label(measurement), key=f"ylabel_{measurement}")
-    fig = make_figure(clean, summary, groups, measurement, title, ylabel)
+
+    with st.expander(t("res.fig_options"), expanded=True):
+        a, b, c = st.columns(3)
+        order_label = a.selectbox(t("res.fig_order"), [t("res.order_given"), t("res.order_label"),
+                                                       t("res.order_desc"), t("res.order_asc")], key="fig_order")
+        order = ("given", "label", "mean_desc", "mean_asc")[[t("res.order_given"), t("res.order_label"),
+                                                             t("res.order_desc"), t("res.order_asc")].index(order_label)]
+        bar_colour = b.color_picker(t("res.fig_bar_colour"), value="#002F86", key="fig_bar")
+        point_colour = c.color_picker(t("res.fig_point_colour"), value="#D8291B", key="fig_point")
+        a, b, c = st.columns(3)
+        show_errors = a.toggle(t("res.fig_errors"), value=True, key="fig_errors")
+        show_points = b.toggle(t("res.fig_points"), value=True, key="fig_points")
+        show_values = c.toggle(t("res.fig_values"), value=False, key="fig_values")
+        a, b, c = st.columns(3)
+        y_min_text = a.text_input(t("res.fig_ymin"), key="fig_ymin")
+        y_max_text = b.text_input(t("res.fig_ymax"), key="fig_ymax")
+        dpi = c.selectbox(t("res.fig_dpi"), [150, 300, 600], index=1, key="fig_dpi")
+        a, b = st.columns(2)
+        title = a.text_input(t("res.fig_title"),
+                             value=t("res.fig_title_demo") if data_kind == "synthetic_demo" else t("res.fig_title_real"),
+                             key="fig_title")
+        ylabel = b.text_input(t("res.yaxis"), value=_y_label(measurement), key=f"ylabel_{measurement}")
+
+    def _number(text):
+        try:
+            return float(str(text).strip()) if str(text).strip() else None
+        except ValueError:
+            return None
+
+    ordered = lab_plots.order_summary(summary, order)
+    fig = make_figure(clean, ordered, groups, measurement, title, ylabel,
+                      bar_colour=bar_colour, point_colour=point_colour,
+                      show_errors=show_errors, show_points=show_points, show_values=show_values,
+                      y_from=_number(y_min_text), y_to=_number(y_max_text))
     st.pyplot(fig, width="stretch")
     st.caption(t("res.fig_caption"))
     a, b = st.columns(2)
-    a.download_button(t("res.download_png"), figure_bytes(fig, "png"), "experiment.png", "image/png")
-    b.download_button(t("res.download_svg"), figure_bytes(fig, "svg"), "experiment.svg", "image/svg+xml")
+    a.download_button(t("res.download_png"), figure_bytes(fig, "png", dpi=int(dpi)),
+                      "experiment.png", "image/png")
+    b.download_button(t("res.download_svg"), figure_bytes(fig, "svg", dpi=int(dpi)),
+                      "experiment.svg", "image/svg+xml")
+
+
+def results():
+    st.caption(t("res.step"))
+    st.title(t("res.title"))
+    st.write(t("res.intro"))
+    user = auth.current_user()
+    tab_new, tab_records, tab_chart = st.tabs([t("res.tab_new"), t("res.tab_saved"), t("res.tab_chart")])
+    with tab_new:
+        _record_tab(user)
+    with tab_records:
+        _records_tab(user)
+    with tab_chart:
+        _chart_tab(user)
 
 
 def guide():
