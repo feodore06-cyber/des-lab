@@ -322,6 +322,26 @@ class PageTests(unittest.TestCase):
         finally:
             mailer.send_welcome = original
 
+    def test_results_page_works_when_the_rows_come_from_the_database(self):
+        # On a host there is no local CSV: the page must serialise the DataFrame instead of reading
+        # a file path that only exists on a laptop (this was a real crash).
+        import store as store_module
+
+        rows = pd.DataFrame([{"formulation": "Chl-GA 1:2", "biomass_g": 2.88,
+                              "lignin_mg": 56.0, "lignin_yield_pct": 1.94}])
+        saved_load, saved_enabled, saved_path = auth.load_results, store_module.enabled, auth.results_path
+        auth.load_results = lambda user: rows
+        store_module.enabled = lambda: True
+        auth.results_path = lambda user: (_ for _ in ()).throw(AssertionError("must not read a local file"))
+        try:
+            at = AppTest.from_function(page_results, default_timeout=TIMEOUT)
+            at.session_state[auth.SESSION_KEY] = "Chuanyu"
+            at.run()
+            self.assertEqual([str(e.value)[:120] for e in at.exception], [])
+            self.assertTrue(at.dataframe, "the merged table should render")
+        finally:
+            auth.load_results, store_module.enabled, auth.results_path = saved_load, saved_enabled, saved_path
+
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()

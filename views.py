@@ -205,8 +205,11 @@ def results():
                 auth.save_results(user, pd.read_csv(MY_CSV), append=False)
                 st.rerun()
             return
-        st.caption(t("res.loaded", rows=len(saved), path=auth.results_path(user)))
-        files = [(f"{user}_results.csv", auth.results_path(user).read_bytes())]
+        # The rows may come from the database, where no local file exists, so serialise them here
+        # instead of reading a CSV path that only exists on a laptop.
+        location = "database" if store.enabled() else str(auth.results_path(user))
+        st.caption(t("res.loaded", rows=len(saved), path=location))
+        files = [(f"{auth.folder_name(user)}_results.csv", csv_bytes(saved))]
         encoding, data_kind = "utf-8-sig", "user_saved"
     elif source == "sample":
         st.info(t("res.sample_info"))
