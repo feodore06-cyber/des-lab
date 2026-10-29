@@ -322,6 +322,7 @@ page = st.navigation(
         st.Page(_gate(views.calculator), title=t("app.page_calc"), default=True),
         st.Page(_gate(views.results), title=t("app.page_results"), url_path="results"),
         st.Page(_gate(views.library), title=t("app.page_library"), url_path="papers"),
+        st.Page(_gate(views.compare_page), title=t("app.page_compare"), url_path="compare"),
         st.Page(_gate(views.feedback), title=t("app.page_feedback"), url_path="feedback"),
         st.Page(_gate(views.guide), title=t("app.page_guide"), url_path="guide"),
     ],

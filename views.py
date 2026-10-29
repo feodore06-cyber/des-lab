@@ -28,6 +28,7 @@ import streamlit as st
 
 import auth
 import chem
+import compare
 import excel_export
 import excel_io
 import schema
@@ -442,7 +443,107 @@ def library() -> None:
                 st.write(paper["abstract"])
         if paper["doi"]:
             st.caption(f"DOI: `{paper['doi']}`")
+        if st.button(t("lib.use_in_compare"), key=f"compare_{index}",
+                     help=t("lib.use_in_compare_help")):
+            st.session_state["compare_ref"] = {"title": paper["doi"] or paper["title"],
+                                               "title_text": paper["title"]}
+            st.session_state.pop("compare_outcome", None)
+            st.switch_page("views.compare_page")
         st.divider()
+
+
+BASIS_KEYS = ("cmp.basis_yield", "cmp.basis_delign", "cmp.basis_purity", "cmp.basis_other")
+
+
+def compare_page() -> None:
+    st.markdown(t("cmp.title"))
+    st.caption(t("cmp.sub"))
+    user = auth.current_user()
+    if not user:
+        st.info(t("guide.signin_hint"))
+        return
+
+    saved = _cached_saved(user, _store_where())
+    if saved is None or saved.empty or "sample_id" not in saved.columns:
+        st.info(t("res.empty_records"))
+        return
+    ids = [str(value) for value in saved["sample_id"].dropna().unique()]
+
+    st.subheader(t("cmp.mine"))
+    pick = st.selectbox(t("cmp.pick_run"), ids, key="compare_run")
+    mine_row = saved[saved["sample_id"].astype(str) == str(pick)].iloc[0].to_dict()
+
+    st.subheader(t("cmp.ref"))
+    st.caption(t("cmp.ref_hint"))
+    with st.form("compare_paper"):
+        label = st.text_input(t("cmp.title_field"),
+                              value=str(st.session_state.get("compare_ref", {}).get("title", "")),
+                              placeholder="10.1016/j.indcrop.2022.115040")
+        basis_labels = [t(key) for key in BASIS_KEYS]
+        basis = st.selectbox(t("cmp.basis"), basis_labels, index=0, key="compare_basis")
+        a, b, c = st.columns(3)
+        feedstock = a.text_input(t("cmp.feedstock"), placeholder=str(mine_row.get("feedstock") or ""))
+        ratio = b.text_input(t("cmp.ratio"), placeholder=str(mine_row.get("molar_ratio") or ""))
+        purity = c.text_input(t("cmp.purity"), placeholder=str(mine_row.get("purity_wt_pct") or ""))
+        a, b, c = st.columns(3)
+        water = a.text_input(t("cmp.water"), placeholder=str(mine_row.get("water_wt_pct") or ""))
+        temp = b.text_input(t("cmp.temp"), placeholder=str(mine_row.get("temperature_C") or ""))
+        minutes = c.text_input(t("cmp.time"), placeholder=str(mine_row.get("time_min") or ""))
+        a, b, c = st.columns(3)
+        reported = a.text_input(t("cmp.yield"), placeholder="")
+        replicates = b.text_input(t("cmp.replicates"), placeholder="")
+        moisture = c.text_input(t("cmp.moisture"), placeholder="")
+        if st.form_submit_button(t("cmp.run_btn"), type="primary"):
+            if not str(reported).strip():
+                st.error(t("cmp.need_numbers"))
+            else:
+                theirs = {
+                    "lignin_yield_pct": reported, "basis": basis, "feedstock": feedstock,
+                    "molar_ratio": ratio, "purity_wt_pct": purity, "water_wt_pct": water,
+                    "temperature_C": temp, "time_min": minutes, "replicates": replicates,
+                    "moisture_wt_pct": moisture,
+                }
+                mine = {
+                    "lignin_yield_pct": mine_row.get("lignin_yield_pct"),
+                    "basis": t("cmp.basis_yield"), "feedstock": mine_row.get("feedstock"),
+                    "molar_ratio": mine_row.get("molar_ratio"),
+                    "purity_wt_pct": mine_row.get("purity_wt_pct"),
+                    "water_wt_pct": mine_row.get("water_wt_pct"),
+                    "temperature_C": mine_row.get("temperature_C"),
+                    "time_min": mine_row.get("time_min"),
+                    "replicates": 3, "moisture_wt_pct": mine_row.get("moisture_wt_pct"),
+                }
+                st.session_state["compare_result"] = {"mine": mine, "theirs": theirs,
+                                                      "label": label or pick}
+                st.session_state["compare_outcome"] = compare.compare(mine, theirs)
+
+    outcome = st.session_state.get("compare_outcome")
+    if not outcome:
+        st.caption(t("cmp.nothing_saved"))
+        return
+
+    st.divider()
+    st.subheader(t("cmp.side_by_side"))
+    details = st.session_state.get("compare_result", {})
+    cols = st.columns(3)
+    for column, value in zip(cols, (details.get("mine", {}).get("lignin_yield_pct"),
+                                    details.get("theirs", {}).get("lignin_yield_pct"),
+                                    outcome["delta"])):
+        column.metric("", value if value is not None else "—")
+    st.caption(t("cmp.nothing_saved"))
+    st.info(t(f"cmp.headline_{compare.headline(outcome)}"))
+
+    st.subheader(t("cmp.explanations"))
+    for item in outcome["findings"]:
+        params = dict(item["params"])
+        if "side" in params:
+            params["side"] = t("cmp.mine") if params["side"] == "mine" else t("cmp.ref")
+        with st.container(border=True):
+            st.markdown(f"**{t('cmp.tag_' + item['kind'])}** · "
+                        f"{t('cmp.' + item['code'] + '.claim', **params)}")
+            st.caption(t("cmp." + item["code"] + ".why", **params))
+            st.markdown(f"*{t('cmp.' + item['code'] + '.check', **params)}*")
+            st.markdown(t("cmp." + item["code"] + ".step", **params))
 
 
 def _photos_section(user: str | None, frame: pd.DataFrame) -> None:

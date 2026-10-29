@@ -20,6 +20,12 @@ import i18n  # noqa: E402
 
 SOURCES = ("Hello.py", "auth.py", "views.py", "feedback.py", "chem.py", "store.py", "lab_core.py")
 PATTERN = re.compile(r"""\bt\(\s*["']([A-Za-z0-9_.]+)["']""")
+# keys are sometimes built at runtime ("cmp." + code + ".claim"): a trailing dot marks that prefix
+DYNAMIC = ("cmp.", "cmp.tag_", "res.q_", "guide.")
+
+
+def is_dynamic(key: str) -> bool:
+    return key.endswith(".") or key.endswith("_") or key in DYNAMIC
 
 
 def used_keys() -> dict:
@@ -29,7 +35,10 @@ def used_keys() -> dict:
         if not path.exists():
             continue
         for match in PATTERN.finditer(path.read_text(encoding="utf-8")):
-            found.setdefault(match.group(1), set()).add(name)
+            key = match.group(1)
+            if is_dynamic(key):
+                continue  # a prefix assembled at runtime, checked by the tests that use it
+            found.setdefault(key, set()).add(name)
     return found
 
 
