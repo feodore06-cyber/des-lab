@@ -645,6 +645,42 @@ def invite_required() -> bool:
     return bool(_flag(INVITE_ENV))
 
 
+DEFAULT_PROJECT = "General"
+
+
+def list_projects(username: str | None) -> list:
+    """Projects visible to this account: its own plus its interns', always with General first."""
+    owners = data_owners(username)
+    names = []
+    if store.enabled():
+        try:
+            names = store.projects_of(owners)
+        except Exception:
+            names = []
+    if not names:
+        names = sorted({str(value) for value in (_project_values(username) or []) if value})
+    if DEFAULT_PROJECT not in names:
+        names = [DEFAULT_PROJECT] + names
+    return names
+
+
+def _project_values(username: str | None) -> list:
+    frame = load_results(username)
+    if frame is None or "project" not in frame.columns:
+        return []
+    return [value for value in frame["project"].dropna().unique()]
+
+
+def create_project(username: str, name: str) -> str:
+    """Make a project folder; names are trimmed and capped so they stay usable as a filter."""
+    clean = " ".join(str(name or "").split())[:40]
+    if not clean:
+        raise ValueError("Give the project a name.")
+    if store.enabled():
+        store.project_create(username, clean)
+    return clean
+
+
 def _forget_cached_reads() -> None:
     """A write makes every cached view stale."""
     try:

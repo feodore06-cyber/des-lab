@@ -351,6 +351,18 @@ class PageTests(unittest.TestCase):
         finally:
             auth.load_results, store_module.enabled, auth.results_path = saved_load, saved_enabled, saved_path
 
+    def test_pressing_save_twice_does_not_store_the_run_twice(self):
+        at = run(page_results)
+        self.assertEqual(errors(at), [])
+        at.text_input(key="run_sample").set_value("EXP-DUP").run()
+        at.number_input(key="run_biomass").set_value(2.5).run()
+        at.number_input(key="run_lignin").set_value(40.0).run()
+        press(at, "Save this run")
+        press(at, "Save this run")
+        saved = auth.load_results("Chuanyu")
+        self.assertEqual(len(saved), 1, "a double submit must not duplicate the row")
+        self.assertTrue(any("already saved" in str(w.value) for w in at.warning))
+
     def test_a_run_can_be_recorded_by_hand(self):
         at = run(page_results)
         self.assertEqual(errors(at), [])

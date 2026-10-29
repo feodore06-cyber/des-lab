@@ -54,6 +54,12 @@ create table if not exists reset_tokens (
     used boolean not null default false
 );
 create index if not exists reset_tokens_user on reset_tokens (username);
+create table if not exists projects (
+    owner text not null,
+    name text not null,
+    created timestamptz not null default now(),
+    primary key (owner, name)
+);
 """
 
 
@@ -404,6 +410,33 @@ def account_admin_names() -> set:
 def account_set_admin(username: str, flag: bool) -> None:
     with _connect() as conn:
         conn.execute("update accounts set is_admin = %s where username = %s", (bool(flag), username))
+        conn.commit()
+
+
+# ------------------------------------------------------------------- projects
+def project_create(owner: str, name: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "insert into projects (owner, name) values (%s, %s) on conflict do nothing",
+            (owner, name),
+        )
+        conn.commit()
+
+
+def projects_of(owners: list[str]) -> list[str]:
+    """Project names that belong to these accounts (never another team's)."""
+    if not owners:
+        return []
+    with _connect() as conn:
+        rows = conn.execute(
+            "select distinct name from projects where owner = any(%s) order by name", (list(owners),)
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def project_rename(owner: str, old: str, new: str) -> None:
+    with _connect() as conn:
+        conn.execute("update projects set name = %s where owner = %s and name = %s", (new, owner, old))
         conn.commit()
 
 

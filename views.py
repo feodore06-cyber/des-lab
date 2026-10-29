@@ -256,12 +256,16 @@ def _cached_figure_bytes(clean: pd.DataFrame, summary: pd.DataFrame, groups: tup
 
 
 @st.cache_data(show_spinner=False, ttl=15)
-def _cached_saved(user: str, where: str):
+def _cached_saved(user: str, where: str, project: str | None = None):
     """Reading the records costs a database round trip; cache it briefly.
 
-    ``where`` (the store location) is part of the key so two stores never share an entry.
+    ``where`` (the store location) is part of the key so two stores never share an entry, and
+    ``project`` keeps one project's rows out of another's view.
     """
-    return auth.load_results(user)
+    frame = auth.load_results(user)
+    if frame is None or not project or "project" not in frame.columns:
+        return frame
+    return frame[frame["project"].fillna(auth.DEFAULT_PROJECT) == project].reset_index(drop=True)
 
 
 @st.cache_data(show_spinner=False, ttl=60)
@@ -320,7 +324,48 @@ def _read_any(name: str, content: bytes) -> tuple[pd.DataFrame, dict | None]:
     return pd.read_csv(io.BytesIO(content), encoding="utf-8-sig"), None
 
 
-def _record_tab(user: str | None) -> None:
+def _project_picker(user: str | None) -> str:
+    """The project every write goes into and every read is filtered by."""
+    if not user:
+        return auth.DEFAULT_PROJECT
+    projects = auth.list_projects(user)
+    choice = st.selectbox(t("res.project"), projects, key="project_pick",
+                          help=t("res.project_help"))
+    with st.expander(t("res.project_new"), expanded=False):
+        with st.form("new_project", clear_on_submit=True):
+            name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"))
+            if st.form_submit_button(t("res.project_create")):
+                try:
+                    created = auth.create_project(user, name)
+                except ValueError as exc:
+                    st.error(t(str(exc)))
+                else:
+                    st.success(t("res.project_created", name=created))
+                    st.session_state["project_pick"] = created
+                    st.rerun()
+    return choice
+
+
+def _looks_duplicate(frame: pd.DataFrame, sample_id: str, lignin_mg: float,
+                     biomass_g: float) -> bool:
+    """True when the same run is already stored, so a double click cannot add it twice."""
+    wanted = (str(sample_id or "").strip().lower(), round(float(lignin_mg), 4),
+              round(float(biomass_g), 4))
+    if not wanted[0] or "sample_id" not in frame.columns:
+        return False
+    for _, row in frame.iterrows():
+        try:
+            other = (str(row.get("sample_id", "")).strip().lower(),
+                     round(float(row.get("lignin_mg")), 4),
+                     round(float(row.get("biomass_g")), 4))
+        except (TypeError, ValueError):
+            continue
+        if other == wanted:
+            return True
+    return False
+
+
+def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     """Type one run in by hand: the yield is computed, the row goes into the records."""
     if not user:
         st.info(t("guide.signin_hint"))
@@ -341,9 +386,11 @@ def _record_tab(user: str | None) -> None:
                                format="%.2f", key="run_ratio", help=t("res.ratio_help"))
         a, b, c = st.columns(3)
         purity = a.number_input(t("res.purity"), min_value=0.0, max_value=100.0, value=98.0,
-                                step=1.0, format="%.1f", key="run_purity")
+                                step=1.0, format="%.1f", key="run_purity",
+                                help=t("res.range_hint"))
         water = b.number_input(t("res.water"), min_value=0.0, max_value=100.0, value=0.0,
-                               step=0.5, format="%.2f", key="run_water")
+                               step=0.5, format="%.2f", key="run_water",
+                               help=t("res.range_hint"))
         replicate = c.number_input(t("res.replicate"), min_value=1, value=1, step=1, key="run_replicate")
         a, b, c, d = st.columns(4)
         biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1,
@@ -368,6 +415,11 @@ def _record_tab(user: str | None) -> None:
         elif ratio <= 0 or not hba.strip() or not hbd.strip():
             st.warning(t("res.need_composition"))
         else:
+            already = _cached_saved(user, _store_where(), project)
+            if already is not None and not already.empty and _looks_duplicate(already, sample_id,
+                                                                             lignin, biomass):
+                st.warning(t("res.duplicate_submit"))
+                return
             row = {
                 "sample_id": sample_id.strip() or _next_sample_id(saved),
                 "formulation": label,
@@ -385,6 +437,7 @@ def _record_tab(user: str | None) -> None:
                 "replicate": int(replicate),
                 "notes": notes.strip(),
                 "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
+                "project": project,
             }
             auth.save_results(user, pd.DataFrame([row]), append=True)
             total = auth.load_results(user)
@@ -392,12 +445,12 @@ def _record_tab(user: str | None) -> None:
                          rows=0 if total is None else len(total)))
 
 
-def _records_tab(user: str | None) -> None:
+def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     """Edit, add and delete rows in place, then save the whole table."""
     if not user:
         st.info(t("guide.signin_hint"))
         return
-    saved = _cached_saved(user, _store_where())
+    saved = _cached_saved(user, _store_where(), project)
     empty = saved is None or saved.empty
     if empty:
         st.info(t("res.empty_records"))
@@ -523,7 +576,7 @@ def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary
         st.success(t("res.q_ok"))
 
 
-def _chart_tab(user: str | None) -> None:
+def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     """Merge a source, check the data, summarise it and draw the figure."""
     sources = []
     if user:
@@ -533,7 +586,7 @@ def _chart_tab(user: str | None) -> None:
     kind = dict((text, key) for key, text in sources)[label]
 
     if kind == "saved":
-        saved = _cached_saved(user, _store_where())
+        saved = _cached_saved(user, _store_where(), project)
         if saved is None or saved.empty:
             st.info(t("res.empty"))
             if st.button(t("res.load_example"), key="import_runs"):
@@ -674,13 +727,17 @@ def results():
     st.title(t("res.title"))
     st.write(t("res.intro"))
     user = auth.current_user()
+    if user:
+        project = _project_picker(user)
+    else:
+        project = auth.DEFAULT_PROJECT
     tab_new, tab_records, tab_chart = st.tabs([t("res.tab_new"), t("res.tab_saved"), t("res.tab_chart")])
     with tab_new:
-        _record_tab(user)
+        _record_tab(user, project)
     with tab_records:
-        _records_tab(user)
+        _records_tab(user, project)
     with tab_chart:
-        _chart_tab(user)
+        _chart_tab(user, project)
 
 
 def guide():
