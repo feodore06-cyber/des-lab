@@ -64,12 +64,17 @@ def fetch(url: str, table: str, columns: tuple) -> list[dict]:
 def insert(url: str, table: str, columns: tuple, rows: list[dict]) -> int:
     if not rows:
         return 0
+    from psycopg.types.json import Jsonb
+
     names = ", ".join(columns)
     placeholders = ", ".join(f"%({column})s" for column in columns)
     statement = f"insert into {table} ({names}) values ({placeholders}) on conflict do nothing"
     with connect(url) as conn:
         for row in rows:
-            conn.execute(statement, row)
+            # jsonb columns need an explicit wrapper, else psycopg refuses a plain dict
+            adapted = {key: (Jsonb(value) if isinstance(value, dict) else value)
+                       for key, value in row.items()}
+            conn.execute(statement, adapted)
     return len(rows)
 
 
