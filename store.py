@@ -115,13 +115,40 @@ def _rows(frame: pd.DataFrame) -> list[dict]:
     return [clean_row(record) for record in frame.astype(object).where(pd.notna(frame), None).to_dict("records")]
 
 
-def _connect():
-    import psycopg
+_POOL = None
+_POOL_URL = None
 
-    conn = psycopg.connect(database_url(), connect_timeout=15)
-    conn.execute(SCHEMA)
-    conn.commit()
-    return conn
+
+def close_pool() -> None:
+    """Drop the shared pool (used by tests and when the URL changes)."""
+    global _POOL, _POOL_URL
+    if _POOL is not None:
+        try:
+            _POOL.close()
+        except Exception:
+            pass
+    _POOL, _POOL_URL = None, None
+
+
+def _pool(url: str):
+    """One process-wide pool: opening a connection costs ~2.5 s, a query ~0.2 s, so reusing wins."""
+    global _POOL, _POOL_URL
+    if _POOL is not None and _POOL_URL == url:
+        return _POOL
+    from psycopg_pool import ConnectionPool
+
+    pool = ConnectionPool(conninfo=url, min_size=1, max_size=4, timeout=15,
+                          kwargs={"connect_timeout": 15}, open=True)
+    with pool.connection() as conn:  # make sure the schema exists, once per process
+        conn.execute(SCHEMA)
+        conn.commit()
+    _POOL, _POOL_URL = pool, url
+    return pool
+
+
+def _connect():
+    """A connection borrowed from the pool; the caller's ``with`` returns it."""
+    return _pool(database_url()).connection()
 
 
 def ping() -> str:

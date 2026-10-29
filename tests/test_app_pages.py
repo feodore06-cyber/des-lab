@@ -391,6 +391,30 @@ class PageTests(unittest.TestCase):
         warnings = " ".join(str(w.value) for w in at.warning)
         self.assertIn("n=1", warnings)
 
+    def test_creating_an_intern_requires_a_typed_password(self):
+        at = run(page_guide, user="Chuanyu")
+        self.assertEqual(errors(at), [])
+        labels = [field.label for field in at.text_input]
+        self.assertIn("Intern's email or username", labels)
+        self.assertIn("Initial password", labels, "the password field must be there, and be required")
+
+        def field(label):
+            return [item for item in at.text_input if item.label == label][0]
+
+        field("Intern's email or username").set_value("intern.test@example.com").run()
+        press(at, "Create the account")
+        self.assertNotIn("intern.test@example.com", auth.load_users(), "no password, no account")
+        self.assertTrue(at.error, "the missing password must be reported")
+
+        field("Initial password").set_value("123").run()
+        press(at, "Create the account")
+        self.assertNotIn("intern.test@example.com", auth.load_users(), "a 3-character password is refused")
+
+        field("Initial password").set_value("intern-password-1").run()
+        press(at, "Create the account")
+        self.assertIn("intern.test@example.com", auth.load_users())
+        self.assertTrue(auth.verify("intern.test@example.com", "intern-password-1"))
+
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()

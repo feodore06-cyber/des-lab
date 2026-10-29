@@ -20,7 +20,6 @@ streamlit.testing.v1.AppTest. All user-facing text goes through i18n.t().
 """
 import io
 import re
-import secrets
 import time
 from pathlib import Path
 
@@ -750,6 +749,8 @@ def guide():
                               if row.get("role") == "supervisor"})
         with st.form("add_intern", clear_on_submit=True):
             who = st.text_input(t("guide.intern_id"), placeholder="name@lab.org")
+            initial = st.text_input(t("guide.intern_pw"), type="password",
+                                    help=t("guide.intern_pw_help"))
             a, b = st.columns(2)
             if auth.is_admin(user) and supervisors:
                 owner = a.selectbox(t("guide.col_supervisor"), supervisors, key="intern_owner")
@@ -759,23 +760,27 @@ def guide():
             until = b.date_input(t("guide.intern_expiry"),
                                  value=(pd.Timestamp.now() + pd.Timedelta(days=180)).date())
             if st.form_submit_button(t("guide.intern_create"), type="primary"):
-                # the password is always generated: a supervisor-typed one is usually weak, and the
-                # generated one is shown once below, so there is nothing to forget or guess
-                password = secrets.token_urlsafe(9)
-                try:
-                    created = auth.add_user(who, password, role="intern", supervisor=owner,
-                                            expires=pd.Timestamp(until).to_pydatetime())
-                except ValueError as exc:
-                    st.error(t(str(exc)))
+                # the supervisor types the password: nothing is generated, and an empty field never
+                # creates an account
+                password = initial.strip()
+                if not password:
+                    st.error(t("guide.intern_pw_required"))
+                elif len(password) < 6:
+                    st.error(t("guide.pw_short"))
                 else:
-                    mailed = False
-                    if "@" in created and mailer.provider() != "none":
-                        mailed = mailer.send_welcome(created, auth.display_name(created))
-                    st.success(t("guide.intern_created", user=created))
-                    st.code(f"{t('login.password')}: {password}", language="text")
-                    st.caption(t("guide.intern_expiry_note", date=until.strftime("%Y-%m-%d")))
-                    st.caption(t("guide.intern_mailed", user=created) if mailed
-                               else t("guide.intern_nomail"))
+                    try:
+                        created = auth.add_user(who, password, role="intern", supervisor=owner,
+                                                expires=pd.Timestamp(until).to_pydatetime())
+                    except ValueError as exc:
+                        st.error(t(str(exc)))
+                    else:
+                        mailed = False
+                        if "@" in created and mailer.provider() != "none":
+                            mailed = mailer.send_welcome(created, auth.display_name(created))
+                        st.success(t("guide.intern_created", user=created))
+                        st.caption(t("guide.intern_expiry_note", date=until.strftime("%Y-%m-%d")))
+                        st.caption(t("guide.intern_mailed", user=created) if mailed
+                                   else t("guide.intern_nomail"))
 
     with st.expander(t("guide.mail"), expanded=False):
         state = mailer.check()
