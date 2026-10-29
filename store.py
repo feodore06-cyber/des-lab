@@ -137,8 +137,10 @@ def _pool(url: str):
         return _POOL
     from psycopg_pool import ConnectionPool
 
-    pool = ConnectionPool(conninfo=url, min_size=1, max_size=4, timeout=15,
-                          kwargs={"connect_timeout": 15}, open=True)
+    # autocommit: every statement is its own transaction, so a read costs one round trip instead of
+    # a BEGIN/COMMIT pair on top of it (that was ~250 ms per query on a remote database)
+    pool = ConnectionPool(conninfo=url, min_size=1, max_size=4, timeout=5,
+                          kwargs={"connect_timeout": 15, "autocommit": True}, open=True)
     with pool.connection() as conn:  # make sure the schema exists, once per process
         conn.execute(SCHEMA)
         conn.commit()
