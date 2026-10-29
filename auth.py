@@ -645,6 +645,68 @@ def invite_required() -> bool:
     return bool(_flag(INVITE_ENV))
 
 
+# the categories a photo can belong to; kept as data so the picker can offer them all
+IMAGE_CATEGORIES = [
+    "Optical microscope", "SEM", "TEM", "AFM", "Confocal",
+    "XRD pattern", "FTIR spectrum", "NMR spectrum", "TGA curve", "DSC curve",
+    "UV-Vis spectrum", "HPLC chromatogram", "GC chromatogram", "Mass spectrum",
+    "Sample photo (macro)", "Reaction setup", "Apparatus / weighing", "Gel / membrane",
+    "Chart or screenshot", "Raw data", "Other",
+]
+
+IMAGE_LIMIT_BYTES = 8 * 1024 * 1024  # one picture; the number of pictures is unlimited
+
+
+def add_image(username: str, sample_id: str, category: str, note: str,
+              filename: str, mime: str, payload: bytes) -> int:
+    """Store one picture against a run. Refuses oversized or non-image files."""
+    if not payload:
+        raise ValueError("The file is empty.")
+    if len(payload) > IMAGE_LIMIT_BYTES:
+        raise ValueError("That picture is larger than 8 MB; export it smaller first.")
+    if not str(mime or "").startswith("image/"):
+        raise ValueError("Only images can be attached here.")
+    if not store.enabled():
+        raise ValueError("Attaching pictures needs the database; this copy is running on files.")
+    image_id = store.image_add(username, None, sample_id, category,
+                               " ".join(str(note or "").split())[:200], filename, mime, payload)
+    _forget_cached_reads()
+    return image_id
+
+
+def images_of(username: str, sample_id: str | None = None) -> list:
+    if not store.enabled():
+        return []
+    try:
+        rows = store.image_rows(data_owners(username))
+    except Exception:
+        return []
+    if sample_id:
+        return [row for row in rows if str(row.get("sample_id")) == str(sample_id)]
+    return rows
+
+
+def image_counts(username: str) -> dict:
+    counts = {}
+    for row in images_of(username):
+        key = str(row.get("sample_id") or "")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def image_content(username: str, image_id: int):
+    if not store.enabled():
+        return None
+    return store.image_bytes(image_id, data_owners(username))
+
+
+def remove_image(username: str, image_id: int) -> None:
+    if not store.enabled():
+        return
+    store.image_delete(image_id, data_owners(username))
+    _forget_cached_reads()
+
+
 DEFAULT_PROJECT = "General"
 
 

@@ -313,6 +313,22 @@ def _dataset_zip(frame: pd.DataFrame) -> bytes:
         archive.writestr("experiments.jsonl", jsonl)
         archive.writestr("experiments.csv", export.to_csv(index=False).encode("utf-8-sig"))
         archive.writestr("data_dictionary.md", dictionary_text)
+        # the pictures travel with the data, filed under the run they belong to
+        try:
+            user = auth.current_user()
+            for row in auth.images_of(user) if user else []:
+                stored = auth.image_content(user, int(row["id"]))
+                if not stored:
+                    continue
+                folder = str(row.get("sample_id") or "unassigned")
+                name = str(row.get("filename") or f"image_{row['id']}.png")
+                archive.writestr(f"images/{folder}/{row['id']}_{name}", stored[0])
+                if row.get("note") or row.get("category"):
+                    archive.writestr(f"images/{folder}/{row['id']}_note.txt",
+                                     f"{row.get('category') or ''}\n{row.get('note') or ''}\n"
+                                     .encode("utf-8"))
+        except Exception:
+            pass  # a missing picture must never stop the data export
     return buffer.getvalue()
 
 
@@ -344,6 +360,65 @@ def _project_picker(user: str | None) -> str:
                     st.session_state["project_pick"] = created
                     st.rerun()
     return choice
+
+
+def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
+    """Attach pictures to a run: unlimited count, a category from the list, plus a note."""
+    if not user:
+        return
+    with st.expander(t("res.photos"), expanded=False):
+        st.caption(t("res.photos_hint"))
+        if not store.enabled():
+            st.info(t("res.photos_db_only"))
+            return
+        ids = []
+        if frame is not None and not frame.empty and "sample_id" in frame.columns:
+            ids = [str(value) for value in frame["sample_id"].dropna().unique()]
+        if not ids:
+            st.info(t("res.photos_no_runs"))
+            return
+        target = st.selectbox(t("res.photos_for"), ids, key="photo_sample")
+        counts = auth.image_counts(user)
+        st.caption(t("res.photos_count", n=counts.get(str(target), 0)))
+
+        with st.form("add_photos", clear_on_submit=True):
+            uploads = st.file_uploader(t("res.photos_upload"),
+                                       type=["png", "jpg", "jpeg", "gif", "webp", "tif", "tiff", "bmp"],
+                                       accept_multiple_files=True)
+            category = st.selectbox(t("res.photos_category"), auth.IMAGE_CATEGORIES)
+            note = st.text_input(t("res.photos_note"), placeholder=t("res.photos_note_ph"))
+            if st.form_submit_button(t("res.photos_add")):
+                if not uploads:
+                    st.warning(t("res.photos_pick"))
+                else:
+                    saved_count, failed = 0, []
+                    for upload in uploads:
+                        try:
+                            auth.add_image(user, str(target), category, note, upload.name,
+                                           upload.type or "image/png", upload.getvalue())
+                            saved_count += 1
+                        except ValueError as exc:
+                            failed.append(f"{upload.name}: {t(str(exc))}")
+                    if saved_count:
+                        st.success(t("res.photos_saved", n=saved_count, sample=target))
+                    for message in failed:
+                        st.error(message)
+
+        existing = auth.images_of(user, str(target))
+        if existing:
+            st.markdown(t("res.photos_existing", n=len(existing)))
+            for row in existing:
+                left, right = st.columns([1, 3])
+                stored = auth.image_content(user, int(row["id"]))
+                if stored:
+                    left.image(stored[0], width=140)
+                right.markdown(f"**{row.get('category') or t('res.photos_no_category')}**")
+                if row.get("note"):
+                    right.caption(row["note"])
+                right.caption(f"{row.get('filename')} · {int(row.get('size') or 0) // 1024} KB")
+                if right.button(t("res.photos_delete"), key=f"del_image_{row['id']}"):
+                    auth.remove_image(user, int(row["id"]))
+                    st.rerun()
 
 
 def _looks_duplicate(frame: pd.DataFrame, sample_id: str, lignin_mg: float,
@@ -452,6 +527,14 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         return
     saved = _cached_saved(user, _store_where(), project)
     empty = saved is None or saved.empty
+    if not empty and store.enabled():
+        try:
+            photo_counts = auth.image_counts(user)
+            saved = saved.copy()
+            saved["photos"] = [photo_counts.get(str(value), 0)
+                               for value in saved.get("sample_id", [])]
+        except Exception:
+            pass
     if empty:
         st.info(t("res.empty_records"))
     frame = pd.DataFrame(columns=RECORD_COLUMNS) if empty else saved
@@ -533,6 +616,9 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
             st.warning(t("res.cleared"))
 
 
+    _photos_section(user, frame)
+
+
 def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary: pd.DataFrame) -> None:
     """Say plainly what is wrong or thin in the data before anyone plots it."""
     problems = []
@@ -570,8 +656,8 @@ def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary
         if mismatch:
             problems.append(t("res.q_yield_mismatch", n=mismatch))
     if problems:
-        for text in problems:
-            st.warning(text)
+        for message in problems:
+            st.warning(message)
     else:
         st.success(t("res.q_ok"))
 

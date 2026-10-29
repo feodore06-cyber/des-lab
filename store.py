@@ -54,6 +54,19 @@ create table if not exists reset_tokens (
     used boolean not null default false
 );
 create index if not exists reset_tokens_user on reset_tokens (username);
+create table if not exists images (
+    id bigserial primary key,
+    owner text not null,
+    project text,
+    sample_id text,
+    category text,
+    note text,
+    filename text,
+    mime text,
+    bytes bytea not null,
+    created_at timestamptz not null default now()
+);
+create index if not exists images_owner on images (owner, sample_id);
 create table if not exists projects (
     owner text not null,
     name text not null,
@@ -410,6 +423,66 @@ def account_admin_names() -> set:
 def account_set_admin(username: str, flag: bool) -> None:
     with _connect() as conn:
         conn.execute("update accounts set is_admin = %s where username = %s", (bool(flag), username))
+        conn.commit()
+
+
+# --------------------------------------------------------------------- images
+def image_add(owner: str, project: str | None, sample_id: str | None, category: str | None,
+              note: str | None, filename: str, mime: str, payload: bytes) -> int:
+    with _connect() as conn:
+        row = conn.execute(
+            "insert into images (owner, project, sample_id, category, note, filename, mime, bytes)"
+            " values (%s, %s, %s, %s, %s, %s, %s, %s) returning id",
+            (owner, project, sample_id, category, note, filename, mime, payload),
+        ).fetchone()
+        conn.commit()
+    return int(row[0])
+
+
+def image_rows(owners: list[str]) -> list[dict]:
+    """Metadata only: the bytes stay in the database until somebody actually opens a picture."""
+    if not owners:
+        return []
+    with _connect() as conn:
+        rows = conn.execute(
+            "select id, owner, project, sample_id, category, note, filename, mime,"
+            " length(bytes) as size, created_at from images"
+            " where owner = any(%s) order by created_at desc", (list(owners),),
+        ).fetchall()
+    return [
+        {
+            "id": row[0],
+            "owner": row[1],
+            "project": row[2] or "",
+            "sample_id": row[3] or "",
+            "category": row[4] or "",
+            "note": row[5] or "",
+            "filename": row[6] or "",
+            "mime": row[7] or "image/png",
+            "size": int(row[8] or 0),
+            "created_at": row[9].strftime("%Y-%m-%d %H:%M") if row[9] else "",
+        }
+        for row in rows
+    ]
+
+
+def image_bytes(image_id: int, owners: list[str]):
+    if not owners:
+        return None
+    with _connect() as conn:
+        row = conn.execute(
+            "select bytes, mime from images where id = %s and owner = any(%s)",
+            (image_id, list(owners)),
+        ).fetchone()
+    return row
+
+
+def image_delete(image_id: int, owners: list[str]) -> None:
+    if not owners:
+        return
+    with _connect() as conn:
+        conn.execute("delete from images where id = %s and owner = any(%s)",
+                     (image_id, list(owners)))
         conn.commit()
 
 
