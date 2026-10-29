@@ -444,6 +444,23 @@ def _records_tab(user: str | None) -> None:
         auth.save_results(user, cleaned, append=False)
         st.success(t("res.save_table_done", rows=len(cleaned)))
     b.download_button(t("res.download_table"), csv_bytes(frame), "my_records.csv", "text/csv")
+    with st.expander(t("res.email_data"), expanded=False):
+        st.caption(t("res.email_data_hint"))
+        with st.form("email_data"):
+            dest = st.text_input(t("res.email_to"), value=user if "@" in str(user) else "")
+            if st.form_submit_button(t("res.email_send")):
+                if not dest.strip():
+                    st.error(t("res.email_need_address"))
+                elif frame.empty:
+                    st.error(t("res.email_no_rows"))
+                elif mailer.provider() == "none":
+                    st.error(t("res.email_not_configured"))
+                elif mailer.send_data(dest.strip(), len(frame), csv_bytes(frame),
+                                      f"{auth.folder_name(user)}_records.csv"):
+                    st.success(t("res.email_sent", to=dest))
+                else:
+                    st.error(t("res.email_failed"))
+
     dataset = _dataset_zip(frame) if not frame.empty else _dataset_zip(pd.DataFrame(columns=RECORD_COLUMNS))
     b.download_button(t("res.download_dataset"), dataset, "dataset_for_ai.zip",
                       "application/zip", key="download_dataset")

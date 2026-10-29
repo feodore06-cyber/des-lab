@@ -111,6 +111,31 @@ def reset_message(to: str, name: str, link: str) -> EmailMessage:
     return msg
 
 
+def data_message(to: str, rows: int, csv_bytes: bytes, filename: str = "my_records.csv",
+                 note: str = "") -> EmailMessage:
+    """The sender's own data as an attachment - what the "email my data" button builds."""
+    msg = EmailMessage()
+    msg["To"] = to
+    msg["Subject"] = f"BioMat Lab · {rows} experiment rows"
+    msg.set_content("\n".join([
+        "Your experiment records are attached as a CSV file.",
+        note,
+        "",
+        f"Rows: {rows}",
+        "Open it in Excel, or upload it back into BioMat Lab at any time.",
+        "",
+        "— BioMat Lab",
+    ]))
+    msg.add_attachment(csv_bytes, maintype="text", subtype="csv", filename=filename)
+    return msg
+
+
+def send_data(to: str, rows: int, csv_bytes: bytes, filename: str = "my_records.csv") -> bool:
+    if not to or not rows:
+        return False
+    return send(data_message(to, rows, csv_bytes, filename))
+
+
 def _deliver(message: EmailMessage) -> bool:
     """Hand the message to the SMTP server. Returns False instead of raising."""
     host = setting("host") or ""
@@ -172,15 +197,31 @@ def _post_json(url: str, payload: dict, headers: dict) -> tuple[int, str]:
 
 def _deliver_brevo(message: EmailMessage) -> bool:
     """HTTPS delivery through Brevo (no SMTP, no two-factor setup needed)."""
+    import base64
+
     settings = _brevo_settings()
     if not (settings["api_key"] and settings["sender"]):
         return False
+
+    # a message with an attachment is multipart/mixed, so read the text body and the attachments
+    # separately instead of assuming a single text part
+    plain = message.get_body(preferencelist=("plain", "html"))
+    body_text = plain.get_content() if plain is not None else ""
+    attachments = []
+    for part in message.iter_attachments():
+        data = part.get_payload(decode=True) or b""
+        attachments.append({"name": part.get_filename() or "attachment.csv",
+                            "content": base64.b64encode(data).decode("ascii")})
+
     payload = {
         "sender": {"name": settings["sender_name"], "email": settings["sender"]},
         "to": [{"email": address.strip()} for address in str(message["To"]).split(",") if address.strip()],
         "subject": str(message["Subject"]),
-        "textContent": message.get_content(),
+        "textContent": body_text,
     }
+    if attachments:
+        payload["attachment"] = attachments
+
     status, text = _post_json("https://api.brevo.com/v3/smtp/email", payload,
                               {"api-key": settings["api_key"], "content-type": "application/json",
                                "accept": "application/json"})
