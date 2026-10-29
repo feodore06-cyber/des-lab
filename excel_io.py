@@ -141,7 +141,8 @@ def read_table(content: bytes, sheet: str | None = None) -> dict:
     frame = body.rename(columns=renamed)
 
     # merged cells only carry a value in the first row: fill the identifying columns downwards
-    for column in ("sample_id", "formulation", "temperature_C", "time_min"):
+    for column in ("sample_id", "formulation", "feedstock", "des_hba", "des_hbd",
+                   "temperature_C", "time_min"):
         if column in frame.columns:
             frame[column] = frame[column].ffill()
 

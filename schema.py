@@ -61,15 +61,41 @@ def parse_formulation(text: object) -> dict:
     return result
 
 
+def to_ratio(value) -> float | None:
+    """Read a molar ratio written as 2, "2", "1:2" or "0.5" - spreadsheets hold all of these."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, (int, float)):
+        return round(float(value), 4)
+    text = str(value).strip().replace("：", ":")
+    if not text:
+        return None
+    match = RATIO_RE.search(text)
+    if match:
+        try:
+            return round(float(match.group(2)) / float(match.group(1)), 4)
+        except ZeroDivisionError:
+            return None
+    try:
+        return round(float(text), 4)
+    except ValueError:
+        return None
+
+
 def build_formulation(row) -> str:
     """The human label: "ChCl:Glyoxylic acid 1:2"."""
-    hba = str(row.get("des_hba") or "").strip()
-    hbd = str(row.get("des_hbd") or "").strip()
-    ratio = row.get("molar_ratio")
+    def _text(value) -> str:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return ""
+        return str(value).strip()
+
+    hba = _text(row.get("des_hba"))
+    hbd = _text(row.get("des_hbd"))
+    ratio = to_ratio(row.get("molar_ratio"))
     parts = [part for part in (hba, hbd) if part]
     text = ":".join(parts)
-    if ratio is not None and pd.notna(ratio) and parts:
-        value = float(ratio)
+    if ratio is not None and parts:
+        value = ratio
         if value >= 1 and abs(value - round(value)) < 1e-6:
             label = f"1:{int(round(value))}"
         elif 0 < value < 1 and abs(1 / value - round(1 / value)) < 1e-6:
@@ -99,6 +125,9 @@ def backfill(frame: pd.DataFrame) -> pd.DataFrame:
     for column in ("des_hba", "des_hbd"):
         frame[column] = [canonical_name(value) if isinstance(value, str) and value.strip() else value
                          for value in frame[column]]
+    # and a ratio may be written "1:2" in a cell instead of 2
+    frame["molar_ratio"] = [to_ratio(value) if value not in (None, "") else None
+                             for value in frame["molar_ratio"]]
     if "formulation" in frame.columns:
         for index, row in frame.iterrows():
             if pd.isna(row.get("formulation")):
