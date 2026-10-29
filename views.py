@@ -38,6 +38,7 @@ import mailer
 from i18n import t
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
+import papers
 
 ROOT = Path(__file__).parent
 DEMO_CSV = ROOT / "sample_data/demo_lignin.csv"
@@ -362,6 +363,88 @@ def _project_picker(user: str | None) -> str:
     return choice
 
 
+def _search_section(frame: pd.DataFrame) -> None:
+    """Find a past run by any word in it: id, formulation, feedstock, note, project."""
+    if frame is None or frame.empty:
+        return
+    with st.expander(t("res.search"), expanded=False):
+        term = st.text_input(t("res.search_ph"), key="records_search",
+                             placeholder=t("res.search_example"))
+        if not term.strip():
+            st.caption(t("res.search_hint"))
+            return
+        needle = term.strip().lower()
+        haystack = frame.astype(str).apply(lambda column: column.str.lower(), axis=0)
+        mask = haystack.apply(lambda row: needle in " ".join(row.values), axis=1)
+        found = frame[mask]
+        if found.empty:
+            st.warning(t("res.search_none", term=term.strip()))
+            return
+        st.success(t("res.search_found", n=len(found)))
+        columns = [column for column in ("sample_id", "formulation", "feedstock", "molar_ratio",
+                                         "biomass_g", "lignin_mg", "lignin_yield_pct",
+                                         "recorded_at", "notes") if column in found.columns]
+        st.dataframe(found[columns], width="stretch", hide_index=True)
+        st.download_button(t("res.search_download"), csv_bytes(found[columns]),
+                           "search_results.csv", "text/csv", key="search_download")
+
+
+def _library_results(query: str, since, citations: int, sort: str, limit: int) -> list:
+    @st.cache_data(show_spinner=False, ttl=3600)
+    def run(text: str, since_year, min_cites: int, order: str, count: int):
+        return papers.search(text, limit=count, since=since_year,
+                             min_citations=min_cites, sort=order)
+
+    return run(query, since, citations, sort, limit)
+
+
+def library() -> None:
+    st.markdown(t("lib.title"))
+    st.caption(t("lib.sub"))
+    with st.form("paper_search"):
+        query = st.text_input(t("lib.query"), placeholder=t("lib.query_ph"))
+        a, b, c, d = st.columns(4)
+        since = a.number_input(t("lib.since"), min_value=1900, max_value=2100, value=2015, step=1)
+        citations = b.number_input(t("lib.min_cites"), min_value=0, value=0, step=5)
+        order = c.selectbox(t("lib.order"), [t("lib.by_relevance"), t("lib.by_citations"),
+                                             t("lib.by_newest")])
+        limit = d.number_input(t("lib.limit"), min_value=5, max_value=30, value=10, step=5)
+        submitted = st.form_submit_button(t("lib.search"), type="primary")
+    if not submitted or not query.strip():
+        st.info(t("lib.how"))
+        return
+
+    mapping = {t("lib.by_relevance"): "relevant", t("lib.by_citations"): "cited",
+               t("lib.by_newest"): "newest"}
+    try:
+        with st.spinner(t("lib.searching")):
+            found = _library_results(query.strip(), int(since), int(citations),
+                                     mapping.get(order, "relevant"), int(limit))
+    except papers.PaperError as exc:
+        st.error(t("lib.failed", error=str(exc)))
+        return
+
+    if not found:
+        st.warning(t("lib.none", query=query.strip()))
+        return
+    st.caption(papers.summarise(query.strip(), found))
+    for index, paper in enumerate(found, start=1):
+        title = paper["title"]
+        link = f"[{title}]({paper['url']})" if paper["url"] else title
+        st.markdown(f"**{index}. {link}**")
+        bits = [str(paper["year"]) or "n.d.", paper["venue"] or t("lib.no_venue"),
+                t("lib.citations", n=paper["citations"])]
+        if paper["authors"]:
+            bits.insert(1, paper["authors"])
+        st.caption(" · ".join(bits))
+        if paper["abstract"]:
+            with st.expander(t("lib.abstract"), expanded=False):
+                st.write(paper["abstract"])
+        if paper["doi"]:
+            st.caption(f"DOI: `{paper['doi']}`")
+        st.divider()
+
+
 def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
     """Attach pictures to a run: unlimited count, a category from the list, plus a note."""
     if not user:
@@ -616,6 +699,7 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
             st.warning(t("res.cleared"))
 
 
+    _search_section(frame)
     _photos_section(user, frame)
 
 
