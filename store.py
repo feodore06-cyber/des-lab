@@ -14,6 +14,7 @@ using the CSV files in ``user_data/``.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
@@ -148,9 +149,31 @@ def _pool(url: str):
     return pool
 
 
+class _SingleConnection:
+    """Fallback when psycopg_pool is unavailable: open, use, close - slower but never broken."""
+
+    def __init__(self, url: str):
+        self.url = url
+
+    @contextlib.contextmanager
+    def connection(self):
+        import psycopg
+
+        conn = psycopg.connect(self.url, connect_timeout=15, autocommit=True)
+        try:
+            conn.execute(SCHEMA)
+            yield conn
+        finally:
+            conn.close()
+
+
 def _connect():
     """A connection borrowed from the pool; the caller's ``with`` returns it."""
-    return _pool(database_url()).connection()
+    url = database_url()
+    try:
+        return _pool(url).connection()
+    except ImportError:  # the pool package is missing (older deployment, trimmed environment)
+        return _SingleConnection(url).connection()
 
 
 def ping() -> str:
