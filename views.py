@@ -349,6 +349,16 @@ def _project_picker(user: str | None) -> str:
     projects = auth.list_projects(user)
     choice = st.selectbox(t("res.project"), projects, key="project_pick",
                           help=t("res.project_help"))
+    states = auth.project_statuses(user)
+    current = states.get(choice, "In progress")
+    labels = [_status_label(item) for item in auth.PROJECT_STATUSES]
+    picked = st.selectbox(t("exp.status"), labels,
+                          index=max(0, labels.index(_status_label(current)))
+                          if _status_label(current) in labels else 1,
+                          key=f"status_{choice}")
+    wanted = dict(zip(labels, auth.PROJECT_STATUSES))[picked]
+    if wanted != current:
+        auth.set_project_status(user, choice, wanted)
     with st.expander(t("res.project_new"), expanded=False):
         with st.form("new_project", clear_on_submit=True):
             name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"))
@@ -544,6 +554,62 @@ def compare_page() -> None:
             st.caption(t("cmp." + item["code"] + ".why", **params))
             st.markdown(f"*{t('cmp.' + item['code'] + '.check', **params)}*")
             st.markdown(t("cmp." + item["code"] + ".step", **params))
+
+
+def _status_label(status: str) -> str:
+    mapping = {"Draft": "exp.draft", "In progress": "exp.running", "Pending test": "exp.pending",
+               "Completed": "exp.done", "Needs review": "exp.review"}
+    return t(mapping.get(status, "exp.running"))
+
+
+def workspace() -> None:
+    """The signed-in home: one greeting, two actions, and the experiments that exist."""
+    user = auth.current_user()
+    if not user:
+        st.info(t("guide.signin_hint"))
+        return
+    st.markdown(f"### {t('ws.greeting', user=auth.display_name(user))}")
+    st.caption(t("ws.question"))
+
+    left, right = st.columns(2)
+    if left.button(t("ws.new"), type="primary", use_container_width=True, key="ws_new"):
+        st.switch_page("views.results")
+    if right.button(t("ws.continue"), use_container_width=True, key="ws_continue"):
+        st.switch_page("views.results")
+
+    projects = auth.list_projects(user)
+    states = auth.project_statuses(user)
+    frame = auth.load_results(user)
+
+    st.divider()
+    st.markdown(f"#### {t('ws.recent')}")
+    if frame is None or frame.empty:
+        st.caption(t("ws.none"))
+        return
+
+    rows = frame.copy()
+    if "project" not in rows.columns:
+        rows["project"] = auth.DEFAULT_PROJECT
+    rows["project"] = rows["project"].fillna(auth.DEFAULT_PROJECT)
+    grouped = []
+    for name in projects:
+        part = rows[rows["project"] == name]
+        if part.empty:
+            continue
+        last = part["recorded_at"].iloc[-1] if "recorded_at" in part.columns else ""
+        grouped.append({"name": name, "runs": len(part), "last": str(last)[:10],
+                        "status": states.get(name, "In progress")})
+    grouped.sort(key=lambda item: item["last"], reverse=True)
+
+    for item in grouped[:5]:
+        with st.container(border=True):
+            head, tail = st.columns([3, 1])
+            head.markdown(f"**{item['name']}**")
+            head.caption(f"{_status_label(item['status'])} · "
+                         f"{t('ws.runs', n=item['runs'])} · {t('ws.last', date=item['last'] or '—')}")
+            if tail.button(t("ws.open"), key=f"open_{item['name']}", use_container_width=True):
+                st.session_state["project_pick"] = item["name"]
+                st.switch_page("views.results")
 
 
 def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
@@ -793,7 +859,7 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     dataset = _dataset_zip(frame) if not frame.empty else _dataset_zip(pd.DataFrame(columns=RECORD_COLUMNS))
     b.download_button(t("res.download_dataset"), dataset, "dataset_for_ai.zip",
                       "application/zip", key="download_dataset")
-    with c:
+    with st.expander(t("res.danger"), expanded=False):
         confirm = st.checkbox(t("res.clear_confirm"), key="clear_confirm")
         if st.button(t("res.clear_all"), disabled=not confirm, key="clear_all"):
             auth.save_results(user, frame.iloc[:0], append=False)

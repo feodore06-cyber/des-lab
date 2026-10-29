@@ -19,10 +19,12 @@ Logic lives in lab_core.py / lab_plots.py, accounts and record folders in auth.p
 """
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 import auth
 import i18n
+import landing
 import store
 import views
 from i18n import t
@@ -32,9 +34,14 @@ ROOT = Path(__file__).parent
 APP_NAME = "BioMat Lab"
 APP_TAGLINE = "Experiment Workbench"
 APP_TITLE = f"{APP_NAME} {chr(183)} {APP_TAGLINE}"
-LOGO_PATH = ROOT / "static/astar_logo.png"
-LOGO_MARK_PATH = ROOT / "static/astar_mark.png"  # just the a* mark, for the tab icon
-LOGO_URL = "app/static/astar_logo.png"
+# Institutional branding is opt-in: the A*STAR assets are only shown when the deployment says it is
+# allowed to use them (DESLAB_ASTAR_BRAND=1 or [brand] astar = true). The default is our own mark, so
+# nothing pretends to be an official institutional site.
+BRAND_IS_ASTAR = str(auth._flag("DESLAB_ASTAR_BRAND")).strip().lower() in ("1", "true", "yes")
+
+LOGO_PATH = ROOT / ("static/astar_logo.png" if BRAND_IS_ASTAR else "static/biomat_mark.png")
+LOGO_MARK_PATH = ROOT / ("static/astar_mark.png" if BRAND_IS_ASTAR else "static/biomat_mark.png")
+LOGO_URL = "app/static/astar_logo.png" if BRAND_IS_ASTAR else "app/static/biomat_mark.png"
 
 # A*STAR brand colours sampled from the supplied logo: blue #002F86, red #D8291B.
 STYLE = """
@@ -275,10 +282,13 @@ STYLE = """
 </style>
 """
 
+SPLASH_MARK = ("app/static/astar_logo.png", "A*STAR - Agency for Science, Technology and Research, Singapore") \
+    if BRAND_IS_ASTAR else ("app/static/biomat_mark.png", APP_NAME)
+
 SPLASH = f"""
 <div id="dsh-splash">
   <div class="dsh-shine-wrap">
-    <img src="app/static/astar_logo.png" alt="A*STAR - Agency for Science, Technology and Research, Singapore">
+    <img src="{SPLASH_MARK[0]}" alt="{SPLASH_MARK[1]}">
     <span class="dsh-beam" aria-hidden="true"></span>
   </div>
   <div class="dsh-bar"><span></span></div>
@@ -302,11 +312,7 @@ user = auth.current_user()
 
 
 def _gate(view):
-    """Every page keeps its URL in every state; signed out it shows the sign-in form instead.
-
-    Registering only the sign-in page while signed out made /results (and bookmarks of it) answer
-    "Page not found", because Streamlit derives the URL map from the navigation it is given.
-    """
+    """Every page keeps its URL in every state; signed out it shows the sign-in form instead."""
 
     def run():
         if auth.current_user():
@@ -317,46 +323,60 @@ def _gate(view):
     return run
 
 
-page = st.navigation(
-    [
-        st.Page(_gate(views.calculator), title=t("app.page_calc"), default=True),
-        st.Page(_gate(views.results), title=t("app.page_results"), url_path="results"),
-        st.Page(_gate(views.library), title=t("app.page_library"), url_path="papers"),
-        st.Page(_gate(views.compare_page), title=t("app.page_compare"), url_path="compare"),
-        st.Page(_gate(views.feedback), title=t("app.page_feedback"), url_path="feedback"),
-        st.Page(_gate(views.guide), title=t("app.page_guide"), url_path="guide"),
-    ],
-    # signed out the sidebar is hidden entirely, so a stranger cannot read the app structure
-    position="sidebar" if user else "hidden",
-)
+def _front():
+    """Signed out: the public page, or the form itself once somebody clicks "Start an experiment"."""
+    if auth.current_user():
+        views.workspace()
+        return
+    params = st.query_params
+    direct = (params.get("view") == "signin" or st.session_state.get("show_signin")
+              or "reset" in params or "invite" in params)
+    if direct:
+        if st.button(t("land.back"), key="back_to_landing"):
+            st.session_state["show_signin"] = False
+            st.query_params.clear()
+            st.rerun()
+        auth.login_form(LOGO_URL)
+        return
+    landing.landing(lambda: pd.read_csv(views.MY_CSV))
+
+
+NAV = [
+    ("experiments", st.Page(_front, title=t("nav.experiments"), default=True), t("nav.experiments")),
+    ("results", st.Page(_gate(views.results), title=t("nav.results"), url_path="results"),
+     t("nav.results")),
+    ("calculator", st.Page(_gate(views.calculator), title=t("app.page_calc"), url_path="calculator"),
+     t("app.page_calc")),
+    ("papers", st.Page(_gate(views.library), title=t("nav.papers"), url_path="papers"),
+     t("nav.papers")),
+    ("compare", st.Page(_gate(views.compare_page), title=t("nav.compare"), url_path="compare"),
+     t("nav.compare")),
+    ("profile", st.Page(_gate(views.guide), title=t("nav.profile"), url_path="guide"),
+     t("nav.profile")),
+    ("feedback", st.Page(_gate(views.feedback), title=t("app.page_feedback"), url_path="feedback"),
+     t("app.page_feedback")),
+]
+
+page = st.navigation([entry[1] for entry in NAV], position="hidden")
 
 if user:
-    st.logo(str(LOGO_MARK_PATH), size="large",
-            link="https://www.a-star.edu.sg/")  # the mark reads better at sidebar size than the lockup
-
-    # English / 中文 switch - it lives in the sidebar and in session state, so it survives reruns.
-    i18n.language_switch(st.sidebar)
+    bar = st.columns([2.0, 1, 1, 1, 1, 1, 1, 1.2, 1], vertical_alignment="center", gap="small")
+    bar[0].markdown('<div class="bm-wordmark">BioMat Lab</div>', unsafe_allow_html=True)
+    for column, entry in zip(bar[1:7], NAV[:6]):
+        with column:
+            st.page_link(entry[1], label=entry[2])
+    i18n.language_switch(bar[7])
+    with bar[8]:
+        if st.button(t("app.logout"), key="logout", use_container_width=True):
+            auth.logout()
+            st.query_params.clear()
+            st.rerun()
 
     if auth.hosted_mode() and not store.enabled():
-        st.sidebar.warning(t("app.hosted_warning"), icon="⚠️")
-
-    # A greeting for whoever just signed in, at the top of every page.
-    st.markdown(
-        '<div class="dsh-welcome">'
-        f'<span class="dsh-welcome-hi">{t("app.welcome", user=auth.display_name(user))}</span>'
-        f'<span class="dsh-welcome-sub">{t("app.welcome_sub")}</span>'
-        "</div>",
-        unsafe_allow_html=True,
-    )
+        st.warning(t("app.hosted_warning"))
 
 page.run()
 
 if user:
-    st.sidebar.divider()
-    st.sidebar.caption(t("app.sidebar_signed_in", user=user))
-    st.sidebar.caption(t("app.sidebar_db") if store.enabled()
-                       else t("app.sidebar_records", user=user))
-    if st.sidebar.button(t("app.logout"), use_container_width=True, key="logout"):
-        auth.logout()
-        st.rerun()
-    st.sidebar.caption(t("app.sidebar_footer2"))
+    st.caption(t("app.sidebar_signed_in", user=user) + " · "
+               + (t("app.sidebar_db") if store.enabled() else t("app.sidebar_records", user=user)))

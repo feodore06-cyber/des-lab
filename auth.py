@@ -733,6 +733,26 @@ def _project_values(username: str | None) -> list:
     return [value for value in frame["project"].dropna().unique()]
 
 
+PROJECT_STATUSES = ("Draft", "In progress", "Pending test", "Completed", "Needs review")
+
+
+def project_statuses(username: str | None) -> dict:
+    """name -> status; a project that was never given one counts as in progress."""
+    if not username or not store.enabled():
+        return {}
+    try:
+        return store.project_states(data_owners(username))
+    except Exception:
+        return {}
+
+
+def set_project_status(username: str, name: str, status: str) -> None:
+    if not store.enabled():
+        return
+    store.project_set_status(username, name, status)
+    _forget_cached_reads()
+
+
 def create_project(username: str, name: str) -> str:
     """Make a project folder; names are trimmed and capped so they stay usable as a filter."""
     clean = " ".join(str(name or "").split())[:40]
@@ -979,7 +999,7 @@ def login_form(logo_url: str | None = None) -> None:
         with logo_mid:
             st.markdown(
                 '<div class="dsh-login-brand">'
-                f'<img src="{logo_url}" alt="A*STAR - Agency for Science, Technology and Research, Singapore">'
+                f'<img src="{logo_url}" alt="BioMat Lab">'
                 "</div>",
                 unsafe_allow_html=True,
             )

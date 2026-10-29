@@ -70,9 +70,11 @@ create index if not exists images_owner on images (owner, sample_id);
 create table if not exists projects (
     owner text not null,
     name text not null,
+    status text not null default 'In progress',
     created timestamptz not null default now(),
     primary key (owner, name)
 );
+alter table projects add column if not exists status text not null default 'In progress';
 """
 
 
@@ -189,6 +191,8 @@ class _SingleConnection:
 def _connect():
     """A connection borrowed from the pool; the caller's ``with`` returns it."""
     url = database_url()
+    if not url:
+        raise RuntimeError("no database is configured for this deployment")
     try:
         return _pool(url).connection()
     except ImportError:  # the pool package is missing (older deployment, trimmed environment)
@@ -505,6 +509,24 @@ def projects_of(owners: list[str]) -> list[str]:
             "select distinct name from projects where owner = any(%s) order by name", (list(owners),)
         ).fetchall()
     return [row[0] for row in rows]
+
+
+def project_states(owners: list[str]) -> dict:
+    """name -> status, for the status chips on the workspace."""
+    if not owners:
+        return {}
+    with _connect() as conn:
+        rows = conn.execute("select name, status from projects where owner = any(%s)",
+                            (list(owners),)).fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+def project_set_status(owner: str, name: str, status: str) -> None:
+    with _connect() as conn:
+        conn.execute("insert into projects (owner, name, status) values (%s, %s, %s)"
+                     " on conflict (owner, name) do update set status = excluded.status",
+                     (owner, name, status))
+        conn.commit()
 
 
 def project_rename(owner: str, old: str, new: str) -> None:

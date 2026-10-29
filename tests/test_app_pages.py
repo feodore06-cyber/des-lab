@@ -63,6 +63,14 @@ def run(page, user="Chuanyu", lang=None):
     return at
 
 
+def open_signin(at):
+    """The public page is the front door now; this clicks through to the form."""
+    landing_text = " ".join(m.value for m in at.markdown)
+    if "Sign in" in [button.label for button in at.button] and "Make experimental work clearer" in landing_text:
+        press(at, "Start an experiment")
+    return at
+
+
 def press(at, label):
     """Click the first button with this label and rerun."""
     matches = [b for b in at.button if b.label == label]
@@ -234,6 +242,7 @@ class PageTests(unittest.TestCase):
         # Streamlit Cloud delivers secrets through st.secrets and never exports them as env vars
         auth.users_path().unlink(missing_ok=True)
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state["show_signin"] = True
         at.secrets["DESLAB_HOSTED"] = "1"
         at.secrets["DESLAB_INVITE_CODE"] = "secret-code-42"
         at.run()
@@ -249,6 +258,7 @@ class PageTests(unittest.TestCase):
         auth.users_path().unlink(missing_ok=True)  # a brand new container has no users.json
         try:
             at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+            at.session_state["show_signin"] = True
             at.run()
             self.assertEqual(errors(at), [])
             self.assertTrue(any("No accounts are configured" in str(e.value) for e in at.error))
@@ -285,6 +295,7 @@ class PageTests(unittest.TestCase):
         auth.ensure_store()
         token = auth.create_reset_token("Thena")
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state["show_signin"] = True
         at.query_params["reset_token"] = token
         at.run()
         self.assertEqual(errors(at), [])
@@ -307,6 +318,7 @@ class PageTests(unittest.TestCase):
         import time as _time
 
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state["show_signin"] = True
         at.session_state[auth.SESSION_KEY] = "Chuanyu"
         at.session_state[auth.SESSION_SEEN] = _time.time() - (auth.SESSION_TIMEOUT_H + 1) * 3600
         at.run()
@@ -431,12 +443,16 @@ class PageTests(unittest.TestCase):
     def test_signed_in_users_get_a_welcome_line(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.run()
+        # the front page is the public page: it explains the product before asking for a sign-in
+        markup = " ".join(m.value for m in at.markdown)
+        self.assertIn("Make experimental work clearer", markup)
+        press(at, "Start an experiment")
         at.text_input[0].set_value("Chuanyu")
         at.text_input[1].set_value(auth.DEFAULT_PASSWORD)
         press(at, "Sign in")
         self.assertEqual(errors(at), [])
         markup = " ".join(m.value for m in at.markdown)
-        self.assertIn("Welcome, Chuanyu", markup)
+        self.assertIn("Good to see you, Chuanyu", markup)
 
     def test_feedback_form_stores_a_report_and_admins_see_the_inbox(self):
         import feedback as feedback_mod
@@ -489,12 +505,16 @@ class PageTests(unittest.TestCase):
     # -------------------------------------------------------------------- entrance
     def test_entry_page_branding_and_intro_once(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state["show_signin"] = True
         at.session_state[auth.SESSION_KEY] = "Chuanyu"
         at.run()
         self.assertEqual(errors(at), [])
         markup = "\n".join(str(m.value) for m in at.markdown)
-        self.assertIn('id="dsh-splash"', markup, "the A*STAR intro should be injected on the first run")
-        self.assertIn('<img src="app/static/astar_logo.png"', markup)
+        self.assertIn('id="dsh-splash"', markup, "the intro should be injected on the first run")
+        # institutional branding is opt-in: by default the splash shows our own mark
+        self.assertIn("app/static/biomat_mark.png", markup)
+        self.assertNotIn("astar_logo.png", markup,
+                         "the A*STAR lockup must not be used without an explicit opt-in")
         at.run()  # a rerun in the same session must not replay the intro
         self.assertNotIn('id="dsh-splash"', "\n".join(str(m.value) for m in at.markdown))
 
@@ -502,6 +522,7 @@ class PageTests(unittest.TestCase):
         os.environ[auth.INVITE_ENV] = "lab-code-2026"
         try:
             at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+            at.session_state["show_signin"] = True
             at.run()
             press(at, "Create a new account")
             self.assertEqual(len(at.text_input), 4, "username + password + repeat + invite")
@@ -523,6 +544,7 @@ class PageTests(unittest.TestCase):
 
     def test_login_gate_blocks_the_app_and_accepts_the_seeded_password(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state["show_signin"] = True
         at.run()
         self.assertEqual(errors(at), [])
         self.assertEqual([t.value for t in at.title], [], "no page title before signing in")
@@ -550,7 +572,8 @@ class PageTests(unittest.TestCase):
         at.text_input[1].set_value(auth.DEFAULT_PASSWORD)
         press(at, "Sign in")
         self.assertEqual(session_user(at), "Thena")
-        self.assertEqual(at.title[0].value, "Recipe Calculator")
+        markup = " ".join(str(m.value) for m in at.markdown)
+        self.assertIn("Good to see you, Thena", markup, "signing in lands on the workspace")
 
     def test_language_switch_translates_every_page(self):
         calc = run(page_calculator, lang="zh")
@@ -581,6 +604,7 @@ class PageTests(unittest.TestCase):
 
     def test_create_account_starts_with_an_empty_record_folder(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.session_state["show_signin"] = True
         at.run()
         self.assertEqual(errors(at), [])
 
@@ -606,8 +630,7 @@ class PageTests(unittest.TestCase):
         press(at, "Create my account")
         self.assertEqual(errors(at), [])
         self.assertEqual(session_user(at), "wei@example.com")
-        self.assertIn("Welcome, wei", chr(10).join(str(m.value) for m in at.markdown))
-        self.assertEqual(at.title[0].value, "Recipe Calculator")
+        self.assertIn("Good to see you, wei", chr(10).join(str(m.value) for m in at.markdown))
         self.assertTrue(auth.user_dir("Wei").is_dir(), "record folder should exist immediately")
         self.assertIsNone(auth.load_results("Wei"), "a new account must start with no rows")
         self.assertIsNone(auth.load_results("Thena"), "and must not inherit anyone else's rows")
