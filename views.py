@@ -28,6 +28,7 @@ import streamlit as st
 
 import auth
 import chem
+import excel_export
 import excel_io
 import schema
 import feedback as feedback_mod
@@ -455,11 +456,19 @@ def _records_tab(user: str | None) -> None:
                     st.error(t("res.email_no_rows"))
                 elif mailer.provider() == "none":
                     st.error(t("res.email_not_configured"))
-                elif mailer.send_data(dest.strip(), len(frame), csv_bytes(frame),
-                                      f"{auth.folder_name(user)}_records.csv"):
+                elif mailer.send_data(dest.strip(), len(frame), clean_excel,
+                                      f"{auth.folder_name(user)}_records.xlsx"):
                     st.success(t("res.email_sent", to=dest))
                 else:
                     st.error(t("res.email_failed"))
+
+    clean_excel = excel_export.records_workbook(
+        frame if not frame.empty else pd.DataFrame(columns=RECORD_COLUMNS),
+        meta={"user": user or "", "scope": "my records"})
+    b.download_button(t("res.download_excel"), clean_excel,
+                      f"{auth.folder_name(user)}_records.xlsx",
+                      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                      key="download_excel")
 
     dataset = _dataset_zip(frame) if not frame.empty else _dataset_zip(pd.DataFrame(columns=RECORD_COLUMNS))
     b.download_button(t("res.download_dataset"), dataset, "dataset_for_ai.zip",

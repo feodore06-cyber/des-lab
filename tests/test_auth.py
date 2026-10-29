@@ -4,7 +4,8 @@ import os
 from datetime import datetime, timedelta, timezone
 import sys
 
-os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
+os.environ["DESLAB_STORAGE"] = "file"
+os.environ["DESLAB_MAIL_DISABLE"] = "1"  # tests must never send mail  # tests must never touch a real database
 import tempfile
 import unittest
 from pathlib import Path

@@ -8,7 +8,8 @@ Record folders are redirected to a temporary directory through DESLAB_DATA_DIR.
 import os
 import sys
 
-os.environ["DESLAB_STORAGE"] = "file"  # tests must never touch a real database
+os.environ["DESLAB_STORAGE"] = "file"
+os.environ["DESLAB_MAIL_DISABLE"] = "1"  # tests must never send mail  # tests must never touch a real database
 import tempfile
 import unittest
 from pathlib import Path

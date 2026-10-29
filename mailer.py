@@ -111,14 +111,21 @@ def reset_message(to: str, name: str, link: str) -> EmailMessage:
     return msg
 
 
-def data_message(to: str, rows: int, csv_bytes: bytes, filename: str = "my_records.csv",
+XLSX_TYPE = ("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def _attachment_type(filename: str) -> tuple:
+    return XLSX_TYPE if filename.lower().endswith(".xlsx") else ("text", "csv")
+
+
+def data_message(to: str, rows: int, payload: bytes, filename: str = "my_records.xlsx",
                  note: str = "") -> EmailMessage:
     """The sender's own data as an attachment - what the "email my data" button builds."""
     msg = EmailMessage()
     msg["To"] = to
     msg["Subject"] = f"BioMat Lab · {rows} experiment rows"
     msg.set_content("\n".join([
-        "Your experiment records are attached as a CSV file.",
+        f"Your experiment records are attached as {filename}.",
         note,
         "",
         f"Rows: {rows}",
@@ -126,14 +133,15 @@ def data_message(to: str, rows: int, csv_bytes: bytes, filename: str = "my_recor
         "",
         "— BioMat Lab",
     ]))
-    msg.add_attachment(csv_bytes, maintype="text", subtype="csv", filename=filename)
+    maintype, subtype = _attachment_type(filename)
+    msg.add_attachment(payload, maintype=maintype, subtype=subtype, filename=filename)
     return msg
 
 
-def send_data(to: str, rows: int, csv_bytes: bytes, filename: str = "my_records.csv") -> bool:
+def send_data(to: str, rows: int, payload: bytes, filename: str = "my_records.xlsx") -> bool:
     if not to or not rows:
         return False
-    return send(data_message(to, rows, csv_bytes, filename))
+    return send(data_message(to, rows, payload, filename))
 
 
 def _deliver(message: EmailMessage) -> bool:
