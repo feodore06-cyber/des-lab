@@ -1261,3 +1261,20 @@ def set_project_variables(username: str, name: str, values: list) -> None:
     raw["_variables"] = mapping
     _save_local_projects(raw)
     _forget_cached_reads()
+
+UNITS = {"_C": "°C", "_min": "min", "_s": "s", "_pct": "%", "_percent": "%",
+         "_mg": "mg", "_g": "g", "_kg": "kg", "_per_cm3": "g/cm³", "_cm3": "cm³",
+         "_MPa": "MPa", "_mPa": "mPa", "_kPa": "kPa", "_Pa": "Pa", "_bar": "bar",
+         "_rpm": "rpm", "_mm": "mm", "_um": "µm", "_cm": "cm", "_nm": "nm",
+         "_mL": "mL", "_L": "L", "_ratio": "ratio", "_ph": "pH", "_K": "K", "_h": "h"}
+
+
+def unit_of(variable: str) -> str:
+    """Guess the unit from the end of a variable name, so exports and labels can show it."""
+    name = str(variable or "")
+    for suffix in sorted(UNITS, key=len, reverse=True):
+        if name.endswith(suffix):
+            return UNITS[suffix]
+    if name.endswith("_MPa") or name.endswith("_mPa"):
+        return "MPa"
+    return ""

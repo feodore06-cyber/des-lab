@@ -787,9 +787,12 @@ def workspace() -> None:
         default = [item["key"] for item in suggestion] or list(auth.DEFAULT_VARIABLES)
         picked = st.multiselect(t("exp.variables"), options,
                                 default=[value for value in default if value in options],
-                                help=t("exp.variables_help"), key="new_project_vars")
-        extra = st.text_input(t("exp.variables_more"), placeholder=t("exp.variables_more_ph"),
-                              key="new_project_extra")
+                                help=t("exp.variables_more_ph"), key="new_project_vars",
+                                accept_new_options=True)
+        if picked:
+            st.caption(" · ".join(f"{value} {('(' + auth.unit_of(value) + ')') if auth.unit_of(value) else ''}"
+                                  for value in picked))
+        extra = ""
         if st.button(t("res.project_create"), type="primary", key="create_project_btn"):
             try:
                 created = auth.create_project(user, name)
@@ -1244,7 +1247,9 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     if empty:
         st.info(t("res.empty_records"))
     frame = pd.DataFrame(columns=RECORD_COLUMNS) if empty else saved
+    own = auth.project_variables(user, project) if user else []
     ordered = [c for c in RECORD_COLUMNS if c in frame.columns]
+    ordered += [c for c in own if c in frame.columns and c not in ordered]
     frame = frame.reindex(columns=ordered + [c for c in frame.columns if c not in ordered])
     with st.expander(t("res.import_excel"), expanded=False):
         upload = st.file_uploader(t("res.import_pick"), type=["csv", "xlsx", "xlsm", "xls"],
