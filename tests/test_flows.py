@@ -176,6 +176,21 @@ class WorkspaceFlows(unittest.TestCase):
         at.run()
         return at
 
+    def test_two_unrelated_runs_are_flagged_before_the_numbers(self):
+        def compare_entry():
+            import views
+
+            views.compare_page()
+
+        at = AppTest.from_function(compare_entry, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.run()
+        modes = [item for item in at.radio if item.label == "What to compare"]
+        modes[0].set_value("Two of my own runs").run()
+        press(at, "Compare")
+        warnings = " ".join(str(item.value) for item in at.warning)
+        self.assertTrue(warnings, "two runs that differ in ratio and water must be flagged")
+
     def test_two_of_my_own_runs_can_be_compared(self):
         at = self._page()
         self.assertEqual(exceptions(at), [])

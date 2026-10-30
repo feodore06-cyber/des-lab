@@ -446,6 +446,29 @@ def library() -> None:
 BASIS_KEYS = ("cmp.basis_yield", "cmp.basis_delign", "cmp.basis_purity", "cmp.basis_other")
 
 
+def _pick_run(saved, user, prefix: str, label_key: str, run_index: int = 0) -> dict | None:
+    """Choose a project first, then a run inside it - sample IDs repeat across projects."""
+    if saved is None or saved.empty or "sample_id" not in saved.columns:
+        return None
+    frame = saved.copy()
+    if "project" not in frame.columns:
+        frame["project"] = auth.DEFAULT_PROJECT
+    frame["project"] = frame["project"].fillna(auth.DEFAULT_PROJECT)
+    projects = [name for name in auth.list_projects(user) if name in set(frame["project"])]
+    if not projects:
+        return None
+    project = st.selectbox(t("cmp.project"), projects, key=f"{prefix}_project")
+    part = frame[frame["project"] == project]
+    options = {}
+    for _, row in part.iterrows():
+        caption = f"{row['sample_id']} · {row.get('formulation') or ''} · {str(row.get('recorded_at') or '')[:10]}"
+        options[caption.strip(" ·")] = row.to_dict()
+    keys = list(options)
+    choice = st.selectbox(t(label_key), keys, index=min(run_index, len(keys) - 1),
+                          key=f"{prefix}_run")
+    return options[choice]
+
+
 def compare_page() -> None:
     st.markdown(t("cmp.title"))
     st.caption(t("cmp.sub"))
@@ -463,32 +486,37 @@ def compare_page() -> None:
     mode = st.radio(t("cmp.mode"), [t("cmp.mode_paper"), t("cmp.mode_runs")],
                     horizontal=True, key="compare_mode")
 
-    def _row_of(sample: str) -> dict:
-        return saved[saved["sample_id"].astype(str) == str(sample)].iloc[0].to_dict()
-
     if mode == t("cmp.mode_runs"):
         st.subheader(t("cmp.mine"))
         a_col, b_col = st.columns(2)
-        first = a_col.selectbox(t("cmp.run_a"), ids, key="compare_a")
-        second = b_col.selectbox(t("cmp.run_b"), ids,
-                                 index=min(1, len(ids) - 1), key="compare_b")
+        with a_col:
+            left_row = _pick_run(saved, user, "cmp_a", "cmp.run_a")
+        with b_col:
+            right_row = _pick_run(saved, user, "cmp_b", "cmp.run_b", run_index=1)
+        if left_row is None or right_row is None:
+            st.info(t("res.empty_records"))
+            return
         if st.button(t("cmp.run_btn"), type="primary", key="compare_runs_btn"):
-            if str(first) == str(second):
+            if (str(left_row.get("sample_id")), str(left_row.get("project"))) == (
+                    str(right_row.get("sample_id")), str(right_row.get("project"))):
                 st.warning(t("cmp.same_run"))
             else:
-                left_row, right_row = _row_of(first), _row_of(second)
                 mine = {**left_row, "basis": t("cmp.basis_yield"), "replicates": 3}
                 theirs = {**right_row, "basis": t("cmp.basis_yield"), "replicates": 3}
                 st.session_state["compare_outcome"] = compare.compare(mine, theirs)
                 st.session_state["compare_result"] = {
-                    "mine": mine, "theirs": theirs, "label": f"{first} vs {second}",
-                    "sides": {"mine": str(first), "theirs": str(second)}}
+                    "mine": mine, "theirs": theirs,
+                    "label": f"{left_row.get('sample_id')} vs {right_row.get('sample_id')}",
+                    "sides": {"mine": str(left_row.get("sample_id")),
+                              "theirs": str(right_row.get("sample_id"))}}
         _render_outcome()
         return
 
     st.subheader(t("cmp.mine"))
-    pick = st.selectbox(t("cmp.pick_run"), ids, key="compare_run")
-    mine_row = saved[saved["sample_id"].astype(str) == str(pick)].iloc[0].to_dict()
+    mine_row = _pick_run(saved, user, "cmp_mine", "cmp.pick_run")
+    if mine_row is None:
+        st.info(t("res.empty_records"))
+        return
 
     st.subheader(t("cmp.ref"))
     st.caption(t("cmp.ref_hint"))
@@ -538,6 +566,27 @@ def compare_page() -> None:
     _render_outcome()
 
 
+def _comparability(mine: dict, theirs: dict) -> list:
+    """Name the differences that make two runs not really comparable, before any explanation."""
+    notes = []
+
+    def text_of(row, key):
+        value = row.get(key)
+        return "" if value is None or (isinstance(value, float) and pd.isna(value)) else str(value).strip().lower()
+
+    if text_of(mine, "feedstock") and text_of(theirs, "feedstock") \
+            and text_of(mine, "feedstock") != text_of(theirs, "feedstock"):
+        notes.append(t("cmp.guard_feedstock", mine=mine.get("feedstock"), theirs=theirs.get("feedstock")))
+    if text_of(mine, "formulation") and text_of(theirs, "formulation") \
+            and text_of(mine, "formulation") != text_of(theirs, "formulation"):
+        notes.append(t("cmp.guard_formulation", mine=mine.get("formulation"),
+                       theirs=theirs.get("formulation")))
+    for key, label in (("des_hbd", "cmp.guard_donor"), ("des_hba", "cmp.guard_acceptor")):
+        if text_of(mine, key) and text_of(theirs, key) and text_of(mine, key) != text_of(theirs, key):
+            notes.append(t(label, mine=mine.get(key), theirs=theirs.get(key)))
+    return notes
+
+
 def _render_outcome() -> None:
     """The shared result block: two numbers, the difference, then the ranked explanations."""
     outcome = st.session_state.get("compare_outcome")
@@ -546,8 +595,12 @@ def _render_outcome() -> None:
         return
 
     st.divider()
-    st.subheader(t("cmp.side_by_side"))
     details = st.session_state.get("compare_result", {})
+    guard = _comparability(details.get("mine", {}), details.get("theirs", {}))
+    if guard:
+        st.warning(t("cmp.guard_title") + "\n\n- " + "\n- ".join(guard))
+        st.caption(t("cmp.guard_note"))
+    st.subheader(t("cmp.side_by_side"))
     sides = details.get("sides") or {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}
     cols = st.columns(3)
     for column, name, value in zip(
