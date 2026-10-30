@@ -397,11 +397,14 @@ def library() -> None:
     with st.form("paper_search"):
         query = st.text_input(t("lib.query"), placeholder=t("lib.query_ph"))
         a, b, c, d = st.columns(4)
-        since = a.number_input(t("lib.since"), min_value=1900, max_value=2100, value=2015, step=1)
+        windows = {t("lib.any_year"): None, t("lib.since_2020"): 2020,
+                   t("lib.since_2015"): 2015, t("lib.since_2010"): 2010}
+        since = windows[a.selectbox(t("lib.since"), list(windows), index=0)]
         citations = b.number_input(t("lib.min_cites"), min_value=0, value=0, step=5)
         order = c.selectbox(t("lib.order"), [t("lib.by_relevance"), t("lib.by_citations"),
                                              t("lib.by_newest")])
         limit = d.number_input(t("lib.limit"), min_value=5, max_value=30, value=10, step=5)
+        st.caption(t("lib.since_help"))
         submitted = st.form_submit_button(t("lib.search"), type="primary")
     if not submitted or not query.strip():
         st.info(t("lib.how"))
@@ -411,7 +414,7 @@ def library() -> None:
                t("lib.by_newest"): "newest"}
     try:
         with st.spinner(t("lib.searching")):
-            found = _library_results(query.strip(), int(since), int(citations),
+            found = _library_results(query.strip(), since, int(citations),
                                      mapping.get(order, "relevant"), int(limit))
     except papers.PaperError as exc:
         st.error(t("lib.failed", error=str(exc)))
