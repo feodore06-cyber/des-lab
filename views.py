@@ -937,21 +937,22 @@ def _experiment_panel(user: str | None, name: str) -> None:
 
     with st.expander(t("exp.variables_edit"), expanded=False):
         current_vars = auth.project_variables(user, name)
-        with st.form(f"vars_{name}"):
-            kept = st.multiselect(t("exp.variables"), list(COLUMN_CHOICES),
-                                  default=[v for v in current_vars if v in COLUMN_CHOICES])
-            more = st.text_input(t("exp.variables_more"),
-                                 value=", ".join(v for v in current_vars
-                                                 if v not in COLUMN_CHOICES))
-            if st.form_submit_button(t("exp.variables_save")):
-                wanted = list(kept) + [item.strip() for item in more.split(",") if item.strip()]
-                try:
-                    auth.set_project_variables(user, name, wanted)
-                except ValueError as exc:
-                    st.error(t(str(exc)))
-                else:
-                    st.success(t("exp.variables_saved"))
-                    st.rerun()
+        options = list(dict.fromkeys(list(COLUMN_CHOICES) + current_vars))
+        kept = st.multiselect(t("exp.variables"), options, default=current_vars,
+                              help=t("exp.variables_more_ph"), key=f"vars_{name}_pick",
+                              accept_new_options=True)
+        if kept:
+            st.caption(" · ".join(
+                f"{value} ({auth.unit_of(value)})" if auth.unit_of(value) else value
+                for value in kept))
+        if st.button(t("exp.variables_save"), key=f"vars_{name}_save"):
+            try:
+                auth.set_project_variables(user, name, kept)
+            except ValueError as exc:
+                st.error(t(str(exc)))
+            else:
+                st.success(t("exp.variables_saved"))
+                st.rerun()
 
     with st.expander(t("exp.rename"), expanded=False):
         with st.form(f"rename_{name}"):
@@ -967,7 +968,11 @@ def _experiment_panel(user: str | None, name: str) -> None:
                     st.rerun()
 
     if part.empty:
-        st.info(t("ws.none"))
+        st.info(t("exp.no_experiments"))
+        if st.button(t("exp.add_run"), key=f"first_run_{name}", type="primary"):
+            st.session_state["ws_open"] = name
+            st.session_state["ws_mode"] = "add"
+            st.rerun()
         return
 
     tab_overview, tab_formulation, tab_process, tab_results, tab_records = st.tabs(
