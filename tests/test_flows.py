@@ -121,22 +121,23 @@ class WorkspaceFlows(unittest.TestCase):
         self.assertIn("hot press", auth.list_projects("Chuanyu"),
                       "the project must exist after the click")
 
-    def test_deleting_a_project_with_rows_asks_before_it_removes_anything(self):
+    def test_deleting_a_project_warns_before_it_removes_anything(self):
+        """The screen must name what is at stake and touch nothing until it is confirmed.
+
+        The cascade itself is verified in tests/test_projects.py, where the storage can be inspected
+        directly; this test only covers what the person sees.
+        """
         at = fresh_at()
-        # the first card may be an empty project, so target this one by its key
+        before = len(auth.load_results("Chuanyu"))
         at.button(key="del_wood").click()
         at.run()
         self.assertEqual(exceptions(at), [])
         warnings = " ".join(str(item.value) for item in at.warning)
         self.assertIn("cannot be undone", warnings, "the warning must say what is lost")
-        self.assertEqual(len(auth.load_results("Chuanyu")), 2, "nothing is deleted before confirming")
-
-        # the click-through above proves the warning appears and nothing is removed before it;
-        # the cascade itself is covered deterministically in tests/test_projects.py
-        removed = auth.delete_project("Chuanyu", "wood", force=True)
-        self.assertEqual(removed, 1)
-        left = auth.load_results("Chuanyu")
-        self.assertEqual(left["sample_id"].tolist(), ["EXP-02"])
+        self.assertIn("wood", warnings, "the warning must name the project")
+        self.assertEqual(len(auth.load_results("Chuanyu")), before,
+                         "nothing may be deleted before the confirmation")
+        self.assertIn("Keep it", [button.label for button in at.button])
 
     def test_opening_an_experiment_shows_its_own_panel(self):
         at = fresh_at()
