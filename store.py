@@ -546,6 +546,12 @@ def project_formulation_set(owner: str, name: str, payload: str) -> None:
         conn.commit()
 
 
+def project_delete(owner: str, name: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from projects where owner = %s and name = %s", (owner, name))
+        conn.commit()
+
+
 def project_rename(owner: str, old: str, new: str) -> None:
     with _connect() as conn:
         conn.execute("update projects set name = %s where owner = %s and name = %s", (new, owner, old))

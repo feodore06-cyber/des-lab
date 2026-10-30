@@ -764,26 +764,25 @@ def workspace() -> None:
     projects = auth.list_projects(user)
     states = auth.project_statuses(user)
     frame = auth.load_results(user)
-    if frame is None or frame.empty:
-        st.caption(t("ws.none"))
-        return
 
-    rows = frame.copy()
-    if "project" not in rows.columns:
-        rows["project"] = auth.DEFAULT_PROJECT
-    rows["project"] = rows["project"].fillna(auth.DEFAULT_PROJECT)
+    rows = None
+    if frame is not None and not frame.empty:
+        rows = frame.copy()
+        if "project" not in rows.columns:
+            rows["project"] = auth.DEFAULT_PROJECT
+        rows["project"] = rows["project"].fillna(auth.DEFAULT_PROJECT)
+
     grouped = []
     for name in projects:
-        part = rows[rows["project"] == name]
-        if part.empty:
-            continue
+        part = rows[rows["project"] == name] if rows is not None else None
+        runs = 0 if part is None else len(part)
         last = ""
-        if "recorded_at" in part.columns:
+        if part is not None and not part.empty and "recorded_at" in part.columns:
             stamps = pd.to_datetime(part["recorded_at"], errors="coerce").dropna()
             last = stamps.max().strftime("%Y-%m-%d") if len(stamps) else ""
-        grouped.append({"name": name, "runs": len(part), "last": last,
+        grouped.append({"name": name, "runs": runs, "last": last,
                         "status": states.get(name, "In progress")})
-    grouped.sort(key=lambda item: item["last"], reverse=True)
+    grouped.sort(key=lambda item: (item["last"] != "", item["last"]), reverse=True)
 
     for item in grouped[:5]:
         with st.container(border=True):
@@ -792,12 +791,24 @@ def workspace() -> None:
             head.markdown(f'<div class="bm-status bm-status-{key}">'
                           f'{_status_label(item["status"])}</div>', unsafe_allow_html=True)
             head.markdown(f"**{item['name']}**")
-            head.caption(f"{t('ws.runs', n=item['runs'])} · "
-                         f"{t('ws.last', date=item['last'] or '—')}")
+            if item["runs"]:
+                head.caption(f"{t('ws.runs', n=item['runs'])} · "
+                             f"{t('ws.last', date=item['last'] or '—')}")
+            else:
+                head.caption(t("ws.empty_project"))
             if tail.button(t("ws.open"), key=f"open_{item['name']}", use_container_width=True):
                 st.session_state["ws_open"] = item["name"]
                 st.session_state["ws_mode"] = "open"
                 st.rerun()
+            if item["runs"] == 0:
+                if tail.button(t("ws.delete"), key=f"del_{item['name']}",
+                               use_container_width=True):
+                    try:
+                        auth.delete_project(user, item["name"])
+                    except ValueError as exc:
+                        st.error(t(str(exc)))
+                    else:
+                        st.rerun()
 
 
 def _latest_experiment(user: str | None) -> str | None:

@@ -817,6 +817,8 @@ def create_project(username: str, name: str) -> str:
     clean = " ".join(str(name or "").split())[:40]
     if not clean:
         raise ValueError("Give the project a name.")
+    if clean in list_projects(username):
+        raise ValueError("A project with that name already exists.")
     if store.enabled():
         store.project_create(username, clean)
     # kept locally as well, so a laptop without a database still has projects
@@ -1173,3 +1175,22 @@ def rename_project(username: str, old: str, new: str) -> str:
     _save_local_projects(raw)
     _forget_cached_reads()
     return clean
+
+def delete_project(username: str, name: str) -> None:
+    """Remove an empty project. A project that still holds experiments is kept on purpose."""
+    frame = load_results(username)
+    if frame is not None and not frame.empty and "project" in frame.columns:
+        if (frame["project"].fillna(DEFAULT_PROJECT) == name).any():
+            raise ValueError("This project still holds experiments; move or delete them first.")
+    if store.enabled():
+        try:
+            store.project_delete(username, name)
+        except Exception:
+            pass
+    raw = _local_projects()
+    raw[username] = [value for value in (raw.get(username) or []) if value != name]
+    formulation = raw.get("_formulation") or {}
+    formulation.pop(f"{username}::{name}", None)
+    raw["_formulation"] = formulation
+    _save_local_projects(raw)
+    _forget_cached_reads()
