@@ -97,7 +97,6 @@ def _add_reagent(term: str) -> None:
 
 def calculator():
     labels = _column_labels()
-    st.caption(t("calc.step"))
     st.title(t("calc.title"))
     st.write(t("calc.intro"))
     st.info(t("calc.info"))
@@ -347,6 +346,13 @@ def _project_picker(user: str | None) -> str:
     if not user:
         return auth.DEFAULT_PROJECT
     projects = auth.list_projects(user)
+    # a freshly created project becomes the default on the next run; assigning the widget's own key
+    # after it exists raises StreamlitWidgetAlreadyInstantiatedError
+    wanted = st.session_state.pop("project_wanted", None)
+    if wanted and wanted in projects:
+        st.session_state["project_pick"] = wanted
+    if st.session_state.get("project_pick") not in projects:
+        st.session_state["project_pick"] = projects[0]
     choice = st.selectbox(t("res.project"), projects, key="project_pick",
                           help=t("res.project_help"))
     states = auth.project_statuses(user)
@@ -369,7 +375,7 @@ def _project_picker(user: str | None) -> str:
                     st.error(t(str(exc)))
                 else:
                     st.success(t("res.project_created", name=created))
-                    st.session_state["project_pick"] = created
+                    st.session_state["project_wanted"] = created
                     st.rerun()
     return choice
 
@@ -458,7 +464,7 @@ def library() -> None:
             st.session_state["compare_ref"] = {"title": paper["doi"] or paper["title"],
                                                "title_text": paper["title"]}
             st.session_state.pop("compare_outcome", None)
-            st.switch_page("views.compare_page")
+            _goto("compare")
         st.divider()
 
 
@@ -478,6 +484,32 @@ def compare_page() -> None:
         st.info(t("res.empty_records"))
         return
     ids = [str(value) for value in saved["sample_id"].dropna().unique()]
+
+    mode = st.radio(t("cmp.mode"), [t("cmp.mode_paper"), t("cmp.mode_runs")],
+                    horizontal=True, key="compare_mode")
+
+    def _row_of(sample: str) -> dict:
+        return saved[saved["sample_id"].astype(str) == str(sample)].iloc[0].to_dict()
+
+    if mode == t("cmp.mode_runs"):
+        st.subheader(t("cmp.mine"))
+        a_col, b_col = st.columns(2)
+        first = a_col.selectbox(t("cmp.run_a"), ids, key="compare_a")
+        second = b_col.selectbox(t("cmp.run_b"), ids,
+                                 index=min(1, len(ids) - 1), key="compare_b")
+        if st.button(t("cmp.run_btn"), type="primary", key="compare_runs_btn"):
+            if str(first) == str(second):
+                st.warning(t("cmp.same_run"))
+            else:
+                left_row, right_row = _row_of(first), _row_of(second)
+                mine = {**left_row, "basis": t("cmp.basis_yield"), "replicates": 3}
+                theirs = {**right_row, "basis": t("cmp.basis_yield"), "replicates": 3}
+                st.session_state["compare_outcome"] = compare.compare(mine, theirs)
+                st.session_state["compare_result"] = {
+                    "mine": mine, "theirs": theirs, "label": f"{first} vs {second}",
+                    "sides": {"mine": str(first), "theirs": str(second)}}
+        _render_outcome()
+        return
 
     st.subheader(t("cmp.mine"))
     pick = st.selectbox(t("cmp.pick_run"), ids, key="compare_run")
@@ -523,10 +555,16 @@ def compare_page() -> None:
                     "time_min": mine_row.get("time_min"),
                     "replicates": 3, "moisture_wt_pct": mine_row.get("moisture_wt_pct"),
                 }
-                st.session_state["compare_result"] = {"mine": mine, "theirs": theirs,
-                                                      "label": label or pick}
+                st.session_state["compare_result"] = {
+                    "mine": mine, "theirs": theirs, "label": label or pick,
+                    "sides": {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}}
                 st.session_state["compare_outcome"] = compare.compare(mine, theirs)
 
+    _render_outcome()
+
+
+def _render_outcome() -> None:
+    """The shared result block: two numbers, the difference, then the ranked explanations."""
     outcome = st.session_state.get("compare_outcome")
     if not outcome:
         st.caption(t("cmp.nothing_saved"))
@@ -535,11 +573,18 @@ def compare_page() -> None:
     st.divider()
     st.subheader(t("cmp.side_by_side"))
     details = st.session_state.get("compare_result", {})
+    sides = details.get("sides") or {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}
     cols = st.columns(3)
-    for column, value in zip(cols, (details.get("mine", {}).get("lignin_yield_pct"),
-                                    details.get("theirs", {}).get("lignin_yield_pct"),
-                                    outcome["delta"])):
-        column.metric("", value if value is not None else "—")
+    for column, name, value in zip(
+            cols,
+            (sides["mine"], sides["theirs"], t("cmp.delta")),
+            (details.get("mine", {}).get("lignin_yield_pct"),
+             details.get("theirs", {}).get("lignin_yield_pct"),
+             outcome["delta"])):
+        if isinstance(value, (int, float)):
+            column.metric(str(name), f"{value:.2f} %" if name != t("cmp.delta") else f"{value:+.2f}")
+        else:
+            column.metric(str(name), "—")
     st.caption(t("cmp.nothing_saved"))
     st.info(t(f"cmp.headline_{compare.headline(outcome)}"))
 
@@ -547,13 +592,27 @@ def compare_page() -> None:
     for item in outcome["findings"]:
         params = dict(item["params"])
         if "side" in params:
-            params["side"] = t("cmp.mine") if params["side"] == "mine" else t("cmp.ref")
+            sides = details.get("sides") or {}
+            params["side"] = sides.get(params["side"]) or (
+                t("cmp.mine") if params["side"] == "mine" else t("cmp.ref"))
         with st.container(border=True):
             st.markdown(f"**{t('cmp.tag_' + item['kind'])}** · "
                         f"{t('cmp.' + item['code'] + '.claim', **params)}")
             st.caption(t("cmp." + item["code"] + ".why", **params))
             st.markdown(f"*{t('cmp.' + item['code'] + '.check', **params)}*")
             st.markdown(t("cmp." + item["code"] + ".step", **params))
+
+
+PAGE_OBJECTS: dict = {}
+
+
+def _goto(key: str) -> None:
+    """Switch to a registered page by key (file paths do not work for function-defined pages)."""
+    page = PAGE_OBJECTS.get(key)
+    if page is None:
+        st.error(f"navigation target {key!r} is not registered")
+        return
+    st.switch_page(page)
 
 
 def _status_label(status: str) -> str:
@@ -563,26 +622,51 @@ def _status_label(status: str) -> str:
 
 
 def workspace() -> None:
-    """The signed-in home: one greeting, two actions, and the experiments that exist."""
+    """The signed-in home. New work happens here, so no button ever has to leave the page."""
     user = auth.current_user()
     if not user:
         st.info(t("guide.signin_hint"))
         return
+    mode = st.session_state.get("ws_mode", "home")
+
+    if mode == "new":
+        if st.button("← " + t("ws.back"), key="ws_back"):
+            st.session_state["ws_mode"] = "home"
+            st.rerun()
+        project = _project_picker(user)
+        _record_tab(user, project)
+        return
+
+    if mode == "open":
+        name = st.session_state.get("ws_open", auth.DEFAULT_PROJECT)
+        if st.button("← " + t("ws.back"), key="ws_back_open"):
+            st.session_state["ws_mode"] = "home"
+            st.rerun()
+        _experiment_panel(user, name)
+        return
+
     st.markdown(f"### {t('ws.greeting', user=auth.display_name(user))}")
     st.caption(t("ws.question"))
 
     left, right = st.columns(2)
     if left.button(t("ws.new"), type="primary", use_container_width=True, key="ws_new"):
-        st.switch_page("views.results")
+        st.session_state["ws_mode"] = "new"
+        st.rerun()
     if right.button(t("ws.continue"), use_container_width=True, key="ws_continue"):
-        st.switch_page("views.results")
-
-    projects = auth.list_projects(user)
-    states = auth.project_statuses(user)
-    frame = auth.load_results(user)
+        latest = _latest_experiment(user)
+        if latest:
+            st.session_state["ws_open"] = latest
+            st.session_state["ws_mode"] = "open"
+            st.rerun()
+        else:
+            st.session_state["ws_mode"] = "new"
+            st.rerun()
 
     st.divider()
     st.markdown(f"#### {t('ws.recent')}")
+    projects = auth.list_projects(user)
+    states = auth.project_statuses(user)
+    frame = auth.load_results(user)
     if frame is None or frame.empty:
         st.caption(t("ws.none"))
         return
@@ -596,8 +680,8 @@ def workspace() -> None:
         part = rows[rows["project"] == name]
         if part.empty:
             continue
-        last = part["recorded_at"].iloc[-1] if "recorded_at" in part.columns else ""
-        grouped.append({"name": name, "runs": len(part), "last": str(last)[:10],
+        last = str(part["recorded_at"].iloc[-1])[:10] if "recorded_at" in part.columns else ""
+        grouped.append({"name": name, "runs": len(part), "last": last,
                         "status": states.get(name, "In progress")})
     grouped.sort(key=lambda item: item["last"], reverse=True)
 
@@ -608,8 +692,54 @@ def workspace() -> None:
             head.caption(f"{_status_label(item['status'])} · "
                          f"{t('ws.runs', n=item['runs'])} · {t('ws.last', date=item['last'] or '—')}")
             if tail.button(t("ws.open"), key=f"open_{item['name']}", use_container_width=True):
-                st.session_state["project_pick"] = item["name"]
-                st.switch_page("views.results")
+                st.session_state["ws_open"] = item["name"]
+                st.session_state["ws_mode"] = "open"
+                st.rerun()
+
+
+def _latest_experiment(user: str | None) -> str | None:
+    frame = auth.load_results(user)
+    if frame is None or frame.empty:
+        return None
+    column = "project" if "project" in frame.columns else None
+    if column is None:
+        return auth.DEFAULT_PROJECT
+    values = [str(value) for value in frame[column].dropna().unique()]
+    return values[-1] if values else None
+
+
+def _experiment_panel(user: str | None, name: str) -> None:
+    """Everything known about one experiment, on one page."""
+    frame = auth.load_results(user)
+    if frame is None or frame.empty:
+        st.info(t("res.empty_records"))
+        return
+    if "project" not in frame.columns:
+        frame = frame.assign(project=auth.DEFAULT_PROJECT)
+    part = frame[frame["project"].fillna(auth.DEFAULT_PROJECT) == name]
+    state = auth.project_statuses(user).get(name, "In progress")
+
+    st.markdown(f"### {name}")
+    st.caption(_status_label(state))
+
+    if part.empty:
+        st.info(t("ws.none"))
+        return
+
+    latest = part.iloc[-1]
+    columns = st.columns(3)
+    columns[0].metric(t("res.lignin_yield"), f"{float(latest.get('lignin_yield_pct') or 0):.2f} %")
+    columns[1].metric(t("res.lignin_mg"), f"{float(latest.get('lignin_mg') or 0):.1f} mg")
+    columns[2].metric(t("ws.runs_label"), len(part))
+
+    st.caption(t("exp.panel_note", date=str(latest.get("recorded_at") or "—")))
+    keep = [column for column in ("sample_id", "formulation", "molar_ratio", "biomass_g",
+                                  "lignin_mg", "lignin_yield_pct", "recorded_at")
+            if column in part.columns]
+    st.dataframe(part[keep], width="stretch", hide_index=True)
+
+    with st.expander(t("exp.more_runs"), expanded=False):
+        _record_tab(user, name)
 
 
 def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
@@ -1060,7 +1190,6 @@ def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
 
 
 def results():
-    st.caption(t("res.step"))
     st.title(t("res.title"))
     st.write(t("res.intro"))
     user = auth.current_user()

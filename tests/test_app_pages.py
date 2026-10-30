@@ -503,6 +503,18 @@ class PageTests(unittest.TestCase):
         self.assertIn("Create the account", [b.label for b in at.button])
 
     # -------------------------------------------------------------------- entrance
+    def test_institutional_branding_can_be_turned_off(self):
+        os.environ["DESLAB_ASTAR_BRAND"] = "0"
+        try:
+            at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+            at.session_state["show_signin"] = True
+            at.run()
+            markup = "\n".join(str(m.value) for m in at.markdown)
+            self.assertIn("app/static/biomat_mark.png", markup)
+            self.assertNotIn("astar_logo.png", markup)
+        finally:
+            os.environ.pop("DESLAB_ASTAR_BRAND", None)
+
     def test_entry_page_branding_and_intro_once(self):
         at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
         at.session_state["show_signin"] = True
@@ -511,10 +523,8 @@ class PageTests(unittest.TestCase):
         self.assertEqual(errors(at), [])
         markup = "\n".join(str(m.value) for m in at.markdown)
         self.assertIn('id="dsh-splash"', markup, "the intro should be injected on the first run")
-        # institutional branding is opt-in: by default the splash shows our own mark
-        self.assertIn("app/static/biomat_mark.png", markup)
-        self.assertNotIn("astar_logo.png", markup,
-                         "the A*STAR lockup must not be used without an explicit opt-in")
+        # the lab asked for the institutional lockup on 2026-10-30; the flag turns it off again
+        self.assertIn("astar_logo.png", markup)
         at.run()  # a rerun in the same session must not replay the intro
         self.assertNotIn('id="dsh-splash"', "\n".join(str(m.value) for m in at.markdown))
 

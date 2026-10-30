@@ -719,6 +719,9 @@ def list_projects(username: str | None) -> list:
             names = store.projects_of(owners)
         except Exception:
             names = []
+    local = _local_projects()
+    for owner in owners:
+        names = list(names) + [value for value in (local.get(owner) or []) if value]
     if not names:
         names = sorted({str(value) for value in (_project_values(username) or []) if value})
     if DEFAULT_PROJECT not in names:
@@ -753,13 +756,41 @@ def set_project_status(username: str, name: str, status: str) -> None:
     _forget_cached_reads()
 
 
+def _projects_file() -> Path:
+    return data_root() / "projects.json"
+
+
+def _local_projects() -> dict:
+    path = _projects_file()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) or {}
+    except (ValueError, OSError):
+        return {}
+
+
+def _save_local_projects(mapping: dict) -> None:
+    path = _projects_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def create_project(username: str, name: str) -> str:
-    """Make a project folder; names are trimmed and capped so they stay usable as a filter."""
+    """Make a project; names are trimmed and capped so they stay usable as a filter."""
     clean = " ".join(str(name or "").split())[:40]
     if not clean:
         raise ValueError("Give the project a name.")
     if store.enabled():
         store.project_create(username, clean)
+    # kept locally as well, so a laptop without a database still has projects
+    mapping = _local_projects()
+    names = mapping.get(username) or []
+    if clean not in names:
+        names.append(clean)
+    mapping[username] = names
+    _save_local_projects(mapping)
+    _forget_cached_reads()
     return clean
 
 

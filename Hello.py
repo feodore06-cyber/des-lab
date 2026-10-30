@@ -37,7 +37,10 @@ APP_TITLE = f"{APP_NAME} {chr(183)} {APP_TAGLINE}"
 # Institutional branding is opt-in: the A*STAR assets are only shown when the deployment says it is
 # allowed to use them (DESLAB_ASTAR_BRAND=1 or [brand] astar = true). The default is our own mark, so
 # nothing pretends to be an official institutional site.
-BRAND_IS_ASTAR = str(auth._flag("DESLAB_ASTAR_BRAND")).strip().lower() in ("1", "true", "yes")
+# On by default at the lab's request (2026-10-30); DESLAB_ASTAR_BRAND=0 hides the institutional
+# lockup and falls back to the plain wordmark if the permission ever lapses.
+_brand_flag = str(auth._flag("DESLAB_ASTAR_BRAND")).strip().lower()
+BRAND_IS_ASTAR = _brand_flag not in ("0", "false", "no", "off")
 
 LOGO_PATH = ROOT / ("static/astar_logo.png" if BRAND_IS_ASTAR else "static/biomat_mark.png")
 LOGO_MARK_PATH = ROOT / ("static/astar_mark.png" if BRAND_IS_ASTAR else "static/biomat_mark.png")
@@ -358,6 +361,8 @@ NAV = [
 ]
 
 page = st.navigation([entry[1] for entry in NAV], position="hidden")
+# views needs the page objects to move between pages; a file path does not resolve for these pages
+views.PAGE_OBJECTS = {key: page_object for key, page_object, _label in NAV}
 
 if user:
     bar = st.columns([2.0, 1, 1, 1, 1, 1, 1, 1.2, 1], vertical_alignment="center", gap="small")
