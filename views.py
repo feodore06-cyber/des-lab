@@ -749,9 +749,9 @@ def _experiment_panel(user: str | None, name: str) -> None:
                           f"{float(latest.get('lignin_yield_pct') or 0):.2f} %")
         columns[1].metric(t("res.lignin_mg"), f"{float(latest.get('lignin_mg') or 0):.1f} mg")
         columns[2].metric(t("ws.runs_label"), len(part))
-        st.caption(t("exp.key_conditions", ratio=latest.get("molar_ratio"),
-                     temp=latest.get("temperature_C"), time=latest.get("time_min"),
-                     purity=latest.get("purity_wt_pct")))
+        heading = auth.project_formulation(user, name)
+        st.caption(t("exp.header_line", hba=heading["des_hba"], hbd=heading["des_hbd"],
+                     ratio=heading["molar_ratio"], runs=len(part)))
         keep = [column for column in ("sample_id", "formulation", "lignin_yield_pct", "recorded_at")
                 if column in part.columns]
         st.dataframe(part[keep], width="stretch", hide_index=True)
@@ -1277,7 +1277,15 @@ def results():
     st.write(t("res.intro"))
     user = auth.current_user()
     if user:
-        project = _project_picker(user)
+        # Results is an analysis page: it selects a project, it does not create one
+        projects = auth.list_projects(user)
+        wanted = st.session_state.pop("project_wanted", None)
+        if wanted and wanted in projects:
+            st.session_state["project_pick"] = wanted
+        if st.session_state.get("project_pick") not in projects:
+            st.session_state["project_pick"] = projects[0]
+        project = st.selectbox(t("res.project"), projects, key="project_pick",
+                               help=t("res.project_help"))
     else:
         project = auth.DEFAULT_PROJECT
     tab_new, tab_records, tab_chart = st.tabs([t("res.tab_new"), t("res.tab_saved"), t("res.tab_chart")])
