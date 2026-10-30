@@ -93,6 +93,8 @@ class NavigationTests(unittest.TestCase):
                      "abstract": "Lignin yield reached 6.1 % at 90 C for 120 min, ratio 1:2.",
                      "score": 1.0}]
 
+        self._original = papers.search
+        self.addCleanup(setattr, papers, "search", self._original)
         papers.search = fake_search
 
         def entry():

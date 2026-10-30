@@ -471,7 +471,8 @@ def library() -> None:
             st.session_state["compare_ref"] = {"title": paper["doi"] or paper["title"],
                                                "title_text": paper["title"]}
             st.session_state.pop("compare_outcome", None)
-            _goto("compare")
+            st.session_state["compare_inline"] = True
+            st.rerun()
         st.divider()
 
 
@@ -744,11 +745,13 @@ PAGE_OBJECTS: dict = {}
 
 
 def _goto(key: str) -> None:
-    """Go to a page by key. ``switch_page`` needs the page object, not a file path."""
-    page = PAGE_OBJECTS.get(key)
-    if page is None:
-        # the registry is filled by Hello.py just before the page runs; if it is missing we still
-        # show the content rather than leaving the button looking dead
+    """Kept for future navigation; the comparison screen is rendered in place instead.
+
+    ``st.switch_page`` needs the page object created in the same script run. A page object kept from
+    an earlier run does nothing at all, which is exactly the "button is dead" symptom, so this helper
+    is not used for the paper -> comparison step.
+    """
+    if key == "compare":
         st.session_state["compare_inline"] = True
         st.rerun()
         return
