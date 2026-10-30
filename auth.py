@@ -1176,24 +1176,44 @@ def rename_project(username: str, old: str, new: str) -> str:
     _forget_cached_reads()
     return clean
 
-def delete_project(username: str, name: str) -> None:
-    """Remove an empty project. A project that still holds experiments is kept on purpose."""
+def delete_project(username: str, name: str, force: bool = False) -> int:
+    """Delete a project and, when confirmed, every experiment inside it.
+
+    Returns the number of experiments removed. Without ``force`` a project that still holds rows is
+    left untouched and the error names how many would be lost.
+    """
     frame = load_results(username)
+    removed = 0
     if frame is not None and not frame.empty and "project" in frame.columns:
-        if (frame["project"].fillna(DEFAULT_PROJECT) == name).any():
-            raise ValueError("This project still holds experiments; move or delete them first.")
+        mask = frame["project"].fillna(DEFAULT_PROJECT) == name
+        removed = int(mask.sum())
+        if removed and not force:
+            raise ValueError(f"This project still holds {removed} experiment(s); "
+                             "confirm to delete them as well.")
+        if removed:
+            save_results(username, frame.loc[~mask], append=False)
+
     if store.enabled():
+        try:
+            store.image_delete_by_project(username, name)
+        except Exception:
+            pass
         try:
             store.project_delete(username, name)
         except Exception:
             pass
+
     raw = _local_projects()
     raw[username] = [value for value in (raw.get(username) or []) if value != name]
     formulation = raw.get("_formulation") or {}
     formulation.pop(f"{username}::{name}", None)
     raw["_formulation"] = formulation
+    variables = raw.get("_variables") or {}
+    variables.pop(f"{username}::{name}", None)
+    raw["_variables"] = variables
     _save_local_projects(raw)
     _forget_cached_reads()
+    return removed
 
 DEFAULT_VARIABLES = ["temperature_C", "time_min", "biomass_g", "lignin_mg",
                      "lignin_yield_pct", "replicate", "notes"]

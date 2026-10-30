@@ -483,6 +483,12 @@ def image_bytes(image_id: int, owners: list[str]):
     return row
 
 
+def image_delete_by_project(owner: str, project: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from images where owner = %s and project = %s", (owner, project))
+        conn.commit()
+
+
 def image_delete(image_id: int, owners: list[str]) -> None:
     if not owners:
         return

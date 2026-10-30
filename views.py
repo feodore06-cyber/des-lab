@@ -853,6 +853,26 @@ def workspace() -> None:
                         "status": states.get(name, "In progress")})
     grouped.sort(key=lambda item: (item["last"] != "", item["last"]), reverse=True)
 
+    pending = st.session_state.get("ws_delete")
+    if pending:
+        count = next((item["runs"] for item in grouped if item["name"] == pending), 0)
+        st.warning(t("ws.delete_warning", name=pending, runs=count))
+        yes, no = st.columns(2)
+        if yes.button(t("ws.delete_confirm"), type="primary", key="ws_delete_yes"):
+            try:
+                removed = auth.delete_project(user, pending, force=True)
+            except ValueError as exc:
+                st.error(t(str(exc)))
+            else:
+                st.session_state.pop("ws_delete", None)
+                if st.session_state.get("ws_open") == pending:
+                    st.session_state["ws_mode"] = "home"
+                st.success(t("ws.delete_done", name=pending, runs=removed))
+                st.rerun()
+        if no.button(t("ws.delete_cancel"), key="ws_delete_no"):
+            st.session_state.pop("ws_delete", None)
+            st.rerun()
+
     for item in grouped[:5]:
         with st.container(border=True):
             head, tail = st.columns([3, 1])
@@ -869,15 +889,10 @@ def workspace() -> None:
                 st.session_state["ws_open"] = item["name"]
                 st.session_state["ws_mode"] = "open"
                 st.rerun()
-            if item["runs"] == 0:
-                if tail.button(t("ws.delete"), key=f"del_{item['name']}",
-                               use_container_width=True):
-                    try:
-                        auth.delete_project(user, item["name"])
-                    except ValueError as exc:
-                        st.error(t(str(exc)))
-                    else:
-                        st.rerun()
+            if tail.button(t("ws.delete"), key=f"del_{item['name']}",
+                           use_container_width=True):
+                st.session_state["ws_delete"] = item["name"]
+                st.rerun()
 
 
 def _latest_experiment(user: str | None) -> str | None:
