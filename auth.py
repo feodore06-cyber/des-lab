@@ -756,6 +756,28 @@ def set_project_status(username: str, name: str, status: str) -> None:
     _forget_cached_reads()
 
 
+DEFAULT_FORMULATION = {"des_hba": "ChCl", "des_hbd": "Glyoxylic acid", "molar_ratio": 2.0,
+                       "purity_wt_pct": 98.0, "water_wt_pct": 0.0}
+
+
+def project_formulation(username: str | None, name: str) -> dict:
+    """The formulation a project was started with; every experiment inherits it."""
+    mapping = _local_projects().get("_formulation") or {}
+    stored = mapping.get(f"{username}::{name}") or {}
+    merged = dict(DEFAULT_FORMULATION)
+    merged.update({key: value for key, value in stored.items() if value not in (None, "")})
+    return merged
+
+
+def set_project_formulation(username: str, name: str, formulation: dict) -> None:
+    raw = _local_projects()
+    mapping = raw.get("_formulation") or {}
+    mapping[f"{username}::{name}"] = dict(formulation)
+    raw["_formulation"] = mapping
+    _save_local_projects(raw)
+    _forget_cached_reads()
+
+
 def _projects_file() -> Path:
     return data_root() / "projects.json"
 

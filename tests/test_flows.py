@@ -78,14 +78,14 @@ class WorkspaceFlows(unittest.TestCase):
 
     def test_new_experiment_opens_the_form_without_leaving_the_page(self):
         at = fresh_at()
-        at = press(at, "New experiment")
+        at = press(at, "New project")
         self.assertEqual(exceptions(at), [], "the button must not raise StreamlitPageNotFoundError")
         labels = [field.label for field in at.text_input]
         self.assertIn("Sample ID", labels, "the record form is on screen")
 
     def test_creating_a_project_does_not_instantiate_a_widget_twice(self):
         at = fresh_at()
-        at = press(at, "New experiment")
+        at = press(at, "New project")
         self.assertEqual(exceptions(at), [])
         # type a project name into the expander form and submit it
         fields = [field for field in at.text_input if field.label == "Project name"]
@@ -98,14 +98,14 @@ class WorkspaceFlows(unittest.TestCase):
 
     def test_opening_an_experiment_shows_its_own_panel(self):
         at = fresh_at()
-        at = press(at, "Open experiment")
+        at = press(at, "Open project")
         self.assertEqual(exceptions(at), [])
         markup = " ".join(str(m.value) for m in at.markdown)
         self.assertTrue("wood" in markup or "straw" in markup, "the experiment name should be shown")
 
     def test_the_experiment_report_has_the_five_tabs(self):
         at = fresh_at()
-        at = press(at, "Open experiment")
+        at = press(at, "Open project")
         self.assertEqual(exceptions(at), [])
         labels = [tab.label for tab in at.tabs]
         for wanted in ("Overview", "Formulation", "Process", "Results", "Records"):
@@ -113,7 +113,7 @@ class WorkspaceFlows(unittest.TestCase):
 
     def test_the_report_shows_its_traceability_line_and_exports(self):
         at = fresh_at()
-        at = press(at, "Open experiment")
+        at = press(at, "Open project")
         self.assertEqual(exceptions(at), [])
         captions = " ".join(str(item.value) for item in at.caption)
         self.assertIn("Last updated", captions, "every report must say when and by whom")
@@ -122,7 +122,7 @@ class WorkspaceFlows(unittest.TestCase):
 
     def test_continue_latest_opens_something(self):
         at = fresh_at()
-        at = press(at, "Continue latest experiment")
+        at = press(at, "Continue latest project")
         self.assertEqual(exceptions(at), [])
 
 

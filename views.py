@@ -757,6 +757,25 @@ def _experiment_panel(user: str | None, name: str) -> None:
         st.dataframe(part[keep], width="stretch", hide_index=True)
 
     with tab_formulation:
+        current = auth.project_formulation(user, name)
+        st.caption(t("exp.formulation_setting"))
+        with st.form(f"formulation_{name}"):
+            a, b, c = st.columns(3)
+            hba = a.text_input(t("res.hba"), value=str(current["des_hba"]))
+            hbd = b.text_input(t("res.hbd"), value=str(current["des_hbd"]))
+            ratio = c.number_input(t("res.ratio"), min_value=0.0, value=float(current["molar_ratio"]),
+                                   step=0.5, format="%.2f", help=t("res.ratio_help"))
+            a, b, c = st.columns(3)
+            purity = a.number_input(t("res.purity"), min_value=0.0, max_value=100.0,
+                                    value=float(current["purity_wt_pct"]), step=1.0,
+                                    format="%.1f")
+            water = b.number_input(t("res.water"), min_value=0.0, max_value=100.0,
+                                   value=float(current["water_wt_pct"]), step=0.5, format="%.2f")
+            if st.form_submit_button(t("exp.formulation_save")):
+                auth.set_project_formulation(user, name, {
+                    "des_hba": hba.strip(), "des_hbd": hbd.strip(), "molar_ratio": float(ratio),
+                    "purity_wt_pct": float(purity), "water_wt_pct": float(water)})
+                st.success(t("exp.formulation_saved"))
         columns = [column for column in ("sample_id", "des_hba", "des_hbd", "molar_ratio",
                                          "purity_wt_pct", "water_wt_pct", "feedstock")
                    if column in part.columns]
@@ -897,20 +916,15 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         sample_id = left.text_input(t("res.sample_id"), value=_next_sample_id(saved), key="run_sample")
         feedstock = right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
                                      key="run_feedstock")
-        st.markdown(t("res.des_block"))
-        a, b, c = st.columns(3)
-        hba = a.text_input(t("res.hba"), value="ChCl", key="run_hba")
-        hbd = b.text_input(t("res.hbd"), value="Glyoxylic acid", key="run_hbd")
-        ratio = c.number_input(t("res.ratio"), min_value=0.0, value=2.0, step=0.5,
-                               format="%.2f", key="run_ratio", help=t("res.ratio_help"))
-        a, b, c = st.columns(3)
-        purity = a.number_input(t("res.purity"), min_value=0.0, max_value=100.0, value=98.0,
-                                step=1.0, format="%.1f", key="run_purity",
-                                help=t("res.range_hint"))
-        water = b.number_input(t("res.water"), min_value=0.0, max_value=100.0, value=0.0,
-                               step=0.5, format="%.2f", key="run_water",
-                               help=t("res.range_hint"))
-        replicate = c.number_input(t("res.replicate"), min_value=1, value=1, step=1, key="run_replicate")
+        formulation = auth.project_formulation(user, project)
+        st.caption(t("res.project_formulation", hba=formulation["des_hba"],
+                     hbd=formulation["des_hbd"], ratio=formulation["molar_ratio"],
+                     purity=formulation["purity_wt_pct"]))
+        hba, hbd = formulation["des_hba"], formulation["des_hbd"]
+        ratio, purity = formulation["molar_ratio"], formulation["purity_wt_pct"]
+        water = formulation["water_wt_pct"]
+        replicate = st.number_input(t("res.replicate"), min_value=1, value=1, step=1,
+                                    key="run_replicate")
         a, b, c, d = st.columns(4)
         biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1,
                                  format="%.4f", key="run_biomass")
