@@ -392,6 +392,13 @@ def _library_results(query: str, since, citations: int, sort: str, limit: int) -
 
 
 def library() -> None:
+    if st.session_state.get("compare_inline"):
+        if st.button("← " + t("lib.back_to_papers"), key="leave_compare"):
+            st.session_state["compare_inline"] = False
+            st.rerun()
+        compare_page()
+        return
+
     st.markdown(t("lib.title"))
     st.caption(t("lib.sub"))
     with st.form("paper_search"):
@@ -455,7 +462,8 @@ def library() -> None:
             st.session_state["compare_ref"] = {"title": paper["doi"] or paper["title"],
                                                "title_text": paper["title"]}
             st.session_state.pop("compare_outcome", None)
-            _goto("compare")
+            st.session_state["compare_inline"] = True
+            st.rerun()
         st.divider()
 
 
