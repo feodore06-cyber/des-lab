@@ -1381,6 +1381,12 @@ def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary
 
 def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     """Merge a source, check the data, summarise it and draw the figure."""
+    # the source radio keeps its value across pages; when the project changes, go back to the
+    # project's own rows instead of silently showing the bundled sample
+    if st.session_state.get("source_project") != project:
+        st.session_state["source_project"] = project
+        st.session_state["source"] = t("res.src_saved")
+
     sources = []
     if user:
         sources.append(("saved", t("res.src_saved")))
