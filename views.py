@@ -709,38 +709,102 @@ def _latest_experiment(user: str | None) -> str | None:
 
 
 def _experiment_panel(user: str | None, name: str) -> None:
-    """Everything known about one experiment, on one page."""
+    """One experiment, read like a report: overview, formulation, process, results, records."""
     frame = auth.load_results(user)
     if frame is None or frame.empty:
         st.info(t("res.empty_records"))
         return
+    frame = frame.copy()
     if "project" not in frame.columns:
         frame = frame.assign(project=auth.DEFAULT_PROJECT)
-    part = frame[frame["project"].fillna(auth.DEFAULT_PROJECT) == name]
+    frame["project"] = frame["project"].fillna(auth.DEFAULT_PROJECT)
+    part = frame[frame["project"] == name].reset_index(drop=True)
     state = auth.project_statuses(user).get(name, "In progress")
 
-    st.markdown(f"### {name}")
-    st.caption(_status_label(state))
+    head, badge = st.columns([4, 1], vertical_alignment="center")
+    head.markdown(f"### {name}")
+    labels = [_status_label(item) for item in auth.PROJECT_STATUSES]
+    current = _status_label(state)
+    with badge:
+        picked = st.selectbox(t("exp.status"), labels,
+                              index=labels.index(current) if current in labels else 1,
+                              key=f"panel_status_{name}", label_visibility="collapsed")
+    wanted = dict(zip(labels, auth.PROJECT_STATUSES))[picked]
+    if wanted != state:
+        auth.set_project_status(user, name, wanted)
+        st.rerun()
 
     if part.empty:
         st.info(t("ws.none"))
         return
 
+    tab_overview, tab_formulation, tab_process, tab_results, tab_records = st.tabs(
+        [t("exp.tab_overview"), t("exp.tab_formulation"), t("exp.tab_process"),
+         t("exp.tab_results"), t("exp.tab_records")])
+
     latest = part.iloc[-1]
-    columns = st.columns(3)
-    columns[0].metric(t("res.lignin_yield"), f"{float(latest.get('lignin_yield_pct') or 0):.2f} %")
-    columns[1].metric(t("res.lignin_mg"), f"{float(latest.get('lignin_mg') or 0):.1f} mg")
-    columns[2].metric(t("ws.runs_label"), len(part))
+    with tab_overview:
+        columns = st.columns(3)
+        columns[0].metric(t("res.lignin_yield"),
+                          f"{float(latest.get('lignin_yield_pct') or 0):.2f} %")
+        columns[1].metric(t("res.lignin_mg"), f"{float(latest.get('lignin_mg') or 0):.1f} mg")
+        columns[2].metric(t("ws.runs_label"), len(part))
+        st.caption(t("exp.key_conditions", ratio=latest.get("molar_ratio"),
+                     temp=latest.get("temperature_C"), time=latest.get("time_min"),
+                     purity=latest.get("purity_wt_pct")))
+        keep = [column for column in ("sample_id", "formulation", "lignin_yield_pct", "recorded_at")
+                if column in part.columns]
+        st.dataframe(part[keep], width="stretch", hide_index=True)
 
-    st.caption(t("exp.panel_note", date=str(latest.get("recorded_at") or "—")))
-    keep = [column for column in ("sample_id", "formulation", "molar_ratio", "biomass_g",
-                                  "lignin_mg", "lignin_yield_pct", "recorded_at")
-            if column in part.columns]
-    st.dataframe(part[keep], width="stretch", hide_index=True)
+    with tab_formulation:
+        columns = [column for column in ("sample_id", "des_hba", "des_hbd", "molar_ratio",
+                                         "purity_wt_pct", "water_wt_pct", "feedstock")
+                   if column in part.columns]
+        st.dataframe(part[columns], width="stretch", hide_index=True)
+        st.caption(t("exp.formulation_note"))
 
-    with st.expander(t("exp.more_runs"), expanded=False):
-        _record_tab(user, name)
+    with tab_process:
+        columns = [column for column in ("sample_id", "biomass_g", "temperature_C", "time_min",
+                                         "replicate", "recorded_at") if column in part.columns]
+        st.dataframe(part[columns], width="stretch", hide_index=True)
+        st.caption(t("exp.process_note"))
 
+    with tab_results:
+        measurement = "lignin_yield_pct" if "lignin_yield_pct" in part.columns else part.columns[-1]
+        groups = ["formulation"] if "formulation" in part.columns else []
+        if groups and len(part) > 1:
+            try:
+                clean, summary, _audit = _cached_summary(part, tuple(groups), measurement)
+                figure = _cached_figure(clean, summary, tuple(groups), measurement, name,
+                                        _y_label(measurement), "#002F86", "#0B1F4B",
+                                        True, False, True, None, None, "none")
+                st.pyplot(figure, width="stretch")
+                st.dataframe(summary, width="stretch", hide_index=True)
+                st.caption(t("exp.results_note", n=len(clean)))
+            except Exception as exc:  # a bad row must not take the page down
+                st.warning(t("res.read_error", error=str(exc)[:160]))
+        else:
+            st.info(t("exp.results_single"))
+
+    with tab_records:
+        keep = [column for column in RECORD_COLUMNS if column in part.columns]
+        st.dataframe(part[keep], width="stretch", hide_index=True)
+        _photos_section(user, part)
+
+    st.divider()
+    st.caption(t("exp.traceability", date=str(latest.get("recorded_at") or "—"),
+                 who=user or "—", rows=len(part)))
+    row = st.columns(3)
+    payload = excel_export.records_workbook(part, meta={"user": user or "", "scope": name})
+    row[0].download_button(t("res.download_excel"), payload,
+                           f"{auth.folder_name(user)}_{name}.xlsx",
+                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           key=f"exp_xlsx_{name}")
+    row[1].download_button(t("res.download_table"), csv_bytes(part), f"{name}.csv", "text/csv",
+                           key=f"exp_csv_{name}")
+    if row[2].button(t("exp.add_run"), key=f"exp_add_{name}"):
+        st.session_state["ws_mode"] = "new"
+        st.rerun()
 
 def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
     """Attach pictures to a run: unlimited count, a category from the list, plus a note."""
@@ -1152,8 +1216,13 @@ def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
                                                        t("res.order_desc"), t("res.order_asc")], key="fig_order")
         order = ("given", "label", "mean_desc", "mean_asc")[[t("res.order_given"), t("res.order_label"),
                                                              t("res.order_desc"), t("res.order_asc")].index(order_label)]
-        bar_colour = b.color_picker(t("res.fig_bar_colour"), value="#002F86", key="fig_bar")
-        point_colour = c.color_picker(t("res.fig_point_colour"), value="#D8291B", key="fig_point")
+        palette = {"#0B1F4B": t("res.col_ink"), "#002F86": t("res.col_navy"),
+                   "#4A5A7A": t("res.col_slate"), "#0F7A5A": t("res.col_teal")}
+        names = list(palette.values())
+        bar_pick = b.selectbox(t("res.fig_bar_colour"), names, index=1, key="fig_bar_name")
+        point_pick = c.selectbox(t("res.fig_point_colour"), names, index=0, key="fig_point_name")
+        bar_colour = [code for code, label in palette.items() if label == bar_pick][0]
+        point_colour = [code for code, label in palette.items() if label == point_pick][0]
         a, b, c = st.columns(3)
         show_errors = a.toggle(t("res.fig_errors"), value=True, key="fig_errors")
         show_points = b.toggle(t("res.fig_points"), value=True, key="fig_points")
