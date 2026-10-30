@@ -626,7 +626,7 @@ def _render_outcome() -> None:
             reading = ai.analyse(details.get("mine", {}), details.get("theirs", {}),
                                  [t("cmp." + item["code"] + ".claim", **dict(item["params"]))
                                   for item in outcome["findings"]],
-                                 st.session_state.get("lang", "en"))
+                                 st.session_state.get(i18n.LANG_KEY, "en"))
         if reading:
             st.markdown(reading)
             st.caption(t("cmp.ai_hint"))
