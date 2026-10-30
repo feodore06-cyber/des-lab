@@ -768,6 +768,29 @@ def workspace() -> None:
         st.caption(t("ws.how"))
         name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"),
                              key="new_project_name")
+        upload = st.file_uploader(t("exp.start_from_file"), type=["csv", "xlsx", "xlsm", "xls"],
+                                  key="new_project_file")
+        incoming, mapping = None, {}
+        if upload is not None:
+            try:
+                incoming = _read_any(upload.name, upload.getvalue())[0]
+            except (ValueError, UnicodeError, pd.errors.ParserError) as exc:
+                st.error(t("res.read_error", error=t(str(exc))))
+            if incoming is not None and not incoming.empty:
+                st.caption(t("exp.start_rows", rows=len(incoming), cols=len(incoming.columns)))
+                if ai.available() and st.button(t("exp.read_columns"), key="read_columns"):
+                    with st.spinner(t("exp.ai_thinking")):
+                        pairs = ai.normalise_columns(
+                            list(incoming.columns),
+                            incoming.head(3).astype(str).to_dict("records"),
+                            st.session_state.get(i18n.LANG_KEY, "en"))
+                    st.session_state["column_map"] = pairs
+                pairs = st.session_state.get("column_map") or []
+                if pairs:
+                    st.caption(t("exp.column_map_note"))
+                    for item in pairs:
+                        st.caption(f"· {item['original']} → `{item['key']}`")
+                    mapping = {item["original"]: item["key"] for item in pairs}
         suggestion = st.session_state.get("ai_vars") or []
         if ai.available():
             if st.button(t("exp.ai_suggest"), key="ai_suggest_vars"):
@@ -783,8 +806,11 @@ def workspace() -> None:
             else:
                 st.caption(t("exp.ai_suggest_hint"))
 
-        options = list(dict.fromkeys(list(COLUMN_CHOICES) + [item["key"] for item in suggestion]))
-        default = [item["key"] for item in suggestion] or list(auth.DEFAULT_VARIABLES)
+        mapped_keys = list(mapping.values())
+        options = list(dict.fromkeys(list(COLUMN_CHOICES) + [item["key"] for item in suggestion]
+                                     + mapped_keys))
+        default = (mapped_keys or [item["key"] for item in suggestion]
+                   or list(auth.DEFAULT_VARIABLES))
         picked = st.multiselect(t("exp.variables"), options,
                                 default=[value for value in default if value in options],
                                 help=t("exp.variables_more_ph"), key="new_project_vars",
@@ -798,10 +824,17 @@ def workspace() -> None:
                 created = auth.create_project(user, name)
                 wanted = list(picked) + [item.strip() for item in extra.split(",") if item.strip()]
                 auth.set_project_variables(user, created, wanted or list(auth.DEFAULT_VARIABLES))
+                if incoming is not None and not incoming.empty:
+                    prepared = incoming.rename(columns=mapping) if mapping else incoming.copy()
+                    prepared["project"] = created
+                    if "recorded_at" not in prepared.columns:
+                        prepared["recorded_at"] = time.strftime("%Y-%m-%d %H:%M")
+                    auth.save_results(user, prepared, append=False)
             except ValueError as exc:
                 st.error(t(str(exc)))
             else:
                 st.session_state.pop("ai_vars", None)
+                st.session_state.pop("column_map", None)
                 st.session_state["ws_open"] = created
                 st.session_state["project_wanted"] = created
                 st.session_state["ws_mode"] = "open"

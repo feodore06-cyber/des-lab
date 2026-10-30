@@ -280,3 +280,53 @@ def suggest_variables(project_name: str, language: str = "en") -> list:
         elif isinstance(item, str):
             clean.append({"key": " ".join(item.split()).replace(" ", "_")[:32], "why": ""})
     return [item for item in clean if item["key"]]
+
+COLUMNS_SYSTEM = (
+    "You receive the header row of a spreadsheet from a biomaterials lab, plus a few example rows. "
+    "Map every column to a clean snake_case key with its unit in the name when the unit is evident "
+    "(temperature_C, time_min, lignin_yield_pct). Keep the original order. If two columns mean the "
+    "same thing, give them the same key. Return a JSON array of objects with 'original' and 'key'. "
+    "No prose, one entry per input column."
+)
+
+
+def normalise_columns(columns: list, sample: list, language: str = "en") -> list:
+    """Return [{original, key}] for a spreadsheets headers, or [] when no model is configured."""
+    config = settings()
+    if not config["key"] or not columns:
+        return []
+    payload = {
+        "model": config["model"],
+        "temperature": 0.0,
+        "messages": [
+            {"role": "system", "content": COLUMNS_SYSTEM},
+            {"role": "user", "content": json.dumps(
+                {"columns": [str(value) for value in columns], "sample_rows": sample[:3],
+                 "answer_in": "Chinese" if language == "zh" else "English"},
+                ensure_ascii=False, default=str)},
+        ],
+    }
+    request = urllib.request.Request(
+        f"{config['base']}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {config['key']}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(raw)
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    pairs = []
+    for item in parsed:
+        if isinstance(item, dict) and item.get("original") and item.get("key"):
+            pairs.append({"original": str(item["original"]),
+                          "key": " ".join(str(item["key"]).split()).replace(" ", "_")[:32]})
+    return pairs
