@@ -1423,7 +1423,9 @@ def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     sources = []
     if user:
         sources.append(("saved", t("res.src_saved")))
-    sources += [("sample", t("res.src_sample")), ("demo", t("res.src_demo")), ("upload", t("res.src_upload"))]
+    # no bundled sample and no synthetic demo: showing a number that does not belong to this
+    # project is worse than showing nothing
+    sources += [("upload", t("res.src_upload"))]
     label = st.radio(t("res.source"), [text for _, text in sources], horizontal=True, key="source")
     kind = dict((text, key) for key, text in sources)[label]
 
@@ -1439,15 +1441,6 @@ def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         st.caption(t("res.loaded", rows=len(saved), path=location))
         files = [(f"{auth.folder_name(user)}_results.csv", csv_bytes(saved))]
         encoding, data_kind = "utf-8-sig", "user_saved"
-    elif kind == "sample":
-        st.warning(t("res.sample_warning"))
-        st.info(t("res.sample_info"))
-        files = [("my_des_runs.csv", MY_CSV.read_bytes())]
-        encoding, data_kind = "utf-8-sig", "my_experiments"
-    elif kind == "demo":
-        st.warning(t("res.demo_warning"))
-        files = [("demo_lignin.csv", DEMO_CSV.read_bytes())]
-        encoding, data_kind = "utf-8-sig", "synthetic_demo"
     else:
         uploads = st.file_uploader(t("res.uploader"), type=["csv", "xlsx", "xlsm", "xls"],
                                    accept_multiple_files=True)

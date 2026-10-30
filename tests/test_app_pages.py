@@ -143,30 +143,6 @@ class PageTests(unittest.TestCase):
         self.assertEqual(list((auth.user_dir("Thena") / "recipes").glob("*")), [])
 
     # --------------------------------------------------------------------- results
-    def test_results_page_sample_runs(self):
-        at = run(page_results)
-        self.assertEqual(errors(at), [])
-        at.radio(key="source").set_value(SAMPLE_RUNS).run()
-        self.assertEqual(errors(at), [])
-        summary = at.dataframe[-1].value
-        self.assertEqual(list(summary["n"]), [1, 1, 1])
-        self.assertTrue(summary["sd"].isna().all(), "n=1 must leave sd empty")
-        self.assertEqual(list(summary["formulation"]), ["ChCl-GA 1:1", "ChCl-GA 1:2", "ChCl-GA 2:1"])
-        for got, want in zip(summary["mean"], [1.13, 1.94, 0.78]):
-            self.assertAlmostEqual(got, want, delta=0.005)
-        labels = [b.label for b in at.download_button]
-        self.assertIn("Download PNG · 300 dpi", labels)
-        self.assertIn("Download SVG · vector", labels)
-
-    def test_results_page_demo_has_error_bars(self):
-        at = run(page_results)
-        at.radio(key="source").set_value("Fictitious demo (9 rows)").run()
-        self.assertEqual(errors(at), [])
-        summary = at.dataframe[-1].value
-        self.assertEqual(list(summary["n"]), [3, 3, 3])
-        for sd in summary["sd"]:
-            self.assertAlmostEqual(sd, 0.05)
-
     def test_results_page_starts_empty_for_a_new_user(self):
         at = run(page_results)
         self.assertEqual(errors(at), [])
@@ -405,13 +381,6 @@ class PageTests(unittest.TestCase):
         delete = [b for b in at.button if b.label == "Delete all my rows"][0]
         self.assertTrue(delete.disabled, "the destructive button starts disabled")
         self.assertIn("Download my records (CSV)", [b.label for b in at.download_button])
-
-    def test_quality_warning_names_groups_without_replicates(self):
-        at = run(page_results)
-        at.radio(key="source").set_value(SAMPLE_RUNS).run()
-        self.assertEqual(errors(at), [])
-        warnings = " ".join(str(w.value) for w in at.warning)
-        self.assertIn("n=1", warnings)
 
     def test_creating_an_intern_requires_a_typed_password(self):
         at = run(page_guide, user="Chuanyu")
