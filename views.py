@@ -413,16 +413,25 @@ def library() -> None:
         limit = d.number_input(t("lib.limit"), min_value=5, max_value=30, value=10, step=5)
         st.caption(t("lib.since_help"))
         submitted = st.form_submit_button(t("lib.search"), type="primary")
-    if not submitted or not query.strip():
-        st.info(t("lib.how"))
-        return
-
     mapping = {t("lib.by_relevance"): "relevant", t("lib.by_citations"): "cited",
                t("lib.by_newest"): "newest"}
+    if submitted and query.strip():
+        st.session_state["lib_last"] = {"query": query.strip(), "since": since,
+                                        "citations": int(citations),
+                                        "order": mapping.get(order, "relevant"),
+                                        "limit": int(limit)}
+    last = st.session_state.get("lib_last")
+    if not last:
+        st.info(t("lib.how"))
+        return
+    query = last["query"]
+    since = last["since"]
+    citations = last["citations"]
+
     try:
         with st.spinner(t("lib.searching")):
-            found = _library_results(query.strip(), since, int(citations),
-                                     mapping.get(order, "relevant"), int(limit))
+            found = _library_results(query, since, citations,
+                                     last["order"], last["limit"])
     except papers.PaperError as exc:
         st.error(t("lib.failed", error=str(exc)))
         return
@@ -462,8 +471,7 @@ def library() -> None:
             st.session_state["compare_ref"] = {"title": paper["doi"] or paper["title"],
                                                "title_text": paper["title"]}
             st.session_state.pop("compare_outcome", None)
-            st.session_state["compare_inline"] = True
-            st.rerun()
+            _goto("compare")
         st.divider()
 
 
@@ -736,10 +744,13 @@ PAGE_OBJECTS: dict = {}
 
 
 def _goto(key: str) -> None:
-    """Switch to a registered page by key (file paths do not work for function-defined pages)."""
+    """Go to a page by key. ``switch_page`` needs the page object, not a file path."""
     page = PAGE_OBJECTS.get(key)
     if page is None:
-        st.error(f"navigation target {key!r} is not registered")
+        # the registry is filled by Hello.py just before the page runs; if it is missing we still
+        # show the content rather than leaving the button looking dead
+        st.session_state["compare_inline"] = True
+        st.rerun()
         return
     st.switch_page(page)
 

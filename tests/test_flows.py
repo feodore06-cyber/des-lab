@@ -73,6 +73,54 @@ class PublicPageTests(unittest.TestCase):
         self.assertNotIn("ChCl:GA 1:2", blob, "a stored formulation must never reach the public page")
 
 
+class NavigationTests(unittest.TestCase):
+    """A button that opens the comparison must never look dead."""
+
+    def setUp(self):
+        os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
+        auth.ensure_store()
+        auth.save_results("Chuanyu", pd.DataFrame([
+            {"sample_id": "EXP-01", "project": "General", "lignin_yield_pct": 1.9,
+             "molar_ratio": 2.0, "temperature_C": 80, "time_min": 60}]), append=False)
+
+    def _papers_page(self):
+        import papers
+
+        def fake_search(query, limit=12, since=None, min_citations=0, sort="relevant"):
+            return [{"title": "A DES lignin paper", "year": 2024, "venue": "Journal",
+                     "authors": "A. Author", "citations": 12, "doi": "10.1/x",
+                     "url": "https://doi.org/10.1/x",
+                     "abstract": "Lignin yield reached 6.1 % at 90 C for 120 min, ratio 1:2.",
+                     "score": 1.0}]
+
+        papers.search = fake_search
+
+        def entry():
+            import views
+
+            views.library()
+
+        at = AppTest.from_function(entry, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.run()
+        return at
+
+    def test_the_button_opens_the_comparison_rather_than_doing_nothing(self):
+        at = self._papers_page()
+        self.assertEqual(exceptions(at), [])
+        fields = [item for item in at.text_input if item.label == "Topic, title or author"]
+        self.assertTrue(fields, f"no query field on the paper screen: {[f.label for f in at.text_input]}")
+        fields[0].set_value("des lignin").run()
+        press(at, "Find papers")
+        self.assertEqual(exceptions(at), [])
+        self.assertIn("Compare with my data", [button.label for button in at.button])
+        press(at, "Compare with my data")
+        self.assertEqual(exceptions(at), [])
+        markup = " ".join(str(item.value) for item in at.markdown)
+        self.assertIn("Compare with a paper", markup,
+                      "pressing the button must open the comparison screen")
+
+
 class WorkspaceFlows(unittest.TestCase):
     def setUp(self):
         os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
