@@ -176,8 +176,8 @@ STYLE = """
   .bm-hero-sub { font: 400 1.06rem/1.6 system-ui, "Segoe UI", sans-serif; color: #5A6478;
                  margin: 1.15rem 0 0 0; }
 
-  .bm-positioning { max-width: 40rem; margin: 2.4rem auto 0; text-align: center;
-                    font: 400 1rem/1.65 system-ui, "Segoe UI", sans-serif; color: #33415C; }
+  .bm-positioning { max-width: 44rem; margin: 3.4rem auto 0; text-align: center;
+                    font: 400 1.02rem/1.7 Georgia, "Times New Roman", serif; color: #33415C; }
 
   .bm-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.4rem;
              max-width: 1020px; margin: 2.2rem auto 0; padding-top: 1.9rem;

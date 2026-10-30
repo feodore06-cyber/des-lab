@@ -34,8 +34,6 @@ def landing() -> None:
             st.query_params["view"] = "signin"
             st.rerun()
 
-    st.markdown(f'<p class="bm-positioning">{t("land.positioning")}</p>', unsafe_allow_html=True)
-
     st.markdown(f'''
       <div class="bm-cols">
         <div>
@@ -54,5 +52,6 @@ def landing() -> None:
           <div class="bm-col-d">{t("land.p3b")}</div>
         </div>
       </div>
+      <p class="bm-positioning">{t("land.positioning")}</p>
       <p class="bm-foot">{t("land.footer")}</p>
     ''', unsafe_allow_html=True)
