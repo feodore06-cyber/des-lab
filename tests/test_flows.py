@@ -102,18 +102,17 @@ class WorkspaceFlows(unittest.TestCase):
         markup = " ".join(str(m.value) for m in at.markdown)
         self.assertIn("Good to see you, Chuanyu", markup)
 
-    def test_new_experiment_opens_the_form_without_leaving_the_page(self):
+    def test_new_project_opens_a_name_form_without_leaving_the_page(self):
         at = fresh_at()
         at = press(at, "New project")
         self.assertEqual(exceptions(at), [], "the button must not raise StreamlitPageNotFoundError")
         labels = [field.label for field in at.text_input]
-        self.assertIn("Sample ID", labels, "the record form is on screen")
+        self.assertIn("Project name", labels, "a new project starts with its name")
 
     def test_creating_a_project_does_not_instantiate_a_widget_twice(self):
         at = fresh_at()
         at = press(at, "New project")
         self.assertEqual(exceptions(at), [])
-        # type a project name into the expander form and submit it
         fields = [field for field in at.text_input if field.label == "Project name"]
         self.assertTrue(fields, f"no project-name field; have {[f.label for f in at.text_input]}")
         fields[0].set_value("hot press").run()
@@ -146,13 +145,6 @@ class WorkspaceFlows(unittest.TestCase):
         downloads = [button.label for button in at.download_button]
         self.assertTrue(any("Excel" in label for label in downloads), downloads)
 
-    def test_continue_latest_opens_something(self):
-        at = fresh_at()
-        at = press(at, "Continue latest project")
-        self.assertEqual(exceptions(at), [])
-
-
-class CompareFlows(unittest.TestCase):
     def setUp(self):
         os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
         try:

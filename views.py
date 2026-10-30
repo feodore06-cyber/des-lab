@@ -342,42 +342,17 @@ def _read_any(name: str, content: bytes) -> tuple[pd.DataFrame, dict | None]:
 
 
 def _project_picker(user: str | None) -> str:
-    """The project every write goes into and every read is filtered by."""
+    """Choose the project a new experiment goes into. Creating one happens on the workspace."""
     if not user:
         return auth.DEFAULT_PROJECT
     projects = auth.list_projects(user)
-    # a freshly created project becomes the default on the next run; assigning the widget's own key
-    # after it exists raises StreamlitWidgetAlreadyInstantiatedError
     wanted = st.session_state.pop("project_wanted", None)
     if wanted and wanted in projects:
         st.session_state["project_pick"] = wanted
     if st.session_state.get("project_pick") not in projects:
         st.session_state["project_pick"] = projects[0]
-    choice = st.selectbox(t("res.project"), projects, key="project_pick",
-                          help=t("res.project_help"))
-    states = auth.project_statuses(user)
-    current = states.get(choice, "In progress")
-    labels = [_status_label(item) for item in auth.PROJECT_STATUSES]
-    picked = st.selectbox(t("exp.status"), labels,
-                          index=max(0, labels.index(_status_label(current)))
-                          if _status_label(current) in labels else 1,
-                          key=f"status_{choice}")
-    wanted = dict(zip(labels, auth.PROJECT_STATUSES))[picked]
-    if wanted != current:
-        auth.set_project_status(user, choice, wanted)
-    with st.expander(t("res.project_new"), expanded=False):
-        with st.form("new_project", clear_on_submit=True):
-            name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"))
-            if st.form_submit_button(t("res.project_create")):
-                try:
-                    created = auth.create_project(user, name)
-                except ValueError as exc:
-                    st.error(t(str(exc)))
-                else:
-                    st.success(t("res.project_created", name=created))
-                    st.session_state["project_wanted"] = created
-                    st.rerun()
-    return choice
+    return st.selectbox(t("res.project"), projects, key="project_pick",
+                        help=t("res.project_help"))
 
 
 def _search_section(frame: pd.DataFrame) -> None:
@@ -637,8 +612,27 @@ def workspace() -> None:
         if st.button("← " + t("ws.back"), key="ws_back"):
             st.session_state["ws_mode"] = "home"
             st.rerun()
-        project = _project_picker(user)
-        _record_tab(user, project)
+        st.markdown(f"### {t('ws.new')}")
+        st.caption(t("ws.how"))
+        with st.form("create_project", clear_on_submit=True):
+            name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"))
+            if st.form_submit_button(t("res.project_create"), type="primary"):
+                try:
+                    created = auth.create_project(user, name)
+                except ValueError as exc:
+                    st.error(t(str(exc)))
+                else:
+                    st.session_state["ws_open"] = created
+                    st.session_state["project_wanted"] = created
+                    st.session_state["ws_mode"] = "open"
+                    st.rerun()
+        return
+
+    if mode == "add":
+        if st.button("← " + t("ws.back"), key="ws_back_add"):
+            st.session_state["ws_mode"] = "open"
+            st.rerun()
+        _record_tab(user, st.session_state.get("ws_open", auth.DEFAULT_PROJECT))
         return
 
     if mode == "open":
@@ -652,19 +646,10 @@ def workspace() -> None:
     st.markdown(f"### {t('ws.greeting', user=auth.display_name(user))}")
     st.caption(t("ws.question"))
 
-    left, right = st.columns(2)
-    if left.button(t("ws.new"), type="primary", use_container_width=True, key="ws_new"):
+    action = st.columns([1, 2])
+    if action[0].button(t("ws.new"), type="primary", use_container_width=True, key="ws_new"):
         st.session_state["ws_mode"] = "new"
         st.rerun()
-    if right.button(t("ws.continue"), use_container_width=True, key="ws_continue"):
-        latest = _latest_experiment(user)
-        if latest:
-            st.session_state["ws_open"] = latest
-            st.session_state["ws_mode"] = "open"
-            st.rerun()
-        else:
-            st.session_state["ws_mode"] = "new"
-            st.rerun()
 
     st.divider()
     st.markdown(f"#### {t('ws.recent')}")
@@ -832,7 +817,8 @@ def _experiment_panel(user: str | None, name: str) -> None:
     row[1].download_button(t("res.download_table"), csv_bytes(part), f"{name}.csv", "text/csv",
                            key=f"exp_csv_{name}")
     if row[2].button(t("exp.add_run"), key=f"exp_add_{name}"):
-        st.session_state["ws_mode"] = "new"
+        st.session_state["ws_open"] = name
+        st.session_state["ws_mode"] = "add"
         st.rerun()
 
 def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
