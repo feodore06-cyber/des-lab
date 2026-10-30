@@ -103,6 +103,23 @@ class WorkspaceFlows(unittest.TestCase):
         markup = " ".join(str(m.value) for m in at.markdown)
         self.assertTrue("wood" in markup or "straw" in markup, "the experiment name should be shown")
 
+    def test_the_experiment_report_has_the_five_tabs(self):
+        at = fresh_at()
+        at = press(at, "Open experiment")
+        self.assertEqual(exceptions(at), [])
+        labels = [tab.label for tab in at.tabs]
+        for wanted in ("Overview", "Formulation", "Process", "Results", "Records"):
+            self.assertIn(wanted, labels, f"missing tab {wanted}: {labels}")
+
+    def test_the_report_shows_its_traceability_line_and_exports(self):
+        at = fresh_at()
+        at = press(at, "Open experiment")
+        self.assertEqual(exceptions(at), [])
+        captions = " ".join(str(item.value) for item in at.caption)
+        self.assertIn("Last updated", captions, "every report must say when and by whom")
+        downloads = [button.label for button in at.download_button]
+        self.assertTrue(any("Excel" in label for label in downloads), downloads)
+
     def test_continue_latest_opens_something(self):
         at = fresh_at()
         at = press(at, "Continue latest experiment")
