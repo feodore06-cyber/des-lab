@@ -761,24 +761,43 @@ def workspace() -> None:
             st.rerun()
         st.markdown(f"### {t('ws.new')}")
         st.caption(t("ws.how"))
-        with st.form("create_project", clear_on_submit=True):
-            name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"))
-            picked = st.multiselect(t("exp.variables"), list(COLUMN_CHOICES),
-                                    default=list(auth.DEFAULT_VARIABLES),
-                                    help=t("exp.variables_help"))
-            extra = st.text_input(t("exp.variables_more"), placeholder=t("exp.variables_more_ph"))
-            if st.form_submit_button(t("res.project_create"), type="primary"):
-                try:
-                    created = auth.create_project(user, name)
-                    wanted = list(picked) + [item.strip() for item in extra.split(",") if item.strip()]
-                    auth.set_project_variables(user, created, wanted or list(auth.DEFAULT_VARIABLES))
-                except ValueError as exc:
-                    st.error(t(str(exc)))
-                else:
-                    st.session_state["ws_open"] = created
-                    st.session_state["project_wanted"] = created
-                    st.session_state["ws_mode"] = "open"
-                    st.rerun()
+        name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"),
+                             key="new_project_name")
+        suggestion = st.session_state.get("ai_vars") or []
+        if ai.available():
+            if st.button(t("exp.ai_suggest"), key="ai_suggest_vars"):
+                with st.spinner(t("exp.ai_thinking")):
+                    suggestion = ai.suggest_variables(
+                        name, st.session_state.get(i18n.LANG_KEY, "en"))
+                st.session_state["ai_vars"] = suggestion
+            if suggestion:
+                st.caption(t("exp.ai_suggest_note"))
+                for item in suggestion:
+                    st.caption(f"· `{item['key']}` — {item['why']}" if item["why"]
+                               else f"· `{item['key']}`")
+            else:
+                st.caption(t("exp.ai_suggest_hint"))
+
+        options = list(dict.fromkeys(list(COLUMN_CHOICES) + [item["key"] for item in suggestion]))
+        default = [item["key"] for item in suggestion] or list(auth.DEFAULT_VARIABLES)
+        picked = st.multiselect(t("exp.variables"), options,
+                                default=[value for value in default if value in options],
+                                help=t("exp.variables_help"), key="new_project_vars")
+        extra = st.text_input(t("exp.variables_more"), placeholder=t("exp.variables_more_ph"),
+                              key="new_project_extra")
+        if st.button(t("res.project_create"), type="primary", key="create_project_btn"):
+            try:
+                created = auth.create_project(user, name)
+                wanted = list(picked) + [item.strip() for item in extra.split(",") if item.strip()]
+                auth.set_project_variables(user, created, wanted or list(auth.DEFAULT_VARIABLES))
+            except ValueError as exc:
+                st.error(t(str(exc)))
+            else:
+                st.session_state.pop("ai_vars", None)
+                st.session_state["ws_open"] = created
+                st.session_state["project_wanted"] = created
+                st.session_state["ws_mode"] = "open"
+                st.rerun()
         return
 
     if mode == "add":

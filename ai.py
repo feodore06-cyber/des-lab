@@ -225,3 +225,58 @@ def extract_from_paper(title: str, abstract: str) -> dict:
             json.JSONDecodeError):
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+SUGGEST_SYSTEM = (
+    "You design the data table for a new experiment in a biomaterials lab. Given a short project "
+    "name, list the variables worth recording for every run. Return a JSON array of objects, each "
+    "with 'key' (snake_case, unit in the name when it applies, e.g. temperature_C, time_min, "
+    "stirring_rpm) and 'why' (at most 8 words, in the requested language). Between 4 and 9 entries. "
+    "Prefer measurable numbers over free text. Always include the result the lab would report. "
+    "No duplicates, no prose outside the JSON."
+)
+
+
+def suggest_variables(project_name: str, language: str = "en") -> list:
+    """Ask for variable keys that fit a project name. Returns [] when no model is configured."""
+    name = " ".join(str(project_name or "").split())
+    if not name:
+        return []
+    config = settings()
+    if not config["key"]:
+        return []
+    payload = {
+        "model": config["model"],
+        "temperature": 0.4,
+        "messages": [
+            {"role": "system", "content": SUGGEST_SYSTEM},
+            {"role": "user", "content": json.dumps(
+                {"project": name, "answer_in": "Chinese" if language == "zh" else "English"},
+                ensure_ascii=False)},
+        ],
+    }
+    request = urllib.request.Request(
+        f"{config['base']}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {config['key']}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(raw)
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    clean = []
+    for item in parsed:
+        if isinstance(item, dict) and item.get("key"):
+            key = " ".join(str(item["key"]).split()).replace(" ", "_")[:32]
+            clean.append({"key": key, "why": str(item.get("why") or "")[:60]})
+        elif isinstance(item, str):
+            clean.append({"key": " ".join(item.split()).replace(" ", "_")[:32], "why": ""})
+    return [item for item in clean if item["key"]]
