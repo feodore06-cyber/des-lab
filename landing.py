@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""The public page: what this is, why it can be trusted, and the one thing to do next.
+"""The public page.
 
-No stored data is shown here. Not even a sample: the numbers on a public page must never come from
-anybody's record, so the illustration is a schematic instead of a chart of real runs.
+Composition rules: one centred column of measure ~46rem, one brand bar above it, one action below
+the headline, and a three-column band aligned to the same width. No data of any kind is shown.
 """
 from __future__ import annotations
 
@@ -13,34 +13,46 @@ from i18n import t
 
 
 def landing() -> None:
-    """Render the signed-out page. One action, no stored data, no decorative image."""
-    top = st.columns([3, 1], vertical_alignment="center")
-    top[0].markdown(
-        '<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
-        '<span class="bm-wordmark">BioMat Lab</span></div>',
-        unsafe_allow_html=True)
-    i18n.language_switch(top[1])
+    bar = st.columns([5, 1.15], vertical_alignment="center")
+    bar[0].markdown('<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
+                    '<span class="bm-wordmark">BioMat Lab</span></div>', unsafe_allow_html=True)
+    i18n.language_switch(bar[1])
+    st.markdown('<div class="bm-rule"></div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="bm-hero">', unsafe_allow_html=True)
-    st.markdown(f'<h1 class="bm-hero-title">{t("land.headline")}</h1>', unsafe_allow_html=True)
-    st.markdown(f'<p class="bm-hero-sub">{t("land.sub")}</p>', unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(f'''
+      <div class="bm-hero">
+        <h1 class="bm-hero-title">{t("land.headline")}</h1>
+        <p class="bm-hero-sub">{t("land.sub")}</p>
+      </div>
+    ''', unsafe_allow_html=True)
 
-    action = st.columns([1, 2.4])
-    with action[0]:
+    st.markdown('<div style="height:.6rem"></div>', unsafe_allow_html=True)
+    middle = st.columns([1, 0.5, 1])[1]
+    with middle:
         if st.button(t("land.start"), key="land_start", type="primary", use_container_width=True):
             st.session_state["show_signin"] = True
             st.query_params["view"] = "signin"
             st.rerun()
 
-    st.divider()
     st.markdown(f'<p class="bm-positioning">{t("land.positioning")}</p>', unsafe_allow_html=True)
 
-    columns = st.columns(3)
-    for column, (title_key, body_key) in zip(columns, (("land.p1", "land.p1b"),
-                                                      ("land.p2", "land.p2b"),
-                                                      ("land.p3", "land.p3b"))):
-        column.markdown(f"**{t(title_key)}**")
-        column.caption(t(body_key))
-
-    st.caption(t("land.footer"))
+    st.markdown(f'''
+      <div class="bm-cols">
+        <div>
+          <div class="bm-col-n">01</div>
+          <div class="bm-col-t">{t("land.p1")}</div>
+          <div class="bm-col-d">{t("land.p1b")}</div>
+        </div>
+        <div>
+          <div class="bm-col-n">02</div>
+          <div class="bm-col-t">{t("land.p2")}</div>
+          <div class="bm-col-d">{t("land.p2b")}</div>
+        </div>
+        <div>
+          <div class="bm-col-n">03</div>
+          <div class="bm-col-t">{t("land.p3")}</div>
+          <div class="bm-col-d">{t("land.p3b")}</div>
+        </div>
+      </div>
+      <p class="bm-foot">{t("land.footer")}</p>
+    ''', unsafe_allow_html=True)
