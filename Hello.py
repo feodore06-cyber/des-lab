@@ -144,6 +144,17 @@ STYLE = """
     box-shadow: 0 10px 26px rgba(0, 47, 134, .45);
   }
 
+  /* ---------- the public schematic ---------- */
+  .bm-flow { display: flex; align-items: stretch; gap: .4rem; }
+  .bm-flow-step { flex: 1; display: flex; flex-direction: column; gap: .25rem;
+                  padding: .9rem .95rem; border: 1px solid #DCE4F2; border-radius: 8px;
+                  background: #FFFFFF; }
+  .bm-flow-n { font: 600 .7rem/1 ui-monospace, Consolas, monospace; color: #8C99B0;
+               letter-spacing: .08em; }
+  .bm-flow-t { font: 600 .98rem/1.3 Georgia, "Times New Roman", serif; color: #0B1F4B; }
+  .bm-flow-d { font: 400 .78rem/1.45 system-ui, "Segoe UI", sans-serif; color: #5A6478; }
+  .bm-flow-arrow { align-self: center; color: #B7C2D6; font-size: 1rem; }
+
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
     background: #FFFFFF;
@@ -341,7 +352,7 @@ def _front():
             st.rerun()
         auth.login_form(LOGO_URL)
         return
-    landing.landing(lambda: pd.read_csv(views.MY_CSV))
+    landing.landing()
 
 
 NAV = [

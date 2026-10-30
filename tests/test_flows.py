@@ -47,6 +47,32 @@ def exceptions(at: AppTest) -> list:
     return [f"{type(e).__name__}: {str(e.value)[:160]}" for e in at.exception]
 
 
+class PublicPageTests(unittest.TestCase):
+    """Nothing that belongs to a record may appear before somebody signs in."""
+
+    def test_the_public_page_shows_no_stored_data(self):
+        os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
+        auth.ensure_store()
+        auth.save_results("Chuanyu", pd.DataFrame([
+            {"sample_id": "EXP-SECRET-1", "formulation": "ChCl:GA 1:2", "project": "wood",
+             "lignin_yield_pct": 4.3219, "biomass_g": 2.88, "lignin_mg": 56.0,
+             "recorded_at": "2026-10-30 09:00"}]), append=False)
+
+        at = AppTest.from_file(str(ROOT / "Hello.py"), default_timeout=TIMEOUT)
+        at.run()
+        self.assertEqual(exceptions(at), [])
+        visible = []
+        for collection in (at.markdown, at.caption, at.text, at.dataframe, at.metric):
+            for item in collection:
+                visible.append(str(getattr(item, "value", "")))
+                visible.append(str(getattr(item, "label", "")))
+        blob = " ".join(visible)
+        self.assertIn("Make experimental work clearer", blob)
+        self.assertNotIn("EXP-SECRET-1", blob, "a saved sample ID must never reach the public page")
+        self.assertNotIn("4.3219", blob, "a stored yield must never reach the public page")
+        self.assertNotIn("ChCl:GA 1:2", blob, "a stored formulation must never reach the public page")
+
+
 class WorkspaceFlows(unittest.TestCase):
     def setUp(self):
         os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
