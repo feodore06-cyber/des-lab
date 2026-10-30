@@ -26,6 +26,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import ai
 import auth
 import chem
 import compare
@@ -615,6 +616,21 @@ def _render_outcome() -> None:
             column.metric(str(name), "—")
     st.caption(t("cmp.nothing_saved"))
     st.info(t(f"cmp.headline_{compare.headline(outcome)}"))
+
+    st.subheader(t("cmp.ai_title"))
+    if ai.available():
+        with st.spinner(t("cmp.ai_loading")):
+            reading = ai.analyse(details.get("mine", {}), details.get("theirs", {}),
+                                 [t("cmp." + item["code"] + ".claim", **dict(item["params"]))
+                                  for item in outcome["findings"]],
+                                 st.session_state.get("lang", "en"))
+        if reading:
+            st.markdown(reading)
+            st.caption(t("cmp.ai_hint"))
+        else:
+            st.caption(t("cmp.ai_off"))
+    else:
+        st.caption(t("cmp.ai_off"))
 
     st.subheader(t("cmp.explanations"))
     for item in outcome["findings"]:
