@@ -635,6 +635,30 @@ def _render_outcome() -> None:
     else:
         st.caption(t("cmp.ai_off"))
 
+    if ai.available():
+        with st.form("compare_question", clear_on_submit=False):
+            question = st.text_input(t("cmp.ask_label"), placeholder=t("cmp.ask_ph"))
+            asked = st.form_submit_button(t("cmp.ask_btn"))
+        if asked and question.strip():
+            context = {key: details.get(side, {}).get(key)
+                       for side in ("mine", "theirs")
+                       for key in ("sample_id", "formulation", "feedstock", "molar_ratio",
+                                   "purity_wt_pct", "water_wt_pct", "temperature_C", "time_min",
+                                   "biomass_g", "lignin_mg", "lignin_yield_pct")}
+            context = {"first": {k: details.get("mine", {}).get(k) for k in context if k in
+                                 details.get("mine", {})},
+                       "second": {k: details.get("theirs", {}).get(k) for k in context if k in
+                                  details.get("theirs", {})},
+                       "differences": [t("cmp." + item["code"] + ".claim", **dict(item["params"]))
+                                       for item in outcome["findings"]]}
+            with st.spinner(t("cmp.ai_loading")):
+                answer = ai.ask(question, context, st.session_state.get(i18n.LANG_KEY, "en"))
+            history = st.session_state.setdefault("compare_qa", [])
+            history.append({"q": question.strip(), "a": answer or t("cmp.ai_failed")})
+        for item in reversed(st.session_state.get("compare_qa", [])[-3:]):
+            st.markdown(f"**{item['q']}**")
+            st.markdown(item["a"])
+
     st.subheader(t("cmp.explanations"))
     for item in outcome["findings"]:
         params = dict(item["params"])

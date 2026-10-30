@@ -99,3 +99,43 @@ def analyse(mine: dict, theirs: dict, differences: list, language: str = "en") -
         return str(body["choices"][0]["message"]["content"]).strip() or None
     except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError):
         return None
+
+ASK_SYSTEM = (
+    "You are a materials-science mentor answering a follow-up question about two experiments the "
+    "user can see. Use only the numbers given. If the data cannot answer the question, say what "
+    "measurement would. Be concise (120 words), plain, and never blame the user."
+)
+
+
+def ask(question: str, context: dict, language: str = "en") -> str | None:
+    """Answer a free-form question about the comparison on screen."""
+    text = " ".join(str(question or "").split())
+    if not text:
+        return None
+    config = settings()
+    if not config["key"]:
+        return None
+    payload = {
+        "model": config["model"],
+        "temperature": 0.3,
+        "messages": [
+            {"role": "system", "content": ASK_SYSTEM},
+            {"role": "user", "content": json.dumps(
+                {"question": text, "context": context,
+                 "answer_in": "Chinese" if language == "zh" else "English"},
+                ensure_ascii=False, default=str)},
+        ],
+    }
+    request = urllib.request.Request(
+        f"{config['base']}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {config['key']}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        return str(body["choices"][0]["message"]["content"]).strip() or None
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError):
+        return None
