@@ -487,6 +487,7 @@ def _pick_run(saved, user, prefix: str, label_key: str, run_index: int = 0) -> d
 
 def compare_page() -> None:
     st.markdown(t("cmp.title"))
+    st.warning(t("cmp.disclaimer"))
     st.caption(t("cmp.sub"))
     user = auth.current_user()
     if not user:
@@ -535,23 +536,55 @@ def compare_page() -> None:
         return
 
     st.subheader(t("cmp.ref"))
+    reference = st.session_state.get("compare_ref") or {}
+    doi = str(reference.get("title") or "")
+    extracted = st.session_state.get("compare_extracted") or {}
+    if doi and not extracted and ai.available():
+        with st.spinner(t("cmp.reading_paper")):
+            work = papers.by_doi(doi)
+            if work and work.get("abstract"):
+                extracted = ai.extract_from_paper(work["title"], work["abstract"])
+                extracted["_title"] = work["title"]
+                extracted["_doi"] = work["doi"]
+                st.session_state["compare_extracted"] = extracted
+    if extracted:
+        found_count = int(extracted.get("found") or 0)
+        if found_count:
+            st.info(t("cmp.read_found", n=found_count, title=extracted.get("_title", doi)))
+            st.caption(t("cmp.read_check"))
+            if extracted.get("quote"):
+                st.caption("“" + str(extracted["quote"]) + "”")
+        else:
+            st.info(t("cmp.read_empty"))
     st.caption(t("cmp.ref_hint"))
     with st.form("compare_paper"):
         label = st.text_input(t("cmp.title_field"),
                               value=str(st.session_state.get("compare_ref", {}).get("title", "")),
                               placeholder="10.1016/j.indcrop.2022.115040")
         basis_labels = [t(key) for key in BASIS_KEYS]
-        basis = st.selectbox(t("cmp.basis"), basis_labels, index=0, key="compare_basis")
+        preface = str(extracted.get("basis") or "").lower()
+        start = 0
+        for index, key in enumerate(BASIS_KEYS):
+            if preface and t(key).lower() in preface:
+                start = index
+        basis = st.selectbox(t("cmp.basis"), basis_labels, index=start, key="compare_basis")
         a, b, c = st.columns(3)
-        feedstock = a.text_input(t("cmp.feedstock"), placeholder=str(mine_row.get("feedstock") or ""))
-        ratio = b.text_input(t("cmp.ratio"), placeholder=str(mine_row.get("molar_ratio") or ""))
-        purity = c.text_input(t("cmp.purity"), placeholder=str(mine_row.get("purity_wt_pct") or ""))
+        feedstock = a.text_input(t("cmp.feedstock"), value=str(extracted.get("feedstock") or ""),
+                             placeholder=str(mine_row.get("feedstock") or ""))
+        ratio = b.text_input(t("cmp.ratio"), value=str(extracted.get("molar_ratio") or ""),
+                         placeholder=str(mine_row.get("molar_ratio") or ""))
+        purity = c.text_input(t("cmp.purity"), value=str(extracted.get("purity_wt_pct") or ""),
+                          placeholder=str(mine_row.get("purity_wt_pct") or ""))
         a, b, c = st.columns(3)
-        water = a.text_input(t("cmp.water"), placeholder=str(mine_row.get("water_wt_pct") or ""))
-        temp = b.text_input(t("cmp.temp"), placeholder=str(mine_row.get("temperature_C") or ""))
-        minutes = c.text_input(t("cmp.time"), placeholder=str(mine_row.get("time_min") or ""))
+        water = a.text_input(t("cmp.water"), value=str(extracted.get("water_wt_pct") or ""),
+                         placeholder=str(mine_row.get("water_wt_pct") or ""))
+        temp = b.text_input(t("cmp.temp"), value=str(extracted.get("temperature_C") or ""),
+                        placeholder=str(mine_row.get("temperature_C") or ""))
+        minutes = c.text_input(t("cmp.time"), value=str(extracted.get("time_min") or ""),
+                           placeholder=str(mine_row.get("time_min") or ""))
         a, b, c = st.columns(3)
-        reported = a.text_input(t("cmp.yield"), placeholder="")
+        reported = a.text_input(t("cmp.yield"), value=str(extracted.get("lignin_yield_pct") or ""),
+                            placeholder="")
         replicates = b.text_input(t("cmp.replicates"), placeholder="")
         moisture = c.text_input(t("cmp.moisture"), placeholder="")
         if st.form_submit_button(t("cmp.run_btn"), type="primary"):

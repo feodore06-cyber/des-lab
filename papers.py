@@ -129,3 +129,18 @@ def summarise(query: str, papers: list[dict]) -> str:
     years = [paper["year"] for paper in papers if paper["year"]]
     span = f"{min(years)}-{max(years)}" if years else "no dates"
     return f"{len(papers)} papers for “{query}” ({span}), ranked by relevance, citations and recency."
+
+def by_doi(doi: str) -> dict | None:
+    """Fetch one work by DOI; used to prefill the comparison from the paper the user picked."""
+    clean = str(doi or "").strip().replace("https://doi.org/", "")
+    if not clean:
+        return None
+    payload = _fetch({"filter": f"doi:{clean}", "per-page": 1,
+                      "mailto": "biomat-lab@example.com"})
+    results = payload.get("results") or []
+    if not results:
+        return None
+    work = results[0]
+    return {"title": (work.get("title") or "").strip(), "year": work.get("publication_year"),
+            "abstract": _abstract(work), "doi": (work.get("doi") or "").replace(
+                "https://doi.org/", "")}

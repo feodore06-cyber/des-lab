@@ -183,3 +183,45 @@ def summarise_papers(items: list, language: str = "en") -> dict:
     if not isinstance(parsed, list):
         return {}
     return {index: str(value).strip() for index, value in enumerate(parsed) if str(value).strip()}
+
+EXTRACT_SYSTEM = (
+    "Read a paper's title and abstract and extract ONLY values that are explicitly stated. "
+    "Return a JSON object with these keys and nothing else: feedstock, molar_ratio (number, HBD:HBA), "
+    "purity_wt_pct, water_wt_pct, temperature_C, time_min, lignin_yield_pct, basis, quote, found. "
+    "Use null for a key that is not stated. 'quote' is the short sentence from the abstract that "
+    "contains the numbers you used (empty if none). 'found' is the number of keys that are not null. "
+    "Never guess and never convert units you are unsure about."
+)
+
+
+def extract_from_paper(title: str, abstract: str) -> dict:
+    """Return the values explicitly stated in a paper; {} when unavailable."""
+    config = settings()
+    if not config["key"] or not abstract:
+        return {}
+    payload = {
+        "model": config["model"],
+        "temperature": 0.0,
+        "messages": [
+            {"role": "system", "content": EXTRACT_SYSTEM},
+            {"role": "user", "content": json.dumps({"title": title, "abstract": abstract[:4000]},
+                                                   ensure_ascii=False)},
+        ],
+    }
+    request = urllib.request.Request(
+        f"{config['base']}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {config['key']}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(raw)
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
