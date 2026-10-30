@@ -1101,17 +1101,24 @@ def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
         if existing:
             st.markdown(t("res.photos_existing", n=len(existing)))
             for row in existing:
-                left, right = st.columns([1, 3])
                 stored = auth.image_content(user, int(row["id"]))
-                if stored:
-                    left.image(stored[0], width=140)
-                right.markdown(f"**{row.get('category') or t('res.photos_no_category')}**")
-                if row.get("note"):
-                    right.caption(row["note"])
-                right.caption(f"{row.get('filename')} · {int(row.get('size') or 0) // 1024} KB")
-                if right.button(t("res.photos_delete"), key=f"del_image_{row['id']}"):
-                    auth.remove_image(user, int(row["id"]))
-                    st.rerun()
+                label = row.get("category") or t("res.photos_no_category")
+                caption = " · ".join(
+                    value for value in (row.get("note"), row.get("filename"),
+                                        f"{int(row.get('size') or 0) // 1024} KB") if value)
+                # the thumbnail is small on purpose; the original is drawn at container width
+                # inside the expander, so opening it shows every pixel instead of an upscaled 140px
+                with st.expander(f"{label} — {caption}", expanded=False):
+                    if stored:
+                        st.image(stored[0], width="stretch")
+                        st.caption(f"{row.get('filename')} · "
+                                   f"{int(row.get('size') or 0) // 1024} KB · "
+                                   f"{stored[1]}")
+                    if row.get("note"):
+                        st.markdown(row["note"])
+                    if st.button(t("res.photos_delete"), key=f"del_image_{row['id']}"):
+                        auth.remove_image(user, int(row["id"]))
+                        st.rerun()
 
 
 def _looks_duplicate(frame: pd.DataFrame, sample_id: str, lignin_mg: float,
