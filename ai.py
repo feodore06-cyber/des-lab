@@ -139,3 +139,47 @@ def ask(question: str, context: dict, language: str = "en") -> str | None:
         return str(body["choices"][0]["message"]["content"]).strip() or None
     except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError):
         return None
+
+SUMMARY_SYSTEM = (
+    "You summarise research papers for a lab that works on deep eutectic solvents and lignin. "
+    "For each item you receive a title and an abstract. Return a JSON array of strings, one per "
+    "item, in the same order. Each string is at most 25 words, in the requested language, saying "
+    "what the paper did and what it found. No preamble, no markdown, no numbering. If the abstract "
+    "is missing, write a single sentence saying what the title implies and add (title only)."
+)
+
+
+def summarise_papers(items: list, language: str = "en") -> dict:
+    """Map index -> one-sentence summary. Returns {} when no model is configured or on failure."""
+    config = settings()
+    if not config["key"] or not items:
+        return {}
+    payload = {
+        "model": config["model"],
+        "temperature": 0.2,
+        "messages": [
+            {"role": "system", "content": SUMMARY_SYSTEM},
+            {"role": "user", "content": json.dumps(
+                {"papers": items, "answer_in": "Chinese" if language == "zh" else "English"},
+                ensure_ascii=False, default=str)},
+        ],
+    }
+    request = urllib.request.Request(
+        f"{config['base']}/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {config['key']}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(raw)
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return {}
+    if not isinstance(parsed, list):
+        return {}
+    return {index: str(value).strip() for index, value in enumerate(parsed) if str(value).strip()}

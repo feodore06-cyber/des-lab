@@ -424,6 +424,16 @@ def library() -> None:
         st.warning(t("lib.none", query=query.strip()))
         return
     st.caption(papers.summarise(query.strip(), found))
+    summaries = {}
+    if ai.available():
+        if st.button(t("lib.summarise"), key="lib_summarise"):
+            items = [{"title": paper["title"], "year": paper["year"],
+                      "abstract": paper["abstract"][:1400]} for paper in found]
+            with st.spinner(t("lib.summarising")):
+                summaries = ai.summarise_papers(items, st.session_state.get(i18n.LANG_KEY, "en"))
+            st.session_state["paper_summaries"] = summaries
+        else:
+            summaries = st.session_state.get("paper_summaries") or {}
     for index, paper in enumerate(found, start=1):
         title = paper["title"]
         link = f"[{title}]({paper['url']})" if paper["url"] else title
@@ -433,6 +443,8 @@ def library() -> None:
         if paper["authors"]:
             bits.insert(1, paper["authors"])
         st.caption(" · ".join(bits))
+        if summaries.get(index - 1):
+            st.markdown(f"> {summaries[index - 1]}")
         if paper["abstract"]:
             with st.expander(t("lib.abstract"), expanded=False):
                 st.write(paper["abstract"])
