@@ -698,6 +698,12 @@ def _goto(key: str) -> None:
     st.switch_page(page)
 
 
+COLUMN_CHOICES = ["temperature_C", "time_min", "biomass_g", "lignin_mg", "lignin_yield_pct",
+                  "replicate", "notes"] + [
+    "stirring_rpm", "stirring_time_min", "solid_liquid_ratio", "ph", "catalyst_wt_pct",
+    "particle_size_mm", "moisture_before_wt_pct", "ash_wt_pct", "recovery_wt_pct",
+    "purity_of_lignin_pct"]
+
 CHIP_CLASS = {"Draft": "draft", "In progress": "running", "Pending test": "pending",
               "Completed": "done", "Needs review": "review"}
 
@@ -724,9 +730,15 @@ def workspace() -> None:
         st.caption(t("ws.how"))
         with st.form("create_project", clear_on_submit=True):
             name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"))
+            picked = st.multiselect(t("exp.variables"), list(COLUMN_CHOICES),
+                                    default=list(auth.DEFAULT_VARIABLES),
+                                    help=t("exp.variables_help"))
+            extra = st.text_input(t("exp.variables_more"), placeholder=t("exp.variables_more_ph"))
             if st.form_submit_button(t("res.project_create"), type="primary"):
                 try:
                     created = auth.create_project(user, name)
+                    wanted = list(picked) + [item.strip() for item in extra.split(",") if item.strip()]
+                    auth.set_project_variables(user, created, wanted or list(auth.DEFAULT_VARIABLES))
                 except ValueError as exc:
                     st.error(t(str(exc)))
                 else:
@@ -847,6 +859,24 @@ def _experiment_panel(user: str | None, name: str) -> None:
     if wanted != state:
         auth.set_project_status(user, name, wanted)
         st.rerun()
+
+    with st.expander(t("exp.variables_edit"), expanded=False):
+        current_vars = auth.project_variables(user, name)
+        with st.form(f"vars_{name}"):
+            kept = st.multiselect(t("exp.variables"), list(COLUMN_CHOICES),
+                                  default=[v for v in current_vars if v in COLUMN_CHOICES])
+            more = st.text_input(t("exp.variables_more"),
+                                 value=", ".join(v for v in current_vars
+                                                 if v not in COLUMN_CHOICES))
+            if st.form_submit_button(t("exp.variables_save")):
+                wanted = list(kept) + [item.strip() for item in more.split(",") if item.strip()]
+                try:
+                    auth.set_project_variables(user, name, wanted)
+                except ValueError as exc:
+                    st.error(t(str(exc)))
+                else:
+                    st.success(t("exp.variables_saved"))
+                    st.rerun()
 
     with st.expander(t("exp.rename"), expanded=False):
         with st.form(f"rename_{name}"):
@@ -1063,6 +1093,16 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         minutes = d.number_input(t("res.time"), min_value=0.0, value=60.0, step=5.0,
                                  format="%.0f", key="run_time")
         notes = st.text_input(t("res.notes"), key="run_notes")
+        extras = {}
+        for index, variable in enumerate(auth.project_variables(user, project)):
+            if variable in auth.DEFAULT_VARIABLES or variable in ("sample_id", "feedstock"):
+                continue
+            key = f"run_extra_{index}"
+            if variable.endswith(("_pct", "_C", "_min", "_mg", "_g", "_rpm", "_mm", "_ratio")):
+                extras[variable] = st.number_input(variable, min_value=0.0, value=0.0, step=0.1,
+                                                   format="%.4f", key=key)
+            else:
+                extras[variable] = st.text_input(variable, key=key)
         submitted = st.form_submit_button(t("res.save_run"), type="primary", use_container_width=True)
     preview = _yield_pct(biomass, lignin)
     label = schema.build_formulation({"des_hba": hba, "des_hbd": hbd, "molar_ratio": ratio})
@@ -1100,6 +1140,7 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
                 "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
                 "project": project,
             }
+            row.update(extras)
             auth.save_results(user, pd.DataFrame([row]), append=True)
             total = auth.load_results(user)
             st.success(t("res.saved_run", sid=row["sample_id"], pct=f"{preview:.2f}",

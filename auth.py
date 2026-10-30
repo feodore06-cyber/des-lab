@@ -1194,3 +1194,50 @@ def delete_project(username: str, name: str) -> None:
     raw["_formulation"] = formulation
     _save_local_projects(raw)
     _forget_cached_reads()
+
+DEFAULT_VARIABLES = ["temperature_C", "time_min", "biomass_g", "lignin_mg",
+                     "lignin_yield_pct", "replicate", "notes"]
+
+# what a project may measure, on top of the ones every project starts with
+EXTRA_VARIABLES = ["stirring_rpm", "stirring_time_min", "solid_liquid_ratio", "ph",
+                   "catalyst_wt_pct", "particle_size_mm", "moisture_before_wt_pct",
+                   "ash_wt_pct", "recovery_wt_pct", "purity_of_lignin_pct"]
+
+
+def project_variables(username: str | None, name: str) -> list:
+    """The measured columns this project records; defaults to the standard set."""
+    if not username:
+        return list(DEFAULT_VARIABLES)
+    stored = None
+    if store.enabled():
+        try:
+            raw = store.project_variables_get(username, name)
+            if raw:
+                stored = json.loads(raw)
+        except Exception:
+            stored = None
+    if stored is None:
+        mapping = _local_projects().get("_variables") or {}
+        stored = mapping.get(f"{username}::{name}")
+    if not stored:
+        return list(DEFAULT_VARIABLES)
+    return [str(value) for value in stored]
+
+
+def set_project_variables(username: str, name: str, values: list) -> None:
+    clean = []
+    for value in values:
+        text_value = " ".join(str(value or "").split())[:32]
+        if text_value and text_value not in clean:
+            clean.append(text_value)
+    if not clean:
+        raise ValueError("Keep at least one variable.")
+    payload = json.dumps(clean, ensure_ascii=False)
+    if store.enabled():
+        store.project_variables_set(username, name, payload)
+    raw = _local_projects()
+    mapping = raw.get("_variables") or {}
+    mapping[f"{username}::{name}"] = clean
+    raw["_variables"] = mapping
+    _save_local_projects(raw)
+    _forget_cached_reads()

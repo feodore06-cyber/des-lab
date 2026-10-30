@@ -76,6 +76,7 @@ create table if not exists projects (
 );
 alter table projects add column if not exists status text not null default 'In progress';
 alter table projects add column if not exists formulation text;
+alter table projects add column if not exists variables text;
 """
 
 
@@ -542,6 +543,22 @@ def project_formulation_set(owner: str, name: str, payload: str) -> None:
         conn.execute(
             "insert into projects (owner, name, formulation) values (%s, %s, %s)"
             " on conflict (owner, name) do update set formulation = excluded.formulation",
+            (owner, name, payload))
+        conn.commit()
+
+
+def project_variables_get(owner: str, name: str):
+    with _connect() as conn:
+        row = conn.execute("select variables from projects where owner = %s and name = %s",
+                           (owner, name)).fetchone()
+    return row[0] if row else None
+
+
+def project_variables_set(owner: str, name: str, payload: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "insert into projects (owner, name, variables) values (%s, %s, %s)"
+            " on conflict (owner, name) do update set variables = excluded.variables",
             (owner, name, payload))
         conn.commit()
 
