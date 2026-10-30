@@ -470,11 +470,16 @@ def _pick_run(saved, user, prefix: str, label_key: str, run_index: int = 0) -> d
     if "project" not in frame.columns:
         frame["project"] = auth.DEFAULT_PROJECT
     frame["project"] = frame["project"].fillna(auth.DEFAULT_PROJECT)
-    projects = [name for name in auth.list_projects(user) if name in set(frame["project"])]
+    projects = auth.list_projects(user)
     if not projects:
         return None
-    project = st.selectbox(t("cmp.project"), projects, key=f"{prefix}_project")
+    with_data = [name for name in projects if name in set(frame["project"])]
+    start = projects.index(with_data[0]) if with_data else 0
+    project = st.selectbox(t("cmp.project"), projects, index=start, key=f"{prefix}_project")
     part = frame[frame["project"] == project]
+    if part.empty:
+        st.caption(t("cmp.project_empty"))
+        return None
     options = {}
     for _, row in part.iterrows():
         caption = f"{row['sample_id']} · {row.get('formulation') or ''} · {str(row.get('recorded_at') or '')[:10]}"
