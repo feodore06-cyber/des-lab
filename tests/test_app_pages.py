@@ -25,7 +25,7 @@ import auth  # noqa: E402
 import i18n  # noqa: E402
 
 TIMEOUT = 120
-SAMPLE_RUNS = "Sample: my DES runs (3 conditions, n=1)"
+SAMPLE_RUNS = "Built-in example (not your data)"
 
 
 def page_calculator():
