@@ -762,14 +762,28 @@ DEFAULT_FORMULATION = {"des_hba": "ChCl", "des_hbd": "Glyoxylic acid", "molar_ra
 
 def project_formulation(username: str | None, name: str) -> dict:
     """The formulation a project was started with; every experiment inherits it."""
-    mapping = _local_projects().get("_formulation") or {}
-    stored = mapping.get(f"{username}::{name}") or {}
+    if not username:
+        return dict(DEFAULT_FORMULATION)
+    stored = None
+    if store.enabled():
+        try:
+            raw = store.project_formulation_get(username, name)
+            if raw:
+                stored = json.loads(raw)
+        except Exception:
+            stored = None
+    if stored is None:
+        mapping = _local_projects().get("_formulation") or {}
+        stored = mapping.get(f"{username}::{name}") or {}
     merged = dict(DEFAULT_FORMULATION)
     merged.update({key: value for key, value in stored.items() if value not in (None, "")})
     return merged
 
 
 def set_project_formulation(username: str, name: str, formulation: dict) -> None:
+    payload = json.dumps(dict(formulation), ensure_ascii=False)
+    if store.enabled():
+        store.project_formulation_set(username, name, payload)
     raw = _local_projects()
     mapping = raw.get("_formulation") or {}
     mapping[f"{username}::{name}"] = dict(formulation)

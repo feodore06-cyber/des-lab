@@ -75,6 +75,7 @@ create table if not exists projects (
     primary key (owner, name)
 );
 alter table projects add column if not exists status text not null default 'In progress';
+alter table projects add column if not exists formulation text;
 """
 
 
@@ -526,6 +527,22 @@ def project_set_status(owner: str, name: str, status: str) -> None:
         conn.execute("insert into projects (owner, name, status) values (%s, %s, %s)"
                      " on conflict (owner, name) do update set status = excluded.status",
                      (owner, name, status))
+        conn.commit()
+
+
+def project_formulation_get(owner: str, name: str):
+    with _connect() as conn:
+        row = conn.execute("select formulation from projects where owner = %s and name = %s",
+                           (owner, name)).fetchone()
+    return row[0] if row else None
+
+
+def project_formulation_set(owner: str, name: str, payload: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "insert into projects (owner, name, formulation) values (%s, %s, %s)"
+            " on conflict (owner, name) do update set formulation = excluded.formulation",
+            (owner, name, payload))
         conn.commit()
 
 

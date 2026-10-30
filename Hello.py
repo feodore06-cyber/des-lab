@@ -155,6 +155,18 @@ STYLE = """
   .bm-flow-d { font: 400 .78rem/1.45 system-ui, "Segoe UI", sans-serif; color: #5A6478; }
   .bm-flow-arrow { align-self: center; color: #B7C2D6; font-size: 1rem; }
 
+  /* ---------- brand ---------- */
+  .bm-brand { display: flex; align-items: center; gap: .5rem; padding-top: .2rem; }
+  .bm-brand img { height: 28px; width: auto; display: block; }
+  .bm-wordmark { font: 600 1.1rem/1.2 Georgia, "Times New Roman", serif; color: #0B1F4B;
+                 letter-spacing: -0.01em; }
+  .bm-hero { margin: 4.2rem 0 1.9rem; max-width: 44rem; }
+  .bm-hero-title { font: 600 2.8rem/1.15 Georgia, "Times New Roman", serif !important;
+                   letter-spacing: -0.025em !important; color: #0B1F4B; margin: 0 0 .85rem 0; }
+  .bm-hero-sub { font: 400 1.1rem/1.6 system-ui, "Segoe UI", sans-serif; color: #55637D; margin: 0; }
+  .bm-positioning { font: 400 .97rem/1.6 system-ui, "Segoe UI", sans-serif; color: #33415C;
+                    max-width: 42rem; }
+
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
     background: #FFFFFF;
@@ -377,7 +389,9 @@ views.PAGE_OBJECTS = {key: page_object for key, page_object, _label in NAV}
 
 if user:
     bar = st.columns([2.0, 1, 1, 1, 1, 1, 1, 1.2, 1], vertical_alignment="center", gap="small")
-    bar[0].markdown('<div class="bm-wordmark">BioMat Lab</div>', unsafe_allow_html=True)
+    bar[0].markdown(
+        '<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
+        '<span class="bm-wordmark">BioMat Lab</span></div>', unsafe_allow_html=True)
     for column, entry in zip(bar[1:7], NAV[:6]):
         with column:
             st.page_link(entry[1], label=entry[2])

@@ -13,33 +13,25 @@ from i18n import t
 
 
 def landing() -> None:
-    """Render the signed-out page."""
-    top = st.columns([3, 1, 0.6], vertical_alignment="center")
-    top[0].markdown('<div class="bm-wordmark">BioMat Lab</div>', unsafe_allow_html=True)
+    """Render the signed-out page. One action, no stored data, no decorative image."""
+    top = st.columns([3, 1], vertical_alignment="center")
+    top[0].markdown(
+        '<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
+        '<span class="bm-wordmark">BioMat Lab</span></div>',
+        unsafe_allow_html=True)
     i18n.language_switch(top[1])
-    with top[2]:
-        if st.button(t("land.signin"), key="land_signin", use_container_width=True):
+
+    st.markdown('<div class="bm-hero">', unsafe_allow_html=True)
+    st.markdown(f'<h1 class="bm-hero-title">{t("land.headline")}</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="bm-hero-sub">{t("land.sub")}</p>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    action = st.columns([1, 2.4])
+    with action[0]:
+        if st.button(t("land.start"), key="land_start", type="primary", use_container_width=True):
             st.session_state["show_signin"] = True
             st.query_params["view"] = "signin"
             st.rerun()
-
-    left, right = st.columns([1.05, 1], gap="large", vertical_alignment="center")
-    with left:
-        st.markdown('<div class="bm-hero">', unsafe_allow_html=True)
-        st.markdown(f'<h1 class="bm-hero-title">{t("land.headline")}</h1>', unsafe_allow_html=True)
-        st.markdown(f'<p class="bm-hero-sub">{t("land.sub")}</p>', unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        actions = st.columns([1, 1], gap="small")
-        with actions[0]:
-            if st.button(t("land.start"), key="land_start", type="primary", use_container_width=True):
-                st.session_state["show_signin"] = True
-                st.query_params["view"] = "signin"
-                st.rerun()
-        with actions[1]:
-            st.button(t("land.example"), key="land_example", disabled=True,
-                      help=t("land.example_locked"), use_container_width=True)
-    with right:
-        _schematic()
 
     st.divider()
     st.markdown(f'<p class="bm-positioning">{t("land.positioning")}</p>', unsafe_allow_html=True)
@@ -52,24 +44,3 @@ def landing() -> None:
         column.caption(t(body_key))
 
     st.caption(t("land.footer"))
-
-
-def _schematic() -> None:
-    """A drawing of what the app does - no record, no number, nothing personal."""
-    st.markdown(
-        '<div class="bm-flow">'
-        '<div class="bm-flow-step"><span class="bm-flow-n">1</span>'
-        '<span class="bm-flow-t">' + t("land.flow1") + "</span>"
-        '<span class="bm-flow-d">' + t("land.flow1b") + "</span></div>"
-        '<div class="bm-flow-arrow">→</div>'
-        '<div class="bm-flow-step"><span class="bm-flow-n">2</span>'
-        '<span class="bm-flow-t">' + t("land.flow2") + "</span>"
-        '<span class="bm-flow-d">' + t("land.flow2b") + "</span></div>"
-        '<div class="bm-flow-arrow">→</div>'
-        '<div class="bm-flow-step"><span class="bm-flow-n">3</span>'
-        '<span class="bm-flow-t">' + t("land.flow3") + "</span>"
-        '<span class="bm-flow-d">' + t("land.flow3b") + "</span></div>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-    st.caption(t("land.flow_note"))
