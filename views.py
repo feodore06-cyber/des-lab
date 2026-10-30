@@ -1440,6 +1440,7 @@ def _chart_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         files = [(f"{auth.folder_name(user)}_results.csv", csv_bytes(saved))]
         encoding, data_kind = "utf-8-sig", "user_saved"
     elif kind == "sample":
+        st.warning(t("res.sample_warning"))
         st.info(t("res.sample_info"))
         files = [("my_des_runs.csv", MY_CSV.read_bytes())]
         encoding, data_kind = "utf-8-sig", "my_experiments"
