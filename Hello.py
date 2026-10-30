@@ -162,6 +162,10 @@ STYLE = """
 
   .bm-rule { max-width: 1080px; margin: .2rem auto 0; border-top: 1px solid #E8EDF6; }
   .bm-brand { display: flex; align-items: center; gap: .5rem; }
+  [data-testid="stPageLink"] p { font-size: .87rem !important; white-space: nowrap; }
+  [data-testid="stPageLink"] { padding: .1rem 0 !important; }
+  div[role="radiogroup"] { gap: .45rem !important; flex-wrap: nowrap !important; }
+  div[role="radiogroup"] label p { font-size: .8rem !important; white-space: nowrap; }
   .bm-brand img { height: 26px; width: auto; display: block; }
   .bm-wordmark { font: 600 1.05rem/1.2 Georgia, "Times New Roman", serif; color: #0B1F4B;
                  letter-spacing: -0.005em; }
@@ -413,7 +417,8 @@ page = st.navigation([entry[1] for entry in NAV], position="hidden")
 views.PAGE_OBJECTS = {key: page_object for key, page_object, _label in NAV}
 
 if user:
-    bar = st.columns([2.0, 1, 1, 1, 1, 1, 1, 1.2, 1], vertical_alignment="center", gap="small")
+    bar = st.columns([2.0, 1.0, 0.9, 1.05, 0.95, 1.0, 0.95, 1.35, 1.0],
+                      vertical_alignment="center", gap="small")
     bar[0].markdown(
         '<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
         '<span class="bm-wordmark">BioMat Lab</span></div>', unsafe_allow_html=True)
