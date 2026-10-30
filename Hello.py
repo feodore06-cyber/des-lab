@@ -196,6 +196,16 @@ STYLE = """
     .bm-hero { margin-top: 3.2rem; }
   }
 
+  /* ---------- experiment status ---------- */
+  .bm-status { display: inline-block; font: 600 .68rem/1 system-ui, "Segoe UI", sans-serif;
+               letter-spacing: .09em; text-transform: uppercase; padding: .3rem .5rem;
+               border-radius: 4px; margin: .1rem 0 .45rem; }
+  .bm-status-draft   { background: #EEF1F6; color: #6B7A99; }
+  .bm-status-running { background: #E7EDFA; color: #002F86; }
+  .bm-status-pending { background: #FDF1DF; color: #8A5A11; }
+  .bm-status-done    { background: #E4F2EC; color: #0F7A5A; }
+  .bm-status-review  { background: #FBEAEA; color: #A32A1C; }
+
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
     background: #FFFFFF;

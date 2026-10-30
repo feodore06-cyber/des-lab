@@ -615,6 +615,10 @@ def _goto(key: str) -> None:
     st.switch_page(page)
 
 
+CHIP_CLASS = {"Draft": "draft", "In progress": "running", "Pending test": "pending",
+              "Completed": "done", "Needs review": "review"}
+
+
 def _status_label(status: str) -> str:
     mapping = {"Draft": "exp.draft", "In progress": "exp.running", "Pending test": "exp.pending",
                "Completed": "exp.done", "Needs review": "exp.review"}
@@ -680,7 +684,10 @@ def workspace() -> None:
         part = rows[rows["project"] == name]
         if part.empty:
             continue
-        last = str(part["recorded_at"].iloc[-1])[:10] if "recorded_at" in part.columns else ""
+        last = ""
+        if "recorded_at" in part.columns:
+            stamps = pd.to_datetime(part["recorded_at"], errors="coerce").dropna()
+            last = stamps.max().strftime("%Y-%m-%d") if len(stamps) else ""
         grouped.append({"name": name, "runs": len(part), "last": last,
                         "status": states.get(name, "In progress")})
     grouped.sort(key=lambda item: item["last"], reverse=True)
@@ -688,9 +695,12 @@ def workspace() -> None:
     for item in grouped[:5]:
         with st.container(border=True):
             head, tail = st.columns([3, 1])
+            key = CHIP_CLASS.get(item["status"], "running")
+            head.markdown(f'<div class="bm-status bm-status-{key}">'
+                          f'{_status_label(item["status"])}</div>', unsafe_allow_html=True)
             head.markdown(f"**{item['name']}**")
-            head.caption(f"{_status_label(item['status'])} · "
-                         f"{t('ws.runs', n=item['runs'])} · {t('ws.last', date=item['last'] or '—')}")
+            head.caption(f"{t('ws.runs', n=item['runs'])} · "
+                         f"{t('ws.last', date=item['last'] or '—')}")
             if tail.button(t("ws.open"), key=f"open_{item['name']}", use_container_width=True):
                 st.session_state["ws_open"] = item["name"]
                 st.session_state["ws_mode"] = "open"
