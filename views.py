@@ -837,6 +837,19 @@ def _experiment_panel(user: str | None, name: str) -> None:
         auth.set_project_status(user, name, wanted)
         st.rerun()
 
+    with st.expander(t("exp.rename"), expanded=False):
+        with st.form(f"rename_{name}"):
+            fresh = st.text_input(t("res.project_name"), value=name)
+            if st.form_submit_button(t("exp.rename_btn")):
+                try:
+                    renamed = auth.rename_project(user, name, fresh)
+                except ValueError as exc:
+                    st.error(t(str(exc)))
+                else:
+                    st.session_state["ws_open"] = renamed
+                    st.session_state["project_wanted"] = renamed
+                    st.rerun()
+
     if part.empty:
         st.info(t("ws.none"))
         return

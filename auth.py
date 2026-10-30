@@ -1136,3 +1136,40 @@ def login_form(logo_url: str | None = None) -> None:
         if st.button(t("login.create"), use_container_width=True, key="go_signup"):
             st.session_state[MODE_KEY] = SIGNUP
             st.rerun()
+
+def rename_project(username: str, old: str, new: str) -> str:
+    """Rename a project: its record, every experiment row, and its formulation entry."""
+    clean = " ".join(str(new or "").split())[:40]
+    if not clean:
+        raise ValueError("Give the project a name.")
+    if clean == old:
+        return clean
+    if clean in list_projects(username):
+        raise ValueError("A project with that name already exists.")
+
+    frame = load_results(username)
+    if frame is not None and not frame.empty and "project" in frame.columns:
+        work = frame.copy()
+        mask = work["project"].fillna(DEFAULT_PROJECT) == old
+        if mask.any():
+            work.loc[mask, "project"] = clean
+            save_results(username, work, append=False)
+
+    if store.enabled():
+        try:
+            store.project_rename(username, old, clean)
+        except Exception:
+            pass
+
+    raw = _local_projects()
+    names = [clean if value == old else value for value in (raw.get(username) or [])]
+    if clean not in names:
+        names.append(clean)
+    raw[username] = [value for value in names if value != old]
+    formulation = raw.get("_formulation") or {}
+    if f"{username}::{old}" in formulation:
+        formulation[f"{username}::{clean}"] = formulation.pop(f"{username}::{old}")
+        raw["_formulation"] = formulation
+    _save_local_projects(raw)
+    _forget_cached_reads()
+    return clean
