@@ -88,3 +88,23 @@ def csv_bytes(frame):
         safe[col] = safe[col].map(lambda v: "'" + v if isinstance(v, str) and v.lstrip().startswith(("=", "+", "-", "@")) else v)
     safe.columns = ["'" + str(c) if str(c).lstrip().startswith(("=", "+", "-", "@")) else c for c in safe.columns]
     return safe.to_csv(index=False).encode("utf-8-sig")
+
+def recipe_for_component(components, fixed_index: int, fixed_g: float, basis: str = "reagent",
+                         added_water_g: float = 0):
+    """Scale the recipe so that component ``fixed_index`` weighs exactly ``fixed_g``.
+
+    The ratios stay as they are: the whole batch is scaled by one factor, so the chemistry is the
+    same mixture as the forward calculation, just sized around what is already on the balance.
+    """
+    if not math.isfinite(fixed_g) or fixed_g <= 0:
+        raise ValueError("The mass of the fixed component must be greater than 0.")
+    frame, _info = calculate_recipe(components, 1.0, basis=basis, added_water_g=added_water_g)
+    if fixed_index < 0 or fixed_index >= len(frame):
+        raise ValueError("Pick a component that exists in the table.")
+    anchor = float(frame.iloc[fixed_index]["weigh_g"])
+    if anchor <= 0:
+        raise ValueError("That component has no mass in this recipe.")
+    scale = fixed_g / anchor
+    frame, info = calculate_recipe(components, scale, basis=basis,
+                                   added_water_g=added_water_g * scale)
+    return frame, info, scale

@@ -47,6 +47,10 @@ DEMO_CSV = ROOT / "sample_data/demo_lignin.csv"
 MY_CSV = ROOT / "sample_data/my_des_runs.csv"
 
 
+COLUMNS_SHOWN = {"name": "Component", "moles": "Mol", "weigh_g": "Weigh (g)",
+                 "water_g": "Water (g)"}
+
+
 def _column_labels() -> dict:
     return {"name": t("calc.col_name"), "mw": t("calc.col_mw"), "ratio": t("calc.col_ratio"),
             "assay_pct": t("calc.col_assay"), "water_pct": t("calc.col_water")}
@@ -136,6 +140,7 @@ def calculator():
 
     st.caption(t("calc.table_caption"))
 
+
     record = st.session_state.get("last_reagent")
     if record:
         unknown = t("lookup.unknown_value")
@@ -157,6 +162,55 @@ def calculator():
             st.caption(t("lookup.source"))
 
     st.markdown(t("calc.s2"))
+    modes = {t("calc.mode_batch"): "batch", t("calc.mode_reverse"): "reverse"}
+    mode = modes[st.radio(t("calc.mode"), list(modes), horizontal=True, key="calc_mode")]
+
+    if mode == "reverse":
+        st.caption(t("calc.reverse_hint"))
+        names = [str(value) for value in components.get("name", [])]
+        if not names:
+            st.info(t("calc.reverse_no_components"))
+            return
+        with st.form("reverse_recipe"):
+            a, b = st.columns([2, 1])
+            which = a.selectbox(t("calc.reverse_pick"), names, key="reverse_which")
+            weighed = b.number_input(t("calc.reverse_mass"), min_value=0.0, value=8.0,
+                                     step=0.1, format="%.3f", key="reverse_mass")
+            if st.form_submit_button(t("calc.reverse_btn"), type="primary"):
+                try:
+                    frame, info, scale = lab_core.recipe_for_component(
+                        components, names.index(which), weighed,
+                        basis="active" if ideal else "reagent")
+                except ValueError as exc:
+                    st.error(t(str(exc)))
+                else:
+                    active_sum = float(frame["active_g"].sum())
+                    weighed_sum = float(frame["weigh_g"].sum())
+                    over_pct = 100 * (weighed_sum / active_sum - 1) if active_sum else 0.0
+                    st.markdown(t("calc.s3"))
+                    cols = st.columns(4)
+                    cols[0].metric(t("calc.m_total"), f"{info.get('total_g', 0):.4f} g")
+                    cols[1].metric(t("calc.reverse_others"),
+                                   ", ".join(f"{row['name']} {row['weigh_g']:.3f} g"
+                                             for _, row in frame.iterrows()
+                                             if row["name"] != which))
+                    cols[2].metric(t("calc.m_water"), f"{info.get('known_water_g', 0):.4f} g")
+                    cols[3].metric(t("calc.m_over"), f"{over_pct:.2f}%", help=t("calc.over_help"))
+                    st.caption(t("calc.reverse_done", name=which, mass=weighed))
+                    result_labels = {**labels, "moles": t("calc.moles"),
+                                     "active_g": t("calc.active_g"), "weigh_g": t("calc.weigh_g"),
+                                     "water_g": t("calc.water_g")}
+                    st.subheader(t("calc.weighing"))
+                    st.dataframe(frame.rename(columns=result_labels).round(6),
+                                 hide_index=True, width="stretch")
+                    export = frame.copy()
+                    export["target_basis"] = "active" if ideal else "reagent"
+                    export["fixed_component"] = which
+                    export["fixed_g"] = weighed
+                    st.download_button(t("calc.download"), csv_bytes(export), "des_recipe.csv",
+                                       "text/csv", key="reverse_download")
+        return
+
     bases = [("active", t("calc.basis_active")), ("reagent", t("calc.basis_reagent"))]
     a, b, c = st.columns([2, 1, 1])
     basis_label = a.selectbox(t("calc.basis"), [label for _, label in bases], key="basis")
