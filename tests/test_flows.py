@@ -73,6 +73,27 @@ class PublicPageTests(unittest.TestCase):
         self.assertNotIn("ChCl:GA 1:2", blob, "a stored formulation must never reach the public page")
 
 
+class CalculatorFlowTests(unittest.TestCase):
+    """A chemical in the recipe table must be removable with one press."""
+
+    def test_pressing_remove_takes_that_chemical_out_of_the_table(self):
+        def calculator_entry():
+            import views
+
+            views.calculator()
+
+        at = AppTest.from_function(calculator_entry, default_timeout=TIMEOUT)
+        at.run()
+        self.assertEqual(exceptions(at), [])
+        labels = [button.label for button in at.button if button.label.startswith("Remove ")]
+        self.assertGreaterEqual(len(labels), 2, f"one button per chemical, got {labels}")
+        press(at, labels[0])
+        self.assertEqual(exceptions(at), [])
+        remaining = [button.label for button in at.button if button.label.startswith("Remove ")]
+        self.assertEqual(len(remaining), len(labels) - 1,
+                         "the row must be gone from the table")
+
+
 class NavigationTests(unittest.TestCase):
     """A button that opens the comparison must never look dead."""
 

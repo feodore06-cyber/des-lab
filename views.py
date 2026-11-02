@@ -119,6 +119,21 @@ def calculator():
         components = components.copy()
         components["assay_pct"] = 100.0
     st.session_state["recipe_rows"] = components.to_dict("records")
+
+    # one button per chemical: press it and that row is gone, no selection needed
+    if len(components):
+        st.caption(t("calc.remove_hint"))
+        slots = st.columns(min(len(components), 4))
+        for position, (_, row) in enumerate(components.iterrows()):
+            label = str(row.get("name") or t("calc.unnamed"))
+            if slots[position % len(slots)].button(
+                    t("calc.remove_one", name=label), key=f"del_component_{position}",
+                    use_container_width=True):
+                remaining = components.drop(index=components.index[position])
+                st.session_state["recipe_rows"] = remaining.to_dict("records")
+                st.session_state.pop("last_reagent", None)
+                st.rerun()
+
     st.caption(t("calc.table_caption"))
 
     record = st.session_state.get("last_reagent")
