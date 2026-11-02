@@ -38,6 +38,7 @@ import store
 import i18n
 import mailer
 from i18n import t
+import lab_core
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
 import papers
@@ -171,44 +172,53 @@ def calculator():
         if not names:
             st.info(t("calc.reverse_no_components"))
             return
+        # the form only collects the input: a download button is not allowed inside it
         with st.form("reverse_recipe"):
             a, b = st.columns([2, 1])
             which = a.selectbox(t("calc.reverse_pick"), names, key="reverse_which")
             weighed = b.number_input(t("calc.reverse_mass"), min_value=0.0, value=8.0,
                                      step=0.1, format="%.3f", key="reverse_mass")
-            if st.form_submit_button(t("calc.reverse_btn"), type="primary"):
-                try:
-                    frame, info, scale = lab_core.recipe_for_component(
-                        components, names.index(which), weighed,
-                        basis="active" if ideal else "reagent")
-                except ValueError as exc:
-                    st.error(t(str(exc)))
-                else:
-                    active_sum = float(frame["active_g"].sum())
-                    weighed_sum = float(frame["weigh_g"].sum())
-                    over_pct = 100 * (weighed_sum / active_sum - 1) if active_sum else 0.0
-                    st.markdown(t("calc.s3"))
-                    cols = st.columns(4)
-                    cols[0].metric(t("calc.m_total"), f"{info.get('total_g', 0):.4f} g")
-                    cols[1].metric(t("calc.reverse_others"),
-                                   ", ".join(f"{row['name']} {row['weigh_g']:.3f} g"
-                                             for _, row in frame.iterrows()
-                                             if row["name"] != which))
-                    cols[2].metric(t("calc.m_water"), f"{info.get('known_water_g', 0):.4f} g")
-                    cols[3].metric(t("calc.m_over"), f"{over_pct:.2f}%", help=t("calc.over_help"))
-                    st.caption(t("calc.reverse_done", name=which, mass=weighed))
-                    result_labels = {**labels, "moles": t("calc.moles"),
-                                     "active_g": t("calc.active_g"), "weigh_g": t("calc.weigh_g"),
-                                     "water_g": t("calc.water_g")}
-                    st.subheader(t("calc.weighing"))
-                    st.dataframe(frame.rename(columns=result_labels).round(6),
-                                 hide_index=True, width="stretch")
-                    export = frame.copy()
-                    export["target_basis"] = "active" if ideal else "reagent"
-                    export["fixed_component"] = which
-                    export["fixed_g"] = weighed
-                    st.download_button(t("calc.download"), csv_bytes(export), "des_recipe.csv",
-                                       "text/csv", key="reverse_download")
+            submitted = st.form_submit_button(t("calc.reverse_btn"), type="primary")
+        if submitted:
+            try:
+                frame, info, scale = lab_core.recipe_for_component(
+                    components, names.index(which), weighed,
+                    basis="active" if ideal else "reagent")
+            except ValueError as exc:
+                st.error(t(str(exc)))
+            else:
+                st.session_state["reverse_result"] = {
+                    "name": which, "mass": weighed, "scale": scale,
+                    "rows": frame.to_dict("records"), "info": info}
+
+        stored = st.session_state.get("reverse_result")
+        if stored:
+            frame = pd.DataFrame(stored["rows"])
+            info = stored["info"]
+            active_sum = float(frame["active_g"].sum())
+            weighed_sum = float(frame["weigh_g"].sum())
+            over_pct = 100 * (weighed_sum / active_sum - 1) if active_sum else 0.0
+            st.markdown(t("calc.s3"))
+            cols = st.columns(4)
+            cols[0].metric(t("calc.m_total"), f"{info.get('total_g', 0):.4f} g")
+            cols[1].metric(t("calc.reverse_others"),
+                           ", ".join(f"{row['name']} {row['weigh_g']:.3f} g"
+                                     for _, row in frame.iterrows()
+                                     if row["name"] != stored["name"]))
+            cols[2].metric(t("calc.m_water"), f"{info.get('known_water_g', 0):.4f} g")
+            cols[3].metric(t("calc.m_over"), f"{over_pct:.2f}%", help=t("calc.over_help"))
+            st.caption(t("calc.reverse_done", name=stored["name"], mass=stored["mass"]))
+            result_labels = {**labels, "moles": t("calc.moles"), "active_g": t("calc.active_g"),
+                             "weigh_g": t("calc.weigh_g"), "water_g": t("calc.water_g")}
+            st.subheader(t("calc.weighing"))
+            st.dataframe(frame.rename(columns=result_labels).round(6), hide_index=True,
+                         width="stretch")
+            export = frame.copy()
+            export["target_basis"] = "active" if ideal else "reagent"
+            export["fixed_component"] = stored["name"]
+            export["fixed_g"] = stored["mass"]
+            st.download_button(t("calc.download"), csv_bytes(export), "des_recipe.csv",
+                               "text/csv", key="reverse_download")
         return
 
     bases = [("active", t("calc.basis_active")), ("reagent", t("calc.basis_reagent"))]

@@ -76,6 +76,27 @@ class PublicPageTests(unittest.TestCase):
 class CalculatorFlowTests(unittest.TestCase):
     """A chemical in the recipe table must be removable with one press."""
 
+    def test_solving_from_one_weighed_component_gives_the_rest(self):
+        def calculator_entry():
+            import views
+
+            views.calculator()
+
+        at = AppTest.from_function(calculator_entry, default_timeout=TIMEOUT)
+        at.run()
+        modes = [item for item in at.radio if item.label == "How do you want to calculate?"]
+        self.assertTrue(modes, "the page needs to ask which direction to calculate")
+        modes[0].set_value("I already weighed one component").run()
+        self.assertEqual(exceptions(at), [])
+        at.number_input(key="reverse_mass").set_value(8.0).run()
+        press(at, "Calculate the rest")
+        self.assertEqual(exceptions(at), [])
+        values = {item.label: item.value for item in at.metric}
+        self.assertIn("Total prepared mass", values)
+        self.assertTrue(values["Total prepared mass"].startswith("16.4"),
+                        f"8 g ChCl at 1:2 should total about 16.48 g, got {values}")
+        self.assertIn("Glyoxylic acid", values["The other components"])
+
     def test_pressing_remove_takes_that_chemical_out_of_the_table(self):
         def calculator_entry():
             import views
