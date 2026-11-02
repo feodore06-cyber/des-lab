@@ -19,6 +19,8 @@ Logic lives in lab_core.py / lab_plots.py, accounts and record folders in auth.p
 """
 from pathlib import Path
 
+import time
+
 import pandas as pd
 import streamlit as st
 
@@ -373,6 +375,12 @@ if not st.session_state.get("_intro_shown"):
 # Every teammate signs in, then only sees their own record folder. Nothing is put in the sidebar
 # before this point, so the sign-in page has no sidebar at all - just the form in the middle.
 auth.ensure_store()
+if not auth.current_user():
+    # a remembered device: the token in the URL signs the person back in, so a refresh is silent
+    remembered = auth.resume_session(st.query_params.get(auth.AUTO_KEY, ""))
+    if remembered:
+        st.session_state[auth.SESSION_KEY] = remembered
+        st.session_state[auth.SESSION_SEEN] = time.time()
 user = auth.current_user()
 
 

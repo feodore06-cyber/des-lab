@@ -67,6 +67,12 @@ create table if not exists images (
     created_at timestamptz not null default now()
 );
 create index if not exists images_owner on images (owner, sample_id);
+create table if not exists sessions (
+    token_hash text primary key,
+    username text not null,
+    created timestamptz not null default now(),
+    expires timestamptz not null
+);
 create table if not exists projects (
     owner text not null,
     name text not null,
@@ -566,6 +572,33 @@ def project_variables_set(owner: str, name: str, payload: str) -> None:
             "insert into projects (owner, name, variables) values (%s, %s, %s)"
             " on conflict (owner, name) do update set variables = excluded.variables",
             (owner, name, payload))
+        conn.commit()
+
+
+def session_put(token_hash: str, username: str, expires) -> None:
+    with _connect() as conn:
+        conn.execute("insert into sessions (token_hash, username, expires) values (%s, %s, %s)"
+                     " on conflict (token_hash) do nothing", (token_hash, username, expires))
+        conn.commit()
+
+
+def session_get(token_hash: str):
+    """Return (username, expires) for a remembered session, or None."""
+    with _connect() as conn:
+        row = conn.execute("select username, expires from sessions where token_hash = %s",
+                           (token_hash,)).fetchone()
+    return row
+
+
+def session_drop(token_hash: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from sessions where token_hash = %s", (token_hash,))
+        conn.commit()
+
+
+def session_purge(now) -> None:
+    with _connect() as conn:
+        conn.execute("delete from sessions where expires < %s", (now,))
         conn.commit()
 
 

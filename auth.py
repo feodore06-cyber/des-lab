@@ -581,6 +581,11 @@ def current_user() -> str | None:
 
 
 def logout() -> None:
+    try:
+        drop_session(st.query_params.get(AUTO_KEY, ""))
+        st.query_params.pop(AUTO_KEY, None)
+    except Exception:
+        pass
     st.session_state.pop(SESSION_KEY, None)
     st.session_state.pop(MODE_KEY, None)
     st.session_state.pop(SESSION_SEEN, None)
@@ -606,6 +611,12 @@ def login(username: str, password: str) -> bool:
         st.session_state.pop("login_locked_until", None)
         st.session_state[SESSION_KEY] = name or username.strip()
         st.session_state[SESSION_SEEN] = time.time()
+        remember = issue_session(st.session_state[SESSION_KEY])
+        if remember:
+            try:
+                st.query_params[AUTO_KEY] = remember
+            except Exception:
+                pass
         _clear_attempts(name or username.strip())
         return True
 
@@ -1278,3 +1289,53 @@ def unit_of(variable: str) -> str:
     if name.endswith("_MPa") or name.endswith("_mPa"):
         return "MPa"
     return ""
+
+# ---------------------------------------------------------- staying signed in
+REMEMBER_DAYS = 30
+AUTO_KEY = "k"          # the query parameter that carries the session token
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_session(username: str) -> str:
+    """Create a long-lived token for this account and return it (shown once, in the URL)."""
+    token = secrets.token_urlsafe(32)
+    if not store.enabled():
+        return ""
+    expires = datetime.now(timezone.utc) + timedelta(days=REMEMBER_DAYS)
+    try:
+        store.session_put(_hash_token(token), username, expires)
+        store.session_purge(datetime.now(timezone.utc))
+    except Exception:
+        return ""
+    return token
+
+
+def resume_session(token: str) -> str | None:
+    """Return the username behind a remembered token, if it is still valid."""
+    clean = str(token or "").strip()
+    if not clean or not store.enabled():
+        return None
+    try:
+        row = store.session_get(_hash_token(clean))
+    except Exception:
+        return None
+    if not row:
+        return None
+    username, expires = row
+    if expires is not None and expires <= datetime.now(timezone.utc):
+        return None
+    if username not in load_users():
+        return None
+    return username
+
+
+def drop_session(token: str) -> None:
+    clean = str(token or "").strip()
+    if clean and store.enabled():
+        try:
+            store.session_drop(_hash_token(clean))
+        except Exception:
+            pass
