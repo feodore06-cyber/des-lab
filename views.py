@@ -81,6 +81,47 @@ def _recipe_rows() -> list:
     return rows
 
 
+def recipe_for_basis(components: pd.DataFrame, ratio_basis: str, ideal: bool) -> pd.DataFrame:
+    """Turn a mass or volume ratio into the molar ratio the calculator works with."""
+    work = components.copy()
+    work["ratio"] = pd.to_numeric(work["ratio"], errors="coerce")
+    work["mw"] = pd.to_numeric(work["mw"], errors="coerce")
+    if ratio_basis == "mass":
+        work["ratio"] = work["ratio"] / work["mw"]
+    elif ratio_basis == "volume":
+        work["density"] = pd.to_numeric(work.get("density", 0.0), errors="coerce")
+        if (work["density"] <= 0).any():
+            raise ValueError(t("calc.need_density"))
+        work["ratio"] = work["ratio"] * work["density"] / work["mw"]
+    if work["ratio"].isna().any():
+        raise ValueError(t("calc.need_ratio"))
+    return work
+
+
+def ratio_summary(components: pd.DataFrame, ideal: bool) -> str:
+    """One compact line: molar, mass and volume ratio against the first component."""
+    work = components.copy()
+    if "density" not in work.columns:
+        work["density"] = 0.0
+    for column in ("ratio", "mw", "density", "assay_pct"):
+        work[column] = pd.to_numeric(work.get(column, 0.0), errors="coerce")
+    assay = 1.0 if ideal else work["assay_pct"].fillna(0) / 100.0
+    molar = work["ratio"] * assay
+    if not len(molar) or not float(molar.iloc[0]):
+        return ""
+    molar = molar / float(molar.iloc[0])
+    mass = molar * work["mw"]
+    mass = mass / float(mass.iloc[0])
+    parts = [t("calc.ratio_line_molar", values=" : ".join(f"{value:.3g}" for value in molar))]
+    parts.append(t("calc.ratio_line_mass", values=" : ".join(f"{value:.3g}" for value in mass)))
+    if (work["density"] > 0).all():
+        volume = mass / work["density"]
+        volume = volume / float(volume.iloc[0])
+        parts.append(t("calc.ratio_line_volume",
+                       values=" : ".join(f"{value:.3g}" for value in volume)))
+    return " · ".join(parts)
+
+
 def _add_reagent(term: str) -> None:
     """Look a reagent up on PubChem and append it to the component table."""
     try:
@@ -115,11 +156,26 @@ def calculator():
         _add_reagent(query.strip())
     st.caption(t("calc.find_hint"))
 
+    bases = {"calc.by_molar": "molar", "calc.by_mass": "mass", "calc.by_volume": "volume"}
+    basis_label = st.radio(t("calc.ratio_basis"), [t(key) for key in bases], horizontal=True,
+                           key="ratio_basis", help=t("calc.ratio_basis_help"))
+    ratio_basis = bases[[key for key in bases if t(key) == basis_label][0]]
+
     rows = _recipe_rows()
-    components = st.data_editor(pd.DataFrame(rows), column_config=labels, num_rows="dynamic",
+    frame = pd.DataFrame(rows)
+    if "density" not in frame.columns:
+        frame["density"] = 0.0
+    table_labels = dict(labels)
+    if ratio_basis == "volume":
+        table_labels["density"] = t("calc.col_density")
+    components = st.data_editor(frame, column_config=table_labels, num_rows="dynamic",
                                 hide_index=True, width="stretch",
                                 disabled=["assay_pct"] if ideal else [],
-                                key=f"components_{len(rows)}")
+                                key=f"components_{len(rows)}_{ratio_basis}")
+    if "density" not in components.columns:
+        components["density"] = 0.0
+    if ratio_basis != "volume":
+        components = components.drop(columns=["density"])
     if ideal:
         components = components.copy()
         components["assay_pct"] = 100.0
@@ -229,7 +285,8 @@ def calculator():
     st.caption(t("calc.water_caption"))
     basis = dict((label, key) for key, label in bases)[basis_label]
     try:
-        recipe, totals = calculate_recipe(components, target, basis, water)
+        solve_rows = recipe_for_basis(components, ratio_basis, ideal)
+        recipe, totals = calculate_recipe(solve_rows, target, basis, water)
     except ValueError as exc:
         st.error(t(str(exc)))
         return
@@ -252,6 +309,9 @@ def calculator():
     result_labels = {**labels, "moles": t("calc.moles"), "active_g": t("calc.active_g"),
                      "weigh_g": t("calc.weigh_g"), "water_g": t("calc.water_g")}
     st.subheader(t("calc.weighing"))
+    summary = ratio_summary(components, ideal)
+    if summary:
+        st.caption(summary)
     st.dataframe(recipe.rename(columns=result_labels).round(6), hide_index=True, width="stretch")
     export = recipe.copy()
     export["target_basis"] = basis
