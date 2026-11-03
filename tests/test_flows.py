@@ -76,6 +76,24 @@ class PublicPageTests(unittest.TestCase):
 class CalculatorFlowTests(unittest.TestCase):
     """A chemical in the recipe table must be removable with one press."""
 
+    def test_an_empty_editor_row_is_not_treated_as_a_component(self):
+        """The dynamic editor always leaves one blank row; it must not reach the maths."""
+
+        def calculator_entry():
+            import views
+
+            views.calculator()
+
+        at = AppTest.from_function(calculator_entry, default_timeout=TIMEOUT)
+        at.run()
+        self.assertEqual(exceptions(at), [],
+                         "a blank trailing row must not break the calculation")
+        labels = [button.label for button in at.button if button.label.startswith("Remove ")]
+        self.assertFalse(any("nan" in label.lower() for label in labels),
+                         f"a blank row must not get a delete button: {labels}")
+        values = {item.label: item.value for item in at.metric}
+        self.assertIn("Total prepared mass", values)
+
     def test_solving_from_one_weighed_component_gives_the_rest(self):
         def calculator_entry():
             import views

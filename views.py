@@ -176,6 +176,11 @@ def calculator():
         components["density"] = 0.0
     if ratio_basis != "volume":
         components = components.drop(columns=["density"])
+    # an empty row at the bottom of the editor is not a component: drop it before anything uses it
+    components = components[
+        components["name"].astype(str).str.strip().ne("")
+        & components["name"].notna()
+    ].reset_index(drop=True)
     if ideal:
         components = components.copy()
         components["assay_pct"] = 100.0
