@@ -712,6 +712,10 @@ def compare_page() -> None:
                 extracted = ai.extract_from_paper(work["title"], work["abstract"])
                 extracted["_title"] = work["title"]
                 extracted["_doi"] = work["doi"]
+            elif work:
+                extracted = {"_title": work["title"], "_doi": work.get("doi", doi),
+                             "_no_abstract": True}
+            if extracted:
                 st.session_state["compare_extracted"] = extracted
     if extracted:
         found_count = int(extracted.get("found") or 0)
@@ -720,8 +724,14 @@ def compare_page() -> None:
             st.caption(t("cmp.read_check"))
             if extracted.get("quote"):
                 st.caption("“" + str(extracted["quote"]) + "”")
+        elif extracted.get("_no_abstract"):
+            st.warning(t("cmp.read_no_abstract", title=extracted.get("_title", doi)))
         else:
             st.info(t("cmp.read_empty"))
+    elif doi and ai.available():
+        st.warning(t("cmp.read_not_found", doi=doi))
+    if doi:
+        st.caption(t("cmp.placeholder_note"))
     st.caption(t("cmp.ref_hint"))
     with st.form("compare_paper"):
         label = st.text_input(t("cmp.title_field"),
