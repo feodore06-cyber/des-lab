@@ -156,6 +156,13 @@ class NavigationTests(unittest.TestCase):
         self._original = papers.search
         self.addCleanup(setattr, papers, "search", self._original)
         papers.search = fake_search
+        # the comparison reads the paper's abstract when a model is configured; the test keeps the
+        # network out of the way and only checks that the screen opens
+        import ai
+
+        self._ai_original = ai.available
+        self.addCleanup(setattr, ai, "available", self._ai_original)
+        ai.available = lambda: False
 
         def entry():
             import views
