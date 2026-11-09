@@ -1375,6 +1375,14 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         return
     saved = auth.load_results(user)
     saved = pd.DataFrame() if saved is None else saved
+    # the next sample ID counts inside this project only: EXP-05 after EXP-04 of the same project
+    if "project" in saved.columns and project:
+        saved = saved[saved["project"].fillna(auth.DEFAULT_PROJECT) == project]
+    # the field keeps its value between runs; reset it when the project changes so the next ID
+    # really is computed for the project now on screen
+    if st.session_state.get("run_project") != project:
+        st.session_state["run_project"] = project
+        st.session_state.pop("run_sample", None)
     st.caption(t("res.new_hint"))
     with st.form("record_run", clear_on_submit=True):
         left, right = st.columns(2)

@@ -213,6 +213,32 @@ class WorkspaceFlows(unittest.TestCase):
              "recorded_at": "2026-10-30 10:00"},
         ]), append=False)
 
+    def test_the_next_sample_id_counts_inside_the_selected_project(self):
+        os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
+        auth.ensure_store()
+        auth.create_project("Chuanyu", "two runs")
+        auth.create_project("Chuanyu", "three runs")
+        auth.save_results("Chuanyu", pd.DataFrame([
+            {"sample_id": "EXP-01", "project": "two runs", "lignin_yield_pct": 1.0},
+            {"sample_id": "EXP-02", "project": "two runs", "lignin_yield_pct": 2.0},
+            {"sample_id": "EXP-01", "project": "three runs", "lignin_yield_pct": 3.0},
+            {"sample_id": "EXP-02", "project": "three runs", "lignin_yield_pct": 4.0},
+            {"sample_id": "EXP-03", "project": "three runs", "lignin_yield_pct": 5.0}]), append=False)
+
+        def page():
+            import views
+
+            views.results()
+
+        at = AppTest.from_function(page, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.run()
+        self.assertEqual(at.text_input(key="run_sample").value, "EXP-03",
+                         "two runs in the project, so the next one is EXP-03")
+        at.selectbox(key="project_pick").set_value("three runs").run()
+        self.assertEqual(at.text_input(key="run_sample").value, "EXP-04",
+                         "three runs in the other project, so its next one is EXP-04")
+
     def test_the_top_bar_switches_to_results_and_the_calculator(self):
         at = fresh_at()
         self.assertEqual(exceptions(at), [])
