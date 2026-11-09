@@ -828,6 +828,54 @@ def _comparability(mine: dict, theirs: dict) -> list:
     return notes
 
 
+SKIP_FROM_CONDITIONS = {"sample_id", "project", "notes", "recorded_at", "replicate",
+                        "basis", "feedstock", "lignin_yield_pct"}
+
+
+def _condition_rows(mine: dict, theirs: dict):
+    """Every condition of both runs next to each other, with the ones that differ marked."""
+    if not mine or not theirs:
+        return None
+    keys = [key for key in list(mine) + list(theirs)
+            if key not in SKIP_FROM_CONDITIONS and str(key) not in SKIP_FROM_CONDITIONS]
+    seen, ordered = set(), []
+    for key in keys:
+        if key not in seen:
+            seen.add(key)
+            ordered.append(key)
+    differing = 0
+    rows = []
+    for key in ordered:
+        left, right = mine.get(key), theirs.get(key)
+        if left is None and right is None:
+            continue
+        same = _same_value(left, right)
+        differing += 0 if same else 1
+        rows.append({"variable": str(key).replace("_", " "),
+                     t("cmp.run_a"): _show(left), t("cmp.run_b"): _show(right),
+                     t("cmp.differs"): "" if same else "•"})
+    return pd.DataFrame(rows) if rows else None
+
+
+def _same_value(left, right) -> bool:
+    if left is None or right is None:
+        return left is None and right is None
+    try:
+        return abs(float(left) - float(right)) < 1e-9
+    except (TypeError, ValueError):
+        return str(left).strip().lower() == str(right).strip().lower()
+
+
+def _show(value) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        if value != value:
+            return "—"
+        return f"{value:g}"
+    return str(value)
+
+
 def _render_outcome() -> None:
     """The shared result block: two numbers, the difference, then the ranked explanations."""
     outcome = st.session_state.get("compare_outcome")
@@ -843,18 +891,33 @@ def _render_outcome() -> None:
         st.caption(t("cmp.guard_note"))
     st.subheader(t("cmp.side_by_side"))
     sides = details.get("sides") or {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}
+    # say what the number is: a yield, a strength, a recovery - not just "0.96 %"
+    measure = details.get("measure") or "lignin_yield_pct"
+    unit = "%" if "pct" in str(measure) else ""
     cols = st.columns(3)
-    for column, name, value in zip(
-            cols,
-            (sides["mine"], sides["theirs"], t("cmp.delta")),
-            (details.get("mine", {}).get("lignin_yield_pct"),
-             details.get("theirs", {}).get("lignin_yield_pct"),
-             outcome["delta"])):
-        if isinstance(value, (int, float)):
-            column.metric(str(name), f"{value:.2f} %" if name != t("cmp.delta") else f"{value:+.2f}")
+    values = (details.get("mine", {}).get(measure),
+              details.get("theirs", {}).get(measure),
+              outcome["delta"])
+    for column, name, value in zip((cols[0], cols[1], cols[2]),
+                                   (sides["mine"], sides["theirs"], t("cmp.delta")), values):
+        if isinstance(value, (int, float)) and value == value:
+            shown = f"{value:+.2f}" if name == t("cmp.delta") else f"{value:.2f}"
+            column.metric(name, f"{shown} {unit}".strip())
         else:
-            column.metric(str(name), "—")
-    st.caption(t("cmp.nothing_saved"))
+            column.metric(name, "—")
+    st.caption(t("cmp.measure_note", what=measure.replace("_", " ")))
+
+    # what actually differed: the result is not caused by one variable, so show them all
+    pair = _condition_rows(details.get("mine", {}), details.get("theirs", {}))
+    if pair is not None and not pair.empty:
+        st.markdown(t("cmp.conditions_title"))
+        st.dataframe(pair, hide_index=True, width="stretch")
+        changed = [row["variable"] for row in pair.to_dict("records")
+                   if row.get(t("cmp.differs")) == "•"]
+        if changed:
+            st.caption(t("cmp.conditions_changed", names=", ".join(changed)))
+        else:
+            st.caption(t("cmp.conditions_same"))
     st.info(t(f"cmp.headline_{compare.headline(outcome)}"))
 
     st.subheader(t("cmp.ai_title"))
