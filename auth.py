@@ -1380,3 +1380,28 @@ def renumber_project(username: str, project: str) -> dict:
                     pass
         _forget_cached_reads()
     return mapping
+
+def project_meta(username: str | None) -> dict:
+    """name -> {created, pinned} for the projects this account can see."""
+    if not username or not store.enabled():
+        return {}
+    try:
+        rows = store.project_rows(data_owners(username))
+    except Exception:
+        return {}
+    meta = {}
+    for row in rows:
+        current = meta.setdefault(row["name"], {"created": "", "pinned": ""})
+        current["created"] = current["created"] or row["created"]
+        current["pinned"] = max(current["pinned"], row["pinned"])
+    return meta
+
+
+def pin_project(username: str, name: str) -> None:
+    """Put a project at the top of the list."""
+    if not store.enabled():
+        return
+    from datetime import datetime, timezone
+
+    store.project_pin(username, name, datetime.now(timezone.utc))
+    _forget_cached_reads()

@@ -83,6 +83,7 @@ create table if not exists projects (
 alter table projects add column if not exists status text not null default 'In progress';
 alter table projects add column if not exists formulation text;
 alter table projects add column if not exists variables text;
+alter table projects add column if not exists pinned_at timestamptz;
 """
 
 
@@ -607,6 +608,26 @@ def session_drop(token_hash: str) -> None:
 def session_purge(now) -> None:
     with _connect() as conn:
         conn.execute("delete from sessions where expires < %s", (now,))
+        conn.commit()
+
+
+def project_rows(owners: list[str]) -> list[dict]:
+    """Name, creation date and pin state for every project of these accounts."""
+    if not owners:
+        return []
+    with _connect() as conn:
+        rows = conn.execute(
+            "select name, created, pinned_at from projects where owner = any(%s) order by name",
+            (list(owners),)).fetchall()
+    return [{"name": row[0],
+             "created": row[1].strftime("%Y-%m-%d") if row[1] else "",
+             "pinned": row[2].strftime("%Y-%m-%d %H:%M") if row[2] else ""} for row in rows]
+
+
+def project_pin(owner: str, name: str, when) -> None:
+    with _connect() as conn:
+        conn.execute("update projects set pinned_at = %s where owner = %s and name = %s",
+                     (when, owner, name))
         conn.commit()
 
 

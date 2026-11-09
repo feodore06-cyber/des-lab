@@ -1053,6 +1053,7 @@ def workspace() -> None:
             rows["project"] = auth.DEFAULT_PROJECT
         rows["project"] = rows["project"].fillna(auth.DEFAULT_PROJECT)
 
+    meta = auth.project_meta(user)
     grouped = []
     for name in projects:
         part = rows[rows["project"] == name] if rows is not None else None
@@ -1061,9 +1062,14 @@ def workspace() -> None:
         if part is not None and not part.empty and "recorded_at" in part.columns:
             stamps = pd.to_datetime(part["recorded_at"], errors="coerce").dropna()
             last = stamps.max().strftime("%Y-%m-%d") if len(stamps) else ""
+        information = meta.get(name, {})
         grouped.append({"name": name, "runs": runs, "last": last,
-                        "status": states.get(name, "In progress")})
-    grouped.sort(key=lambda item: (item["last"] != "", item["last"]), reverse=True)
+                        "status": states.get(name, "In progress"),
+                        "created": information.get("created", ""),
+                        "pinned": information.get("pinned", "")})
+    # a pinned project comes first, then the one with the most recent run
+    grouped.sort(key=lambda item: (item["pinned"] != "", item["pinned"], item["last"] != "",
+                                   item["last"]), reverse=True)
 
     pending = st.session_state.get("ws_delete")
     if pending:
@@ -1092,14 +1098,19 @@ def workspace() -> None:
             head.markdown(f'<div class="bm-status bm-status-{key}">'
                           f'{_status_label(item["status"])}</div>', unsafe_allow_html=True)
             head.markdown(f"**{item['name']}**")
-            if item["runs"]:
-                head.caption(f"{t('ws.runs', n=item['runs'])} · "
-                             f"{t('ws.last', date=item['last'] or '—')}")
-            else:
-                head.caption(t("ws.empty_project"))
+            bits = [t("ws.runs", n=item["runs"]) if item["runs"] else t("ws.empty_project")]
+            if item["created"]:
+                bits.append(t("ws.created", date=item["created"]))
+            if item["last"]:
+                bits.append(t("ws.last", date=item["last"]))
+            head.caption(" · ".join(bits))
             if tail.button(t("ws.open"), key=f"open_{item['name']}", use_container_width=True):
                 st.session_state["ws_open"] = item["name"]
                 st.session_state["ws_mode"] = "open"
+                st.rerun()
+            if tail.button(t("ws.pin"), key=f"pin_{item['name']}",
+                           use_container_width=True):
+                auth.pin_project(user, item["name"])
                 st.rerun()
             if tail.button(t("ws.delete"), key=f"del_{item['name']}",
                            use_container_width=True):
