@@ -731,13 +731,20 @@ def list_projects(username: str | None) -> list:
         except Exception:
             names = []
     local = _local_projects()
+    found = list(names)
     for owner in owners:
-        names = list(names) + [value for value in (local.get(owner) or []) if value]
-    if not names:
-        names = sorted({str(value) for value in (_project_values(username) or []) if value})
-    if DEFAULT_PROJECT not in names:
-        names = [DEFAULT_PROJECT] + names
-    return names
+        found += [value for value in (local.get(owner) or []) if value]
+    found += [str(value) for value in (_project_values(username) or []) if value]
+
+    # one entry per name, in first-seen order: the list used to repeat itself because three
+    # sources were concatenated without checking
+    ordered = []
+    for value in found:
+        if value and value not in ordered:
+            ordered.append(value)
+    if not ordered:
+        ordered = [DEFAULT_PROJECT]
+    return ordered
 
 
 def _project_values(username: str | None) -> list:
