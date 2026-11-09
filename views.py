@@ -653,8 +653,13 @@ def _pick_run(saved, user, prefix: str, label_key: str, run_index: int = 0) -> d
         return None
     options = {}
     for _, row in part.iterrows():
-        caption = f"{row['sample_id']} · {row.get('formulation') or ''} · {str(row.get('recorded_at') or '')[:10]}"
-        options[caption.strip(" ·")] = row.to_dict()
+        stamp = pd.to_datetime(row.get("recorded_at"), errors="coerce")
+        when = stamp.strftime("%Y-%m-%d") if pd.notna(stamp) else t("cmp.no_date")
+        bits = [str(row["sample_id"])]
+        if row.get("formulation") and str(row.get("formulation")) != "nan":
+            bits.append(str(row["formulation"]))
+        bits.append(when)
+        options[" · ".join(bits)] = row.to_dict()
     keys = list(options)
     choice = st.selectbox(t(label_key), keys, index=min(run_index, len(keys) - 1),
                           key=f"{prefix}_run")
