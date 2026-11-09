@@ -852,7 +852,7 @@ def _condition_rows(mine: dict, theirs: dict):
         same = _same_value(left, right)
         differing += 0 if same else 1
         rows.append({"variable": str(key).replace("_", " "),
-                     t("cmp.run_a"): _show(left), t("cmp.run_b"): _show(right),
+                     t("cmp.run_a"): _show(left, key), t("cmp.run_b"): _show(right, key),
                      t("cmp.differs"): "" if same else "•"})
     return pd.DataFrame(rows) if rows else None
 
@@ -866,12 +866,16 @@ def _same_value(left, right) -> bool:
         return str(left).strip().lower() == str(right).strip().lower()
 
 
-def _show(value) -> str:
-    if value is None:
-        return "—"
+def _show(value, key: str = "") -> str:
+    if value is None or (isinstance(value, float) and value != value):
+        return "room temp" if key == "temperature_C" else "—"
+    if key == "temperature_C":
+        try:
+            if float(value) <= 30:
+                return f"{float(value):g} (room temp)"
+        except (TypeError, ValueError):
+            pass
     if isinstance(value, float):
-        if value != value:
-            return "—"
         return f"{value:g}"
     return str(value)
 
