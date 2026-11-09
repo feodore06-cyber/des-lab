@@ -1520,6 +1520,9 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
                 if info:
                     st.caption(t("res.import_found", sheet=info["sheet"], row=info["header_row"],
                                  rows=info["rows"]))
+                    for row_number, column, raw in (info.get("problems") or [])[:8]:
+                        st.warning(t("res.import_bad_cell", row=row_number, column=column,
+                                     raw=raw))
                     if info["mapping"]:
                         st.caption(" · ".join(f"{k} → {v}" for k, v in info["mapping"].items()))
                     if info["unknown"]:

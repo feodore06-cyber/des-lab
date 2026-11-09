@@ -95,6 +95,37 @@ def find_header_row(raw: pd.DataFrame) -> int | None:
     return best_row
 
 
+NUMERIC_COLUMNS = ("molar_ratio", "purity_wt_pct", "water_wt_pct", "biomass_g",
+                   "temperature_C", "time_min", "lignin_mg", "lignin_yield_pct", "replicate")
+
+_LEADING_NUMBER = re.compile(r"^\s*([-+]?\d+(?:[.,]\d+)?)\s*[^\d\s]*")
+
+
+def _coerce_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list]:
+    """Turn "220 mg" into 220 and report cells that hold no number at all.
+
+    Real sheets put the unit inside the cell as often as in the header, so a value that starts with
+    a number is read as that number; anything else is reported instead of being kept as text.
+    """
+    work = frame.copy()
+    problems = []
+    for column in [c for c in NUMERIC_COLUMNS if c in work.columns]:
+        parsed = []
+        for position, value in enumerate(work[column]):
+            if isinstance(value, (int, float)) or (value is None or (isinstance(value, float)
+                                                                     and pd.isna(value))):
+                parsed.append(value)
+                continue
+            match = _LEADING_NUMBER.match(str(value))
+            if match:
+                parsed.append(float(match.group(1).replace(",", ".")))
+            else:
+                parsed.append(None)
+                problems.append((int(position) + 1, column, str(value)))
+        work[column] = pd.Series(parsed, index=work.index, dtype="object")
+    return work, problems
+
+
 def read_table(content: bytes, sheet: str | None = None) -> dict:
     """Turn workbook bytes into a tidy frame plus what had to be guessed.
 
@@ -146,6 +177,7 @@ def read_table(content: bytes, sheet: str | None = None) -> dict:
         if column in frame.columns:
             frame[column] = frame[column].ffill()
 
+    frame, problems = _coerce_numbers(frame)
     frame = add_missing_yield(frame)
     # a sheet that only carries the old free-text label still yields the structured fields, and a
     # sheet that only carries structured columns gets a human-readable label
@@ -159,7 +191,7 @@ def read_table(content: bytes, sheet: str | None = None) -> dict:
         "header_row": header_row + 1,
         "mapping": mapping,
         "unknown": unknown,
-        "rows": len(frame),
+        "rows": len(frame), "problems": problems,
     }
 
 
