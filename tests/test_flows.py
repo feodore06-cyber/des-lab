@@ -213,6 +213,20 @@ class WorkspaceFlows(unittest.TestCase):
              "recorded_at": "2026-10-30 10:00"},
         ]), append=False)
 
+    def test_the_top_bar_switches_to_results_and_the_calculator(self):
+        at = fresh_at()
+        self.assertEqual(exceptions(at), [])
+        keys = [button.key for button in at.button if button.key and button.key.startswith("nav_")]
+        self.assertIn("nav_results", keys, f"the top bar has no Results button: {keys}")
+        at.button(key="nav_results").click()
+        at.run()
+        self.assertEqual(exceptions(at), [])
+        self.assertEqual([title.value for title in at.title], ["Results and Figures"])
+        at.button(key="nav_calculator").click()
+        at.run()
+        self.assertEqual(exceptions(at), [])
+        self.assertEqual([title.value for title in at.title], ["Recipe Calculator"])
+
     def test_the_workspace_renders_the_experiments(self):
         at = fresh_at()
         self.assertEqual(exceptions(at), [])

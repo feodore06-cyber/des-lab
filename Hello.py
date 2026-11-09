@@ -442,7 +442,10 @@ if user:
         '<span class="bm-wordmark">BioMat Lab</span></div>', unsafe_allow_html=True)
     for column, entry in zip(bar[1:7], NAV[:6]):
         with column:
-            st.page_link(entry[1], label=entry[2])
+            # a page_link renders but does not navigate for function-defined pages; a button that
+            # switches to the object created in this very run does work
+            if st.button(entry[2], key=f"nav_{entry[0]}", use_container_width=True):
+                st.switch_page(entry[1])
     i18n.language_switch(bar[7])
     with bar[8]:
         if st.button(t("app.logout"), key="logout", use_container_width=True):
