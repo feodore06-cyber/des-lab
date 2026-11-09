@@ -577,12 +577,22 @@ def library() -> None:
             found = _library_results(query, since, citations,
                                      last["order"], last["limit"])
     except papers.PaperError as exc:
-        st.error(t("lib.failed", error=str(exc)))
-        return
-
-    if not found:
-        st.warning(t("lib.none", query=query.strip()))
-        return
+        # the catalogue being busy must not lose the page: show what was found last time, say what
+        # happened, and offer a retry
+        st.warning(t("lib.failed", error=str(exc)))
+        stale = st.session_state.get("lib_stale") or []
+        if stale:
+            st.caption(t("lib.stale", n=len(stale)))
+            found = stale
+        else:
+            if st.button(t("lib.retry"), key="lib_retry"):
+                st.rerun()
+            return
+    else:
+        if not found:
+            st.warning(t("lib.none", query=query.strip()))
+            return
+        st.session_state["lib_stale"] = found
     st.caption(papers.summarise(query.strip(), found))
     summaries = {}
     if ai.available():

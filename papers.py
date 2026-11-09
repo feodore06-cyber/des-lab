@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import urllib.error
+import time
 import urllib.parse
 import urllib.request
 
@@ -21,19 +22,53 @@ class PaperError(RuntimeError):
     """Raised when the catalogue cannot be reached, with a message that can be shown as-is."""
 
 
-def _fetch(params: dict) -> dict:
+RETRY_STATUS = {429, 500, 502, 503, 504}
+RETRY_DELAYS = (2.0, 6.0, 14.0)          # the catalogue asks for patience, so wait it out
+_MEMO: dict = {}
+
+
+def _fetch(params: dict, attempts: int = len(RETRY_DELAYS) + 1) -> dict:
+    """Ask the catalogue, waiting and trying again while it is busy.
+
+    A 429 means "slow down", not "wrong request", so it is retried with growing delays before the
+    caller is told that anything failed. Answers are remembered, so the same query costs one call.
+    """
     query = urllib.parse.urlencode(params)
+    if query in _MEMO:
+        return _MEMO[query]
+
     request = urllib.request.Request(f"{API}?{query}",
                                      headers={"User-Agent": AGENT, "Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as exc:
-        raise PaperError(f"the catalogue answered {exc.code}") from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise PaperError("the catalogue could not be reached") from exc
-    except json.JSONDecodeError as exc:
-        raise PaperError("the catalogue sent something unreadable") from exc
+    last = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+                body = json.load(response)
+            _MEMO[query] = body
+            return body
+        except urllib.error.HTTPError as exc:
+            last = exc
+            if exc.code not in RETRY_STATUS or attempt == attempts - 1:
+                break
+            wait = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            if retry_after and str(retry_after).isdigit():
+                wait = min(float(retry_after), 30.0)
+            time.sleep(wait)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last = exc
+            if attempt == attempts - 1:
+                break
+            time.sleep(RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)])
+        except json.JSONDecodeError as exc:
+            raise PaperError("the catalogue sent something unreadable") from exc
+
+    if isinstance(last, urllib.error.HTTPError):
+        if last.code == 429:
+            raise PaperError("the catalogue is busy (429) - it asks for a short pause; "
+                             "try again in a minute") from last
+        raise PaperError(f"the catalogue answered {last.code}") from last
+    raise PaperError("the catalogue could not be reached") from last
 
 
 def _abstract(work: dict) -> str:
