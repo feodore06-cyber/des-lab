@@ -1409,11 +1409,15 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         water = formulation["water_wt_pct"]
         replicate = st.number_input(t("res.replicate"), min_value=1, value=1, step=1,
                                     key="run_replicate")
+        own = auth.project_variables(user, project)
         a, b, c, d = st.columns(4)
         biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1,
                                  format="%.4f", key="run_biomass")
-        lignin = b.number_input(t("res.lignin_mg"), min_value=0.0, value=0.0, step=0.1,
-                                format="%.3f", key="run_lignin")
+        lignin = (b.number_input(t("res.lignin_mg"), min_value=0.0, value=0.0, step=0.1,
+                                 format="%.3f", key="run_lignin")
+                  if "lignin_mg" in own else 0.0)
+        if "lignin_mg" not in own:
+            b.caption(t("exp.no_lignin_field"))
         temperature = c.number_input(t("res.temperature"), min_value=0.0, value=80.0, step=5.0,
                                      format="%.1f", key="run_temp")
         minutes = d.number_input(t("res.time"), min_value=0.0, value=60.0, step=5.0,

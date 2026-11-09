@@ -1233,8 +1233,9 @@ def delete_project(username: str, name: str, force: bool = False) -> int:
     _forget_cached_reads()
     return removed
 
-DEFAULT_VARIABLES = ["temperature_C", "time_min", "biomass_g", "lignin_mg",
-                     "lignin_yield_pct", "replicate", "notes"]
+# a project may study anything: the default set is only what almost every run has, and the
+# result column comes from the project's own variables (or from the AI suggestion)
+DEFAULT_VARIABLES = ["temperature_C", "time_min", "biomass_g", "replicate", "notes"]
 
 # what a project may measure, on top of the ones every project starts with
 EXTRA_VARIABLES = ["stirring_rpm", "stirring_time_min", "solid_liquid_ratio", "ph",
