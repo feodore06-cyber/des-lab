@@ -733,56 +733,57 @@ def compare_page() -> None:
     if doi:
         st.caption(t("cmp.placeholder_note"))
     st.caption(t("cmp.ref_hint"))
+    own = [value for value in auth.project_variables(
+        user, mine_row.get("project") or auth.DEFAULT_PROJECT)
+        if value not in ("sample_id", "notes", "recorded_at", "replicate")]
+    if ai.available():
+        if st.button(t("cmp.ai_pick_fields"), key="ai_pick_fields"):
+            with st.spinner(t("cmp.ai_thinking")):
+                chosen = ai.suggest_comparison_fields(
+                    own, extracted.get("_title", ""), extracted.get("quote", ""),
+                    st.session_state.get(i18n.LANG_KEY, "en"))
+            if chosen:
+                st.session_state["cmp_fields"] = [v for v in chosen if v in own] or own
+        own = st.session_state.get("cmp_fields") or own
+        st.caption(t("cmp.ai_pick_note"))
+
     with st.form("compare_paper"):
         label = st.text_input(t("cmp.title_field"),
                               value=str(st.session_state.get("compare_ref", {}).get("title", "")),
                               placeholder="10.1016/j.indcrop.2022.115040")
         basis_labels = [t(key) for key in BASIS_KEYS]
         preface = str(extracted.get("basis") or "").lower()
-        start = 0
+        chosen_basis = 0
         for index, key in enumerate(BASIS_KEYS):
             if preface and t(key).lower() in preface:
-                start = index
-        basis = st.selectbox(t("cmp.basis"), basis_labels, index=start, key="compare_basis")
-        a, b, c = st.columns(3)
-        feedstock = a.text_input(t("cmp.feedstock"), value=str(extracted.get("feedstock") or ""),
-                             placeholder=str(mine_row.get("feedstock") or ""))
-        ratio = b.text_input(t("cmp.ratio"), value=str(extracted.get("molar_ratio") or ""),
-                         placeholder=str(mine_row.get("molar_ratio") or ""))
-        purity = c.text_input(t("cmp.purity"), value=str(extracted.get("purity_wt_pct") or ""),
-                          placeholder=str(mine_row.get("purity_wt_pct") or ""))
-        a, b, c = st.columns(3)
-        water = a.text_input(t("cmp.water"), value=str(extracted.get("water_wt_pct") or ""),
-                         placeholder=str(mine_row.get("water_wt_pct") or ""))
-        temp = b.text_input(t("cmp.temp"), value=str(extracted.get("temperature_C") or ""),
-                        placeholder=str(mine_row.get("temperature_C") or ""))
-        minutes = c.text_input(t("cmp.time"), value=str(extracted.get("time_min") or ""),
-                           placeholder=str(mine_row.get("time_min") or ""))
-        a, b, c = st.columns(3)
-        reported = a.text_input(t("cmp.yield"), value=str(extracted.get("lignin_yield_pct") or ""),
-                            placeholder="")
-        replicates = b.text_input(t("cmp.replicates"), placeholder="")
-        moisture = c.text_input(t("cmp.moisture"), placeholder="")
+                chosen_basis = index
+        basis = st.selectbox(t("cmp.basis"), basis_labels, index=chosen_basis,
+                             key="compare_basis")
+        for chunk in range(0, len(own), 3):
+            columns = st.columns(3)
+            for column, variable in zip(columns, own[chunk:chunk + 3]):
+                value = extracted.get(variable)
+                column.text_input(variable.replace("_", " "),
+                                  value="" if value is None else str(value),
+                                  placeholder="" if mine_row.get(variable) is None
+                                  else str(mine_row.get(variable)),
+                                  key=f"cmp_field_{variable}")
+        reported = st.text_input(t("cmp.yield"),
+                                 value=str(extracted.get("lignin_yield_pct") or ""),
+                                 placeholder="")
         if st.form_submit_button(t("cmp.run_btn"), type="primary"):
             if not str(reported).strip():
                 st.error(t("cmp.need_numbers"))
             else:
-                theirs = {
-                    "lignin_yield_pct": reported, "basis": basis, "feedstock": feedstock,
-                    "molar_ratio": ratio, "purity_wt_pct": purity, "water_wt_pct": water,
-                    "temperature_C": temp, "time_min": minutes, "replicates": replicates,
-                    "moisture_wt_pct": moisture,
-                }
-                mine = {
-                    "lignin_yield_pct": mine_row.get("lignin_yield_pct"),
-                    "basis": t("cmp.basis_yield"), "feedstock": mine_row.get("feedstock"),
-                    "molar_ratio": mine_row.get("molar_ratio"),
-                    "purity_wt_pct": mine_row.get("purity_wt_pct"),
-                    "water_wt_pct": mine_row.get("water_wt_pct"),
-                    "temperature_C": mine_row.get("temperature_C"),
-                    "time_min": mine_row.get("time_min"),
-                    "replicates": 3, "moisture_wt_pct": mine_row.get("moisture_wt_pct"),
-                }
+                theirs = {variable: st.session_state.get(f"cmp_field_{variable}", "")
+                          for variable in own}
+                theirs["basis"] = basis
+                theirs["lignin_yield_pct"] = reported
+                mine = {"lignin_yield_pct": mine_row.get("lignin_yield_pct"),
+                        "basis": t("cmp.basis_yield")}
+                for variable in own:
+                    mine[variable] = mine_row.get(variable)
+                mine["replicates"] = 3
                 st.session_state["compare_result"] = {
                     "mine": mine, "theirs": theirs, "label": label or pick,
                     "sides": {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}}

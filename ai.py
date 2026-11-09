@@ -330,3 +330,47 @@ def normalise_columns(columns: list, sample: list, language: str = "en") -> list
             pairs.append({"original": str(item["original"]),
                           "key": " ".join(str(item["key"]).split()).replace(" ", "_")[:32]})
     return pairs
+
+FIELDS_SYSTEM = (
+    "You are told the variables a lab records, and a paper's title and a quoted sentence. Pick which "
+    "of those variables are worth comparing against this paper, most useful first. Return a JSON "
+    "array of the variable names exactly as given, at most 8, and only ones from the list. No prose."
+)
+
+
+def suggest_comparison_fields(variables: list, title: str, quote: str,
+                              language: str = "en") -> list:
+    """Return the subset of variables worth comparing with this paper, or [] on failure."""
+    config = settings()
+    if not config["key"] or not variables:
+        return []
+    payload = {
+        "model": config["model"],
+        "temperature": 0.0,
+        "messages": [
+            {"role": "system", "content": FIELDS_SYSTEM},
+            {"role": "user", "content": json.dumps(
+                {"variables": variables, "paper_title": title, "paper_quote": quote},
+                ensure_ascii=False)},
+        ],
+    }
+    request = urllib.request.Request(
+        config["base"] + "/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": "Bearer " + config["key"]},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        for fence in ("```json", "```"):
+            raw = raw.replace(fence, "")
+        parsed = json.loads(raw.strip())
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(value) for value in parsed if isinstance(value, str)]

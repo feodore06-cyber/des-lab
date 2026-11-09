@@ -186,7 +186,7 @@ class NavigationTests(unittest.TestCase):
         press(at, "Compare with my data")
         self.assertEqual(exceptions(at), [])
         markup = " ".join(str(item.value) for item in at.markdown)
-        self.assertIn("Compare with a paper", markup,
+        self.assertIn("## Compare", markup,
                       "pressing the button must open the comparison screen")
 
 
