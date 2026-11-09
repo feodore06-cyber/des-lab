@@ -116,12 +116,25 @@ def _coerce_numbers(frame: pd.DataFrame) -> tuple[pd.DataFrame, list]:
                                                                      and pd.isna(value))):
                 parsed.append(value)
                 continue
-            match = _LEADING_NUMBER.match(str(value))
+            raw = str(value)
+            # a ratio is not a leading number: "1:2" means two donors per acceptor
+            if column == "molar_ratio":
+                ratio = schema.to_ratio(raw)
+                parsed.append(ratio)
+                if ratio is None:
+                    problems.append((int(position) + 1, column, raw))
+                continue
+            # "room temperature" is a real value, not a mistake
+            if column == "temperature_C" and raw.strip().lower() in (
+                    "rt", "r.t.", "room temperature", "ambient", "室温"):
+                parsed.append(25.0)
+                continue
+            match = _LEADING_NUMBER.match(raw)
             if match:
                 parsed.append(float(match.group(1).replace(",", ".")))
             else:
                 parsed.append(None)
-                problems.append((int(position) + 1, column, str(value)))
+                problems.append((int(position) + 1, column, raw))
         work[column] = pd.Series(parsed, index=work.index, dtype="object")
     return work, problems
 
