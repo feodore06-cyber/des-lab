@@ -489,6 +489,14 @@ def image_bytes(image_id: int, owners: list[str]):
     return row
 
 
+def image_reassign(owner: str, project: str, old_id: str, new_id: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "update images set sample_id = %s where owner = %s and project = %s and sample_id = %s",
+            (new_id, owner, project, old_id))
+        conn.commit()
+
+
 def image_delete_by_project(owner: str, project: str) -> None:
     with _connect() as conn:
         conn.execute("delete from images where owner = %s and project = %s", (owner, project))

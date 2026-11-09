@@ -669,7 +669,7 @@ IMAGE_LIMIT_BYTES = 8 * 1024 * 1024  # one picture; the number of pictures is un
 
 
 def add_image(username: str, sample_id: str, category: str, note: str,
-              filename: str, mime: str, payload: bytes) -> int:
+              filename: str, mime: str, payload: bytes, project: str | None = None) -> int:
     """Store one picture against a run. Refuses oversized or non-image files."""
     if not payload:
         raise ValueError("The file is empty.")
@@ -679,7 +679,7 @@ def add_image(username: str, sample_id: str, category: str, note: str,
         raise ValueError("Only images can be attached here.")
     if not store.enabled():
         raise ValueError("Attaching pictures needs the database; this copy is running on files.")
-    image_id = store.image_add(username, None, sample_id, category,
+    image_id = store.image_add(username, project, sample_id, category,
                                " ".join(str(note or "").split())[:200], filename, mime, payload)
     _forget_cached_reads()
     return image_id
@@ -1346,3 +1346,37 @@ def drop_session(token: str) -> None:
             store.session_drop(_hash_token(clean))
         except Exception:
             pass
+
+def renumber_project(username: str, project: str) -> dict:
+    """Give every run in a project EXP-01, EXP-02 … in its current order.
+
+    Pictures are bound to the sample ID, so they are moved with the row; returns the old -> new map.
+    """
+    frame = load_results(username)
+    if frame is None or frame.empty:
+        return {}
+    if "project" not in frame.columns:
+        frame = frame.assign(project=DEFAULT_PROJECT)
+    frame = frame.copy()
+    frame["project"] = frame["project"].fillna(DEFAULT_PROJECT)
+    part = frame[frame["project"] == project].sort_values("sample_id")
+    if part.empty:
+        return {}
+
+    mapping = {}
+    for position, (index, row) in enumerate(part.iterrows(), start=1):
+        new_id = f"EXP-{position:02d}"
+        if str(row["sample_id"]) != new_id:
+            mapping[str(row["sample_id"])] = new_id
+        frame.at[index, "sample_id"] = new_id
+
+    if mapping:
+        save_results(username, frame, append=False)
+        if store.enabled():
+            for old_id, new_id in mapping.items():
+                try:
+                    store.image_reassign(username, project, old_id, new_id)
+                except Exception:
+                    pass
+        _forget_cached_reads()
+    return mapping

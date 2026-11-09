@@ -1264,7 +1264,7 @@ def _experiment_panel(user: str | None, name: str) -> None:
     with tab_records:
         keep = [column for column in RECORD_COLUMNS if column in part.columns]
         st.dataframe(part[keep], width="stretch", hide_index=True)
-        _photos_section(user, part)
+        _photos_section(user, part, name)
 
     st.divider()
     st.caption(t("exp.traceability", date=str(latest.get("recorded_at") or "—"),
@@ -1282,7 +1282,7 @@ def _experiment_panel(user: str | None, name: str) -> None:
         st.session_state["ws_mode"] = "add"
         st.rerun()
 
-def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
+def _photos_section(user: str | None, frame: pd.DataFrame, project: str | None = None) -> None:
     """Attach pictures to a run: unlimited count, a category from the list, plus a note."""
     if not user:
         return
@@ -1315,7 +1315,8 @@ def _photos_section(user: str | None, frame: pd.DataFrame) -> None:
                     for upload in uploads:
                         try:
                             auth.add_image(user, str(target), category, note, upload.name,
-                                           upload.type or "image/png", upload.getvalue())
+                                           upload.type or "image/png", upload.getvalue(),
+                                           project=project)
                             saved_count += 1
                         except ValueError as exc:
                             failed.append(f"{upload.name}: {t(str(exc))}")
@@ -1552,7 +1553,7 @@ def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
 
 
     _search_section(frame)
-    _photos_section(user, frame)
+    _photos_section(user, frame, project)
 
 
 def _quality_report(frame: pd.DataFrame, groups: list, measurement: str, summary: pd.DataFrame) -> None:
