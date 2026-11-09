@@ -1190,17 +1190,27 @@ def _experiment_panel(user: str | None, name: str) -> None:
 
     latest = part.iloc[-1]
     with tab_overview:
+        yields = pd.to_numeric(part.get("lignin_yield_pct"), errors="coerce").dropna()
         columns = st.columns(3)
-        columns[0].metric(t("res.lignin_yield"),
-                          f"{float(latest.get('lignin_yield_pct') or 0):.2f} %")
+        if len(yields) > 1 and float(yields.max()) - float(yields.min()) > 1e-9:
+            # several runs that disagree: show the range, not one of them dressed up as the answer
+            columns[0].metric(t("res.lignin_yield"),
+                              f"{float(yields.min()):.2f} – {float(yields.max()):.2f} %",
+                              help=t("exp.range_help", n=len(yields)))
+        else:
+            columns[0].metric(t("res.lignin_yield"),
+                              f"{float(yields.iloc[-1]) if len(yields) else 0:.2f} %")
         columns[1].metric(t("res.lignin_mg"), f"{float(latest.get('lignin_mg') or 0):.1f} mg")
         columns[2].metric(t("ws.runs_label"), len(part))
         heading = auth.project_formulation(user, name)
         st.caption(t("exp.header_line", hba=heading["des_hba"], hbd=heading["des_hbd"],
                      ratio=heading["molar_ratio"], runs=len(part)))
-        keep = [column for column in ("sample_id", "formulation", "lignin_yield_pct", "recorded_at")
+        # the conditions are what tells two runs apart: keep them next to the result
+        keep = [column for column in ("sample_id", "temperature_C", "time_min", "mixing_method",
+                                      "stirring_rpm", "lignin_mg", "lignin_yield_pct")
                 if column in part.columns]
         st.dataframe(part[keep], width="stretch", hide_index=True)
+        st.caption(t("exp.overview_note"))
 
     with tab_formulation:
         current = auth.project_formulation(user, name)
