@@ -1425,7 +1425,10 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         notes = st.text_input(t("res.notes"), key="run_notes")
         extras = {}
         for index, variable in enumerate(auth.project_variables(user, project)):
-            if variable in auth.DEFAULT_VARIABLES or variable in ("sample_id", "feedstock"):
+            # the form already has a field for these; adding another would overwrite the value
+            if variable in ("sample_id", "feedstock", "biomass_g", "lignin_mg",
+                            "lignin_yield_pct", "temperature_C", "time_min", "replicate",
+                            "notes"):
                 continue
             key = f"run_extra_{index}"
             if variable.endswith(("_pct", "_C", "_min", "_mg", "_g", "_rpm", "_mm", "_ratio")):

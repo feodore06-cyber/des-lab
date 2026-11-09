@@ -103,6 +103,10 @@ class PageTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         os.environ[auth.DATA_DIR_ENV] = self.tmp.name
         auth.ensure_store()
+        # the default project of these tests measures lignin, so the form really shows that field
+        auth.set_project_variables("Chuanyu", auth.DEFAULT_PROJECT,
+                                   ["temperature_C", "time_min", "biomass_g", "lignin_mg",
+                                    "lignin_yield_pct", "replicate", "notes"])
 
     def tearDown(self):
         os.environ.pop(auth.DATA_DIR_ENV, None)
