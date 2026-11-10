@@ -38,6 +38,7 @@ import store
 import i18n
 import mailer
 from i18n import t
+import audit
 import comparability
 import comparison
 import derive
@@ -1693,6 +1694,43 @@ def _experiment_panel(user: str | None, name: str) -> None:
         st.divider()
         st.caption(t("exp.variables_here"))
         _variables_editor(user, name)
+
+        with st.expander(t("exp.history"), expanded=False):
+            lines = [line for line in auth.change_log(200)
+                     if line.get("target") == name or line.get("kind") == "record"]
+            if not lines:
+                st.caption(t("exp.history_none"))
+            for line in lines[:30]:
+                st.caption(audit.describe(line))
+            if st.button(t("exp.recompute"), key=f"recompute_{name}"):
+                frame = auth.load_results(user)
+                if frame is not None and not frame.empty:
+                    frame = frame.copy()
+                    mask = frame["project"].fillna(auth.DEFAULT_PROJECT) == name
+                    items = auth.project_variable_items(user, name)
+                    changed = 0
+                    for index in frame[mask].index:
+                        before = frame.loc[index].to_dict()
+                        after = derive.recompute(before, items)
+                        for key, value in after.items():
+                            if key in items and key not in before:
+                                continue
+                        differences = {key: {"before": before.get(key), "after": value}
+                                       for key, value in after.items()
+                                       if str(before.get(key)) != str(value)}
+                        if differences:
+                            for key, value in after.items():
+                                if key in frame.columns:
+                                    frame.at[index, key] = value
+                            changed += 1
+                    if changed:
+                        auth.save_results(user, frame, append=False)
+                        auth.record_change(user, "record", name, {},
+                                           note=f"derived values recomputed for {changed} row(s)")
+                        st.success(t("exp.recomputed", n=changed))
+                        st.rerun()
+                    else:
+                        st.caption(t("exp.recompute_none"))
 
     with tab_formulation:
         current = auth.project_formulation(user, name)

@@ -25,6 +25,7 @@ import pandas as pd
 import streamlit as st
 
 import ai
+import audit
 
 import schema
 import store
@@ -1552,6 +1553,26 @@ def set_variable_items(username: str, name: str, items: list) -> None:
                         "position": position,
                         "removed": bool(item.get("removed"))})
     payload = json.dumps({"items": cleaned}, ensure_ascii=False)
+    before = {item["name"]: item for item in variable_items(username, name)}
+    after = {item["name"]: item for item in cleaned}
+    changes = {}
+    for key in set(before) | set(after):
+        old_item, new_item = before.get(key), after.get(key)
+        if (old_item or {}).get("role") != (new_item or {}).get("role"):
+            changes[f"{key}.role"] = {"before": (old_item or {}).get("role"),
+                                      "after": (new_item or {}).get("role")}
+        if (old_item or {}).get("formula") != (new_item or {}).get("formula"):
+            changes[f"{key}.formula"] = {"before": (old_item or {}).get("formula"),
+                                         "after": (new_item or {}).get("formula")}
+        if (old_item or {}).get("hidden") != (new_item or {}).get("hidden"):
+            changes[f"{key}.hidden"] = {"before": (old_item or {}).get("hidden"),
+                                        "after": (new_item or {}).get("hidden")}
+        if old_item is None:
+            changes[f"{key}.added"] = {"before": None, "after": "added"}
+        if new_item is None:
+            changes[f"{key}.removed"] = {"before": "removed", "after": None}
+    if changes:
+        record_change(username, "variable", name, changes)
     if store.enabled():
         store.project_variables_set(username, name, payload)
     mapping = _local_projects()
@@ -1624,3 +1645,19 @@ def review_paper(username: str, paper_id: int, values: list) -> None:
             papers[str(paper_id)]["values"] = values
             _save_local_projects(mapping)
     _forget_cached_reads()
+
+def record_change(user: str, kind: str, target: str, changes: dict, note: str = "") -> None:
+    """Append one line to the change log. Never rewrites an earlier line."""
+    if not changes and not note:
+        return
+    mapping = _local_projects()
+    log = audit.load(mapping.get("_audit"))
+    log.append(audit.entry(user, kind, target, changes, note))
+    mapping["_audit"] = log[-2000:]
+    _save_local_projects(mapping)
+
+
+def change_log(limit: int = 30) -> list:
+    """The most recent changes, newest first."""
+    log = audit.load(_local_projects().get("_audit"))
+    return list(reversed(log))[:limit]
