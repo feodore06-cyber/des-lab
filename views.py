@@ -41,6 +41,7 @@ from i18n import t
 import audit
 import comparability
 import comparison
+import dataset
 import derive
 import lab_core
 import literature
@@ -1702,6 +1703,14 @@ def _experiment_panel(user: str | None, name: str) -> None:
                 st.caption(t("exp.history_none"))
             for line in lines[:30]:
                 st.caption(audit.describe(line))
+            export_body = dataset.payload(
+                name, auth.project_variable_items(user, name),
+                (part.drop(columns=[c for c in ("_owner",) if c in part.columns])
+                 .to_dict("records")))
+            st.download_button(t("exp.export_json"), dataset.to_json(export_body),
+                               f"{name.replace(' ', '_')}.json", "application/json",
+                               key=f"export_{name}")
+            st.caption(dataset.describe(export_body))
             if st.button(t("exp.recompute"), key=f"recompute_{name}"):
                 frame = auth.load_results(user)
                 if frame is not None and not frame.empty:
