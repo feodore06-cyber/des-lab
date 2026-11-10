@@ -1089,6 +1089,19 @@ def workspace() -> None:
                                      + mapped_keys))
         default = (mapped_keys or [item["key"] for item in suggestion]
                    or list(auth.DEFAULT_VARIABLES))
+        def _add_typed() -> None:
+            typed = [part.strip() for part in
+                     str(st.session_state.get("new_var_typed", "")).replace(",", " ").split()
+                     if part.strip()]
+            current = list(st.session_state.get("new_project_vars") or [])
+            st.session_state["new_project_vars"] = list(dict.fromkeys(current + typed))
+            st.session_state["new_var_typed"] = ""
+
+        typed_row = st.columns([3, 1])
+        typed_row[0].text_input(t("exp.variable_by_hand"), key="new_var_typed",
+                                placeholder="e.g. shear_strength_MPa", label_visibility="collapsed")
+        typed_row[1].button(t("exp.variable_add"), key="add_typed_var", on_click=_add_typed,
+                            use_container_width=True)
         picked = st.multiselect(t("exp.variables"), options,
                                 default=[value for value in default if value in options],
                                 help=t("exp.variables_more_ph"), key="new_project_vars",
