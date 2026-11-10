@@ -1571,3 +1571,54 @@ def project_result_variables(username: str | None, name: str) -> list:
              if item["role"] in RESULT_ROLES]
     items.sort(key=lambda item: (item.get("priority") != "primary", item["position"]))
     return [item["name"] for item in items]
+
+def save_paper(username: str, doi: str, title: str, year, values: list) -> int:
+    """Store a paper together with the values extracted from it."""
+    payload = json.dumps({"values": values}, ensure_ascii=False)
+    if store.enabled():
+        paper_id = store.paper_add(username, doi, title, year, payload)
+    else:
+        mapping = _local_projects()
+        papers = mapping.setdefault("_papers", {})
+        paper_id = max([int(key) for key in papers] or [0]) + 1
+        papers[str(paper_id)] = {"doi": doi, "title": title, "year": year,
+                                 "values": values}
+        _save_local_projects(mapping)
+    _forget_cached_reads()
+    return paper_id
+
+
+def papers_of(username: str | None) -> list:
+    """Papers this account saved, newest first, with their extracted values."""
+    if not username:
+        return []
+    if store.enabled():
+        rows = store.paper_rows(username)
+        out = []
+        for row in rows:
+            try:
+                values = json.loads(row["payload"] or "{}").get("values") or []
+            except (TypeError, ValueError):
+                values = []
+            out.append({"id": row["id"], "doi": row["doi"] or "", "title": row["title"] or "",
+                        "year": row["year"], "values": values})
+        return out
+    mapping = _local_projects().get("_papers") or {}
+    out = []
+    for key, entry in mapping.items():
+        out.append({"id": int(key), "doi": entry.get("doi", ""),
+                    "title": entry.get("title", ""), "year": entry.get("year"),
+                    "values": entry.get("values") or []})
+    return sorted(out, key=lambda item: item["id"], reverse=True)
+
+
+def review_paper(username: str, paper_id: int, values: list) -> None:
+    if store.enabled():
+        store.paper_update(json.dumps({"values": values}, ensure_ascii=False), paper_id, username)
+    else:
+        mapping = _local_projects()
+        papers = mapping.setdefault("_papers", {})
+        if str(paper_id) in papers:
+            papers[str(paper_id)]["values"] = values
+            _save_local_projects(mapping)
+    _forget_cached_reads()

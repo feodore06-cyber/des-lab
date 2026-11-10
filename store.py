@@ -73,6 +73,15 @@ create table if not exists sessions (
     created timestamptz not null default now(),
     expires timestamptz not null
 );
+create table if not exists papers (
+    id serial primary key,
+    owner text not null,
+    doi text,
+    title text,
+    year int,
+    payload jsonb not null,
+    created timestamptz not null default now()
+);
 create table if not exists projects (
     owner text not null,
     name text not null,
@@ -623,6 +632,37 @@ def project_result_set(owner: str, name: str, variable: str) -> None:
     with _connect() as conn:
         conn.execute("update projects set result_variable = %s where owner = %s and name = %s",
                      (variable or None, owner, name))
+        conn.commit()
+
+
+def paper_add(owner: str, doi: str, title: str, year, payload: str) -> int:
+    with _connect() as conn:
+        row = conn.execute(
+            "insert into papers (owner, doi, title, year, payload) values (%s, %s, %s, %s, %s)"
+            " returning id", (owner, doi, title, year, payload)).fetchone()
+        conn.commit()
+    return int(row[0])
+
+
+def paper_rows(owner: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "select id, doi, title, year, payload from papers where owner = %s"
+            " order by created desc", (owner,)).fetchall()
+    return [{"id": row[0], "doi": row[1], "title": row[2], "year": row[3], "payload": row[4]}
+            for row in rows]
+
+
+def paper_update(payload: str, paper_id: int, owner: str) -> None:
+    with _connect() as conn:
+        conn.execute("update papers set payload = %s where id = %s and owner = %s",
+                     (payload, paper_id, owner))
+        conn.commit()
+
+
+def paper_delete(paper_id: int, owner: str) -> None:
+    with _connect() as conn:
+        conn.execute("delete from papers where id = %s and owner = %s", (paper_id, owner))
         conn.commit()
 
 
