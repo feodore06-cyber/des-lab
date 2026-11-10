@@ -1582,7 +1582,7 @@ def save_paper(username: str, doi: str, title: str, year, values: list) -> int:
         papers = mapping.setdefault("_papers", {})
         paper_id = max([int(key) for key in papers] or [0]) + 1
         papers[str(paper_id)] = {"doi": doi, "title": title, "year": year,
-                                 "values": values}
+                                 "owner": username, "values": values}
         _save_local_projects(mapping)
     _forget_cached_reads()
     return paper_id
@@ -1606,6 +1606,8 @@ def papers_of(username: str | None) -> list:
     mapping = _local_projects().get("_papers") or {}
     out = []
     for key, entry in mapping.items():
+        if entry.get("owner") != username:
+            continue
         out.append({"id": int(key), "doi": entry.get("doi", ""),
                     "title": entry.get("title", ""), "year": entry.get("year"),
                     "values": entry.get("values") or []})
