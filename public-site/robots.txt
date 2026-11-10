@@ -1,0 +1,32 @@
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: *
+Allow: /$
+Allow: /index.html$
+Allow: /docs/
+Allow: /data/
+Allow: /robots.txt
+Allow: /llms.txt
+Allow: /sitemap.xml
+Disallow: /app
+Disallow: /login
+Disallow: /admin
+Disallow: /private
+
+Sitemap: https://example.github.io/biomat-public/sitemap.xml

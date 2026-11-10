@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BioMat Lab · Scientific Intelligence Platform (public demo)</title>
+<meta name="description" content="A scientific intelligence platform for experiment records, AI-assisted variable understanding and scientific comparison. Public demo with synthetic data.">
+<link rel="canonical" href="https://example.github.io/biomat-public/">
+<style>
+ body{font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#16233a;max-width:900px;margin:0 auto;padding:40px 20px;background:#fbfbfa}
+ h1{font-size:2rem;margin:0 0 .2em} h2{margin-top:2.2em;border-top:1px solid #e3e3df;padding-top:1.2em}
+ h3{margin-top:1.4em} code{background:#f0f0ec;padding:.1em .3em;border-radius:3px}
+ table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.95rem}
+ th,td{border:1px solid #ddd;padding:.45em .6em;text-align:left;vertical-align:top}
+ th{background:#f3f3ef} .note{color:#5a6473;font-size:.9rem}
+ .tag{display:inline-block;background:#e8eefb;color:#1d3b7a;border-radius:999px;padding:.1em .6em;font-size:.8rem}
+</style>
+</head>
+<body>
+
+<p><a href="/">BioMat Lab</a> · <span class="tag">public demo · synthetic data</span></p>
+
+<h1>BioMat Lab — scientific intelligence platform</h1>
+<p>BioMat Lab records laboratory experiments, understands what each measured variable means, and
+compares results — between two runs of your own work, and against published literature. It is
+built to be topic-agnostic: a deep eutectic solvent (DES) extraction project and a protein
+purification project use the same engine with different variable definitions.</p>
+
+<p class="note">Everything on this page is synthetic example data. The working platform is private:
+project and experiment records are only visible after signing in, and this public page never reads
+them.</p>
+
+<h2 id="capabilities">A. What the platform does</h2>
+<ul>
+  <li><strong>Project-scoped variables.</strong> Each project defines its own measured variables with
+      a unit, a scientific role and, for derived values, a formula. No chemistry field is hard-coded.</li>
+  <li><strong>Variable roles.</strong> A variable is a <em>parameter</em> (a condition you set), a
+      <em>result</em> (an outcome you measure), a <em>derived</em> result (computed from other
+      measurements), an <em>identifier</em> or a <em>covariate</em>. The AI proposes the role from the
+      name, the unit and the project description; the researcher can change it.</li>
+  <li><strong>Comparability check.</strong> Before two numbers are compared, the platform checks
+      whether they mean the same thing: same result definition, same unit, same numerator and
+      denominator, same material, same measurement method.</li>
+  <li><strong>Literature extraction.</strong> Given a paper, the platform extracts parameters and
+      results, keeps the source location of every value, and marks each value as extracted, verified
+      or corrected.</li>
+  <li><strong>CSV / JSON export.</strong> Records leave the platform in an open format.</li>
+</ul>
+
+<h2 id="project">B. Example project</h2>
+<p><strong>DES extraction of lignin from oak sawdust.</strong> Biomass: oak sawdust, 3 g dry per run.
+Hydrogen-bond acceptor: choline chloride. The project records six runs with different temperature,
+molar ratio and mixing method.</p>
+
+<p>Variables of this project (also published as
+<a href="data/variables.json">data/variables.json</a>):</p>
+
+<table>
+  <thead><tr><th>Variable</th><th>Unit</th><th>Role</th><th>Priority</th><th>Definition</th></tr></thead>
+  <tbody>
+    <tr><td>temperature_C</td><td>°C</td><td>parameter</td><td>—</td><td>Set temperature of the heating step</td></tr>
+    <tr><td>time_min</td><td>min</td><td>parameter</td><td>—</td><td>Time held at the set temperature</td></tr>
+    <tr><td>molar_ratio</td><td>mol/mol</td><td>parameter</td><td>—</td><td>Moles of donor per mole of acceptor</td></tr>
+    <tr><td>mixing_method</td><td>—</td><td>parameter</td><td>—</td><td>hotplate, ball mill, or a sequence of both</td></tr>
+    <tr><td>biomass_g</td><td>g</td><td>parameter</td><td>—</td><td>Dry biomass charged to the reactor</td></tr>
+    <tr><td>lignin_mg</td><td>mg</td><td>result</td><td>secondary</td><td>Recovered lignin mass</td></tr>
+    <tr><td>lignin_yield_pct</td><td>%</td><td>derived</td><td>primary</td><td>Recovered lignin / dry biomass × 100</td></tr>
+    <tr><td>lignin_recovery_pct</td><td>%</td><td>derived</td><td>secondary</td><td>Recovered lignin / lignin present in biomass × 100</td></tr>
+  </tbody>
+</table>
+
+<h2 id="records">C. Experiment records</h2>
+<p>The table below is the project overview: columns are generated from the project's variables, and
+the result column is placed first after the sample identifier. Machine-readable copy:
+<a href="data/demo_dataset.json">data/demo_dataset.json</a>.</p>
+
+<table>
+  <thead><tr><th>Sample</th><th>Lignin yield (%)</th><th>Temperature (°C)</th><th>Time (min)</th><th>Molar ratio</th><th>Mixing</th><th>Biomass (g)</th><th>Recovered lignin (mg)</th></tr></thead>
+  <tbody>
+    <tr><td>EXP-01</td><td>1.87</td><td>110</td><td>180</td><td>2.0</td><td>hotplate</td><td>3.0</td><td>56.0</td></tr>
+    <tr><td>EXP-02</td><td>0.51</td><td>110</td><td>180</td><td>0.5</td><td>hotplate</td><td>3.0</td><td>15.2</td></tr>
+    <tr><td>EXP-03</td><td>0.84</td><td>150</td><td>180</td><td>1.0</td><td>hotplate</td><td>3.0</td><td>25.2</td></tr>
+    <tr><td>EXP-04</td><td>0.26</td><td>80</td><td>180</td><td>1.0</td><td>hotplate</td><td>3.0</td><td>7.8</td></tr>
+    <tr><td>EXP-05</td><td>0.96</td><td>120</td><td>180</td><td>1.0</td><td>ball mill (heat gun)</td><td>3.0</td><td>28.9</td></tr>
+    <tr><td>EXP-06</td><td>2.30</td><td>120</td><td>180</td><td>1.0</td><td>hotplate then ball mill</td><td>3.0</td><td>69.0</td></tr>
+  </tbody>
+</table>
+
+<h2 id="compare">D. Comparison workspace — EXP-05 vs EXP-06</h2>
+<p>Full example: <a href="data/demo_comparison.json">data/demo_comparison.json</a>.</p>
+
+<h3>Results</h3>
+<table>
+  <thead><tr><th>Result</th><th>EXP-05</th><th>EXP-06</th><th>Absolute difference</th><th>Relative difference</th></tr></thead>
+  <tbody><tr><td>Lignin yield (%)</td><td>0.96</td><td>2.30</td><td>+1.34</td><td>+139.6 %</td></tr></tbody>
+</table>
+
+<h3>Conditions</h3>
+<table>
+  <thead><tr><th></th><th>EXP-05</th><th>EXP-06</th></tr></thead>
+  <tbody>
+    <tr><td>Temperature (°C)</td><td>120</td><td>120</td></tr>
+    <tr><td>Time (min)</td><td>180</td><td>180</td></tr>
+    <tr><td>Molar ratio</td><td>1.0</td><td>1.0</td></tr>
+    <tr><td>Biomass (g)</td><td>3.0</td><td>3.0</td></tr>
+    <tr><td><strong>Mixing method</strong></td><td><strong>ball mill (heat gun)</strong></td><td><strong>hotplate then ball mill</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>Interpretation</h3>
+<p><strong>Observed:</strong> the run that heated first and milled afterwards recovered more lignin
+(2.30 % vs 0.96 % of dry biomass).</p>
+<p><strong>Possible explanations:</strong> heating may dissolve lignin before mechanical treatment,
+exposing fresh surface; or milling for the whole period may shorten contact with the liquid phase.</p>
+<p><strong>Alternative explanations:</strong> run-to-run variation (no replicates were recorded);
+or a different local temperature at the sample despite the same set point.</p>
+<p><strong>Limits:</strong> two single runs, no replicate statistics, so no causal claim is made.</p>
+
+<h2 id="literature">E. Literature intelligence</h2>
+<p>Example extraction: <a href="data/demo_literature.json">data/demo_literature.json</a>.
+The paper in this example is synthetic.</p>
+<table>
+  <thead><tr><th>Variable</th><th>In the paper</th><th>Normalised</th><th>Source</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>temperature_C</td><td>120 °C</td><td>120 °C</td><td>p.4, Results, Table 2</td><td>extracted, awaiting review</td></tr>
+    <tr><td>time_min</td><td>3 h</td><td>180 min</td><td>p.4, Results, Table 2</td><td>extracted, awaiting review</td></tr>
+    <tr><td>molar_ratio</td><td>1:2</td><td>2.0 mol/mol</td><td>p.4, Methods</td><td>corrected by user</td></tr>
+    <tr><td>lignin_recovery_pct</td><td>58.3 % of Klason lignin</td><td>58.3 %</td><td>p.5, Results</td><td>extracted, awaiting review</td></tr>
+  </tbody>
+</table>
+<p>Every extracted value keeps its original wording, its normalised value, its unit and its source
+location, so the researcher can check it in one click. Values the paper does not report are marked
+<em>not reported</em> rather than filled in.</p>
+
+<h2 id="comparability">F. Scientific comparability</h2>
+<p>Two numbers are only compared after their definitions are compared. The platform returns one of
+four statuses:</p>
+<ol>
+  <li><strong>Directly comparable</strong> — same definition, unit, material and method.</li>
+  <li><strong>Comparable with caveats</strong> — same definition, but a caveat such as a single run.</li>
+  <li><strong>Not directly comparable</strong> — the numbers mean different things.</li>
+  <li><strong>Insufficient information</strong> — one side lacks the definition or the method.</li>
+</ol>
+
+<h3>Worked example: lignin yield vs lignin recovery</h3>
+<table>
+  <thead><tr><th>Metric</th><th>Definition</th><th>Example value</th></tr></thead>
+  <tbody>
+    <tr><td>Lignin yield</td><td>recovered lignin / dry biomass</td><td>12.93 % (388 mg from 3 g)</td></tr>
+    <tr><td>Lignin recovery</td><td>recovered lignin / lignin in the biomass</td><td>58.8 % (388 mg from 660 mg)</td></tr>
+  </tbody>
+</table>
+<p>Both come from the same 388 mg of lignin, yet they are not the same measurement. A comparison
+between a yield and a recovery is reported as <strong>not directly comparable</strong>, with the two
+definitions shown side by side, and the platform asks for a conversion to a common basis before any
+difference is calculated.</p>
+
+<h2 id="docs">Documentation</h2>
+<ul>
+  <li><a href="docs/overview.md">Product overview (Markdown)</a></li>
+  <li><a href="docs/features.md">Feature documentation</a></li>
+  <li><a href="data/variables.json">Example variable definitions (JSON)</a></li>
+  <li><a href="data/demo_dataset.json">Example experiment records (JSON)</a></li>
+  <li><a href="data/demo_comparison.json">Example comparison result (JSON)</a></li>
+  <li><a href="data/demo_literature.json">Example literature extraction (JSON)</a></li>
+</ul>
+
+<p class="note">Private platform: sign-in required. This public site contains synthetic examples only
+and has no access to research records, credentials or configuration.</p>
+</body>
+</html>

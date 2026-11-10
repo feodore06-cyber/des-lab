@@ -1,0 +1,54 @@
+# BioMat Lab — scientific intelligence platform
+
+> Public product description and synthetic demo data for an experiment-management and
+> scientific-comparison platform for chemistry, materials science and formulation research.
+> The working application is private; everything below is example data.
+
+## What it is
+
+BioMat Lab records laboratory experiments in a structured form, understands the scientific role of
+each variable, and compares results — two runs of the same project, or a run against a published
+paper. It is topic-agnostic: a deep eutectic solvent (DES) lignin extraction project and a protein
+purification project use the same engine with different variable definitions.
+
+## Core ideas
+
+- **Project-scoped variable definitions.** Each project declares its own variables, each with a
+  name, unit, scientific role, and — for computed values — a formula.
+- **Roles are separate from priority.** Role: parameter, result, derived, identifier, covariate.
+  Priority (primary/secondary) applies only to results. There is no star-rating of variables.
+- **Comparability before comparison.** Two numbers are compared only after their definitions are
+  compared: same definition, unit, numerator/denominator, material, measurement method. The result
+  is one of: directly comparable, comparable with caveats, not directly comparable, insufficient
+  information.
+- **Literature values keep their provenance.** Each extracted value keeps the original wording, the
+  normalised value, the unit, the page/table, and a status (extracted, verified, corrected, not
+  reported, failed).
+- **No invented numbers.** A value the paper does not report is marked "not reported", never filled.
+
+## Public demo data (synthetic)
+
+- Product overview: https://example.github.io/biomat-public/
+- Variable definitions: https://example.github.io/biomat-public/data/variables.json
+- Experiment records: https://example.github.io/biomat-public/data/demo_dataset.json
+- Comparison result: https://example.github.io/biomat-public/data/demo_comparison.json
+- Literature extraction: https://example.github.io/biomat-public/data/demo_literature.json
+- Product overview (Markdown): https://example.github.io/biomat-public/docs/overview.md
+- Features: https://example.github.io/biomat-public/docs/features.md
+
+## Access policy
+
+- Public: this documentation and the synthetic demo data.
+- Private (sign-in required, never exposed here): project records, experiment data, accounts,
+  attachments, configuration, credentials.
+
+## Crawler policy (robots.txt)
+
+- `Claude-User` — allowed, so a person who asks Claude about this product can have the public page read.
+- `Claude-SearchBot` — allowed, for public discoverability.
+- `ClaudeBot` — disallowed; the training crawler is not permitted by default.
+- Other training crawlers (GPTBot, Google-Extended, CCBot) — disallowed.
+
+## Contact
+
+Public demo only. Private research data is not available through any public endpoint.
