@@ -266,6 +266,20 @@ class WorkspaceFlows(unittest.TestCase):
         self.assertTrue(any("Rank" in label for label in labels),
                         f"the comparison page must offer the ranking panel, got {labels}")
 
+    def test_the_dashboard_and_insights_are_reachable_from_the_top_bar(self):
+        at = fresh_at()
+        keys = [button.key for button in at.button if button.key and button.key.startswith("nav_")]
+        self.assertIn("nav_dashboard", keys, f"the top bar has no Dashboard button: {keys}")
+        self.assertIn("nav_insights", keys, f"the top bar has no Insights button: {keys}")
+        at.button(key="nav_dashboard").click()
+        at.run()
+        self.assertEqual(exceptions(at), [])
+        text = " ".join(str(item.value) for item in at.markdown)
+        self.assertIn("Dashboard", text, "the dashboard did not open")
+        at.button(key="nav_insights").click()
+        at.run()
+        self.assertEqual(exceptions(at), [])
+
     def test_the_top_bar_switches_to_results_and_the_calculator(self):
         at = fresh_at()
         self.assertEqual(exceptions(at), [])

@@ -1148,6 +1148,113 @@ def _status_label(status: str) -> str:
     return t(mapping.get(status, "exp.running"))
 
 
+def dashboard() -> None:
+    """Where the researcher lands: what is running, what was just recorded, what needs a look."""
+    st.markdown(t("dash.title"))
+    st.caption(t("dash.sub"))
+    user = auth.current_user()
+    if not user:
+        st.info(t("guide.signin_hint"))
+        return
+    frame = _cached_saved(user, _store_where())
+    projects = auth.list_projects(user)
+    papers = auth.papers_of(user)
+    empty = frame is None or frame.empty
+
+    counts = st.columns(3)
+    counts[0].metric(t("dash.projects"), len(projects))
+    counts[1].metric(t("dash.runs"), 0 if empty else len(frame))
+    counts[2].metric(t("dash.papers"), len(papers))
+
+    st.subheader(t("dash.recent"))
+    if empty:
+        st.caption(t("dash.no_runs"))
+    else:
+        recent = frame.copy()
+        if "recorded_at" in recent.columns:
+            stamps = pd.to_datetime(recent["recorded_at"], errors="coerce")
+            recent = recent.assign(_at=stamps).sort_values("_at", ascending=False)
+        keep = [value for value in ("sample_id", "project", "recorded_at")
+                if value in recent.columns]
+        st.dataframe(recent[keep].head(8), hide_index=True, width="stretch")
+
+    st.subheader(t("dash.attention"))
+    notes = _attention_notes(user, frame, papers)
+    if notes:
+        for note in notes:
+            st.caption(f"- {note}")
+    else:
+        st.caption(t("dash.nothing"))
+
+    st.divider()
+    st.caption(t("dash.next"))
+
+
+def _attention_notes(user: str, frame, papers: list) -> list:
+    """Things worth a look, phrased as facts rather than judgements."""
+    notes = []
+    if frame is not None and not frame.empty and "project" in frame.columns:
+        for project in frame["project"].fillna(auth.DEFAULT_PROJECT).unique():
+            results = auth.project_result_variables(user, project)
+            for name in results:
+                if name not in frame.columns:
+                    continue
+                values = pd.to_numeric(frame[frame["project"] == project][name],
+                                       errors="coerce").dropna()
+                if len(values) > 1 and float(values.max()) - float(values.min()) > 0:
+                    notes.append(t("dash.spread", project=project, name=name,
+                                   low=f"{float(values.min()):.2f}",
+                                   high=f"{float(values.max()):.2f}"))
+    for paper in papers:
+        counts = literature.review(paper.get("values") or [])
+        if counts["extracted_awaiting_review"]:
+            notes.append(t("dash.pending", title=paper.get("title") or paper.get("doi") or "",
+                           n=counts["extracted_awaiting_review"]))
+    return notes
+
+
+def insights() -> None:
+    """What the project's numbers say as a group, not one row at a time."""
+    st.markdown(t("ins.title"))
+    st.caption(t("ins.sub"))
+    user = auth.current_user()
+    if not user:
+        st.info(t("guide.signin_hint"))
+        return
+    frame = _cached_saved(user, _store_where())
+    if frame is None or frame.empty or "sample_id" not in frame.columns:
+        st.info(t("res.empty_records"))
+        return
+    projects = [value for value in auth.list_projects(user)
+                if value in set(frame["project"].fillna(auth.DEFAULT_PROJECT))]
+    if not projects:
+        st.info(t("res.empty_records"))
+        return
+    project = st.selectbox(t("res.project"), projects, key="ins_project")
+    part = frame[frame["project"].fillna(auth.DEFAULT_PROJECT) == project]
+    results = auth.project_result_variables(user, project)
+    if not results:
+        st.caption(t("ins.no_results"))
+        return
+    for name in results:
+        values = pd.to_numeric(part.get(name), errors="coerce").dropna()
+        if values.empty:
+            continue
+        stats = comparison.replicate_stats(list(values))
+        st.subheader(name.replace("_", " "))
+        columns = st.columns(3)
+        columns[0].metric(t("ins.n"), stats["n"])
+        columns[1].metric(t("ins.mean"), f"{stats['mean']:.3f}" if stats["mean"] is not None
+                          else "—")
+        columns[2].metric(t("ins.sd"), f"{stats['sd']:.3f}" if stats["sd"] is not None else "—")
+        if stats["n"] < 2:
+            st.caption(t("ins.one_run"))
+        st.caption(t("ins.caution"))
+
+    with st.expander(t("ins.rank"), expanded=False):
+        _project_ranking(user, project)
+
+
 def workspace() -> None:
     """The signed-in home. New work happens here, so no button ever has to leave the page."""
     user = auth.current_user()

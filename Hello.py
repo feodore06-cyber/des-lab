@@ -415,6 +415,8 @@ def _front():
 
 
 NAV = [
+    ("dashboard", st.Page(_gate(views.dashboard), title=t("nav.dashboard"), url_path="dashboard"),
+     t("nav.dashboard")),
     ("experiments", st.Page(_front, title=t("nav.experiments"), default=True), t("nav.experiments")),
     ("results", st.Page(_gate(views.results), title=t("nav.results"), url_path="results"),
      t("nav.results")),
@@ -424,6 +426,8 @@ NAV = [
      t("nav.papers")),
     ("compare", st.Page(_gate(views.compare_page), title=t("nav.compare"), url_path="compare"),
      t("nav.compare")),
+    ("insights", st.Page(_gate(views.insights), title=t("nav.insights"), url_path="insights"),
+     t("nav.insights")),
     ("profile", st.Page(_gate(views.guide), title=t("nav.profile"), url_path="guide"),
      t("nav.profile")),
     ("feedback", st.Page(_gate(views.feedback), title=t("app.page_feedback"), url_path="feedback"),
@@ -435,12 +439,12 @@ page = st.navigation([entry[1] for entry in NAV], position="hidden")
 views.PAGE_OBJECTS = {key: page_object for key, page_object, _label in NAV}
 
 if user:
-    bar = st.columns([2.0, 1.0, 0.9, 1.05, 0.95, 1.0, 0.95, 1.35, 1.0],
+    bar = st.columns([1.7, 0.95, 0.95, 0.85, 1.0, 0.9, 0.95, 0.85, 1.3, 0.95],
                       vertical_alignment="center", gap="small")
     bar[0].markdown(
         '<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
         '<span class="bm-wordmark">BioMat Lab</span></div>', unsafe_allow_html=True)
-    for column, entry in zip(bar[1:7], NAV[:6]):
+    for column, entry in zip(bar[1:8], NAV[:7]):
         with column:
             # a page_link renders but does not navigate for function-defined pages; a button that
             # switches to the object created in this very run does work
