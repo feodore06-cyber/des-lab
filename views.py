@@ -669,10 +669,37 @@ def _pick_run(saved, user, prefix: str, label_key: str, run_index: int = 0) -> d
     return options[choice]
 
 
+def _project_ranking(user: str, project: str) -> None:
+    """Every run of the project, ordered by a chosen result variable."""
+    frame = _cached_saved(user, _store_where(), project)
+    if frame is None or frame.empty:
+        return
+    results = auth.project_result_variables(user, project)
+    if not results:
+        return
+    with st.expander(t("cmp.rank_title"), expanded=False):
+        measure = st.selectbox(t("cmp.rank_measure"), results, key=f"rank_{project}")
+        unit = auth.unit_of(measure)
+        ranked = comparison.rank(frame.to_dict("records"), measure)
+        rows = []
+        for position, entry in enumerate(ranked, start=1):
+            value = entry["value"]
+            rows.append({"#": position, "sample_id": entry["run"].get("sample_id"),
+                         measure: "—" if value is None else f"{value:g}",
+                         **{key: entry["run"].get(key)
+                            for key in ("temperature_C", "time_min", "mixing_method")
+                            if entry["run"].get(key) is not None}})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        if unit:
+            st.caption(t("cmp.rank_unit", unit=unit))
+        st.caption(t("cmp.rank_note"))
+
+
 def compare_page() -> None:
     st.markdown(t("cmp.title"))
     st.warning(t("cmp.disclaimer"))
     st.caption(t("cmp.sub"))
+    _ranking_hook = True
     user = auth.current_user()
     if not user:
         st.info(t("guide.signin_hint"))
