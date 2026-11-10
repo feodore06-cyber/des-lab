@@ -1059,9 +1059,17 @@ def workspace() -> None:
                 st.session_state["ai_vars"] = suggestion
             if suggestion:
                 st.caption(t("exp.ai_suggest_note"))
+                ticked = []
                 for item in suggestion:
-                    st.caption(f"· `{item['key']}` — {item['why']}" if item["why"]
-                               else f"· `{item['key']}`")
+                    label = (f"{item['key']} — {item['why']}" if item["why"]
+                             else str(item["key"]))
+                    if st.checkbox(label, value=False, key=f"suggest_{item['key']}"):
+                        ticked.append(item["key"])
+                if st.button(t("exp.ai_add"), key="ai_add_vars"):
+                    current = list(st.session_state.get("new_project_vars") or [])
+                    st.session_state["new_project_vars"] = list(
+                        dict.fromkeys(current + ticked or [item["key"] for item in suggestion]))
+                    st.rerun()
             else:
                 st.caption(t("exp.ai_suggest_hint"))
 
