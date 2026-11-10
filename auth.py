@@ -1406,3 +1406,16 @@ def pin_project(username: str, name: str) -> None:
 
     store.project_pin(username, name, datetime.now(timezone.utc))
     _forget_cached_reads()
+
+def formulation_stored(username: str | None, name: str) -> bool:
+    """True when this project was given a formulation of its own, not just the built-in default."""
+    if not username or not name:
+        return False
+    if store.enabled():
+        try:
+            if store.project_formulation_get(username, name):
+                return True
+        except Exception:
+            pass
+    mapping = _local_projects().get("_formulation") or {}
+    return bool(mapping.get(f"{username}::{name}"))

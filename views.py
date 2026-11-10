@@ -1567,18 +1567,27 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     own = auth.project_variables(user, project)
     # the form is built from this project's variables: a lignin project gets biomass and recovered
     # lignin, an adhesive project gets its own strength and water-resistance fields
+    # the formulation fields come from the project, not from a per-run box: rendering them here
+    # would let an empty box overwrite the配方 the project was started with
     measured = [value for value in own
                 if value not in ("sample_id", "feedstock", "replicate", "notes",
-                                 "lignin_yield_pct", "recorded_at", "project")]
+                                 "lignin_yield_pct", "recorded_at", "project",
+                                 "des_hba", "des_hbd", "molar_ratio", "purity_wt_pct",
+                                 "water_wt_pct")]
     with st.form("record_run", clear_on_submit=True):
         left, right = st.columns(2)
         sample_id = left.text_input(t("res.sample_id"), key="run_sample")
-        feedstock = right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
-                                     key="run_feedstock")
+        feedstock = (right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
+                                      key="run_feedstock")
+                     if "feedstock" in own else "")
         formulation = auth.project_formulation(user, project)
-        st.caption(t("res.project_formulation", hba=formulation["des_hba"],
-                     hbd=formulation["des_hbd"], ratio=formulation["molar_ratio"],
-                     purity=formulation["purity_wt_pct"]))
+        # a DES formulation is only shown for a project that actually records one
+        des_project = (any(value in own for value in ("des_hba", "des_hbd", "molar_ratio"))
+                       or auth.formulation_stored(user, project))
+        if des_project:
+            st.caption(t("res.project_formulation", hba=formulation["des_hba"],
+                         hbd=formulation["des_hbd"], ratio=formulation["molar_ratio"],
+                         purity=formulation["purity_wt_pct"]))
         hba, hbd = formulation["des_hba"], formulation["des_hbd"]
         ratio, purity = formulation["molar_ratio"], formulation["purity_wt_pct"]
         water = formulation["water_wt_pct"]
@@ -1605,8 +1614,9 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     biomass = values.get("biomass_g") or 0.0
     lignin = values.get("lignin_mg") or 0.0
     preview = _yield_pct(biomass, lignin) if ("biomass_g" in values and "lignin_mg" in values) else None
-    label = schema.build_formulation({"des_hba": hba, "des_hbd": hbd, "molar_ratio": ratio})
-    if label:
+    label = (schema.build_formulation({"des_hba": hba, "des_hbd": hbd, "molar_ratio": ratio})
+             if des_project else "")
+    if des_project and label:
         st.caption(t("res.formulation_preview", label=label))
     if preview is not None:
         st.caption(t("res.yield_preview", pct=f"{preview:.2f}"))
@@ -1617,7 +1627,8 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
                 (isinstance(value, str) and not value.strip())
                 or (isinstance(value, (int, float)) and value == 0)
                 for value in values.values()):
-            st.warning(t("res.need_numbers"))
+            st.warning(t("res.need_numbers") if ("biomass_g" in values and "lignin_mg" in values)
+                       else t("res.need_some_value"))
             return
         if ratio <= 0 or not str(hba).strip() or not str(hbd).strip():
             st.warning(t("res.need_composition"))
@@ -1631,17 +1642,16 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
             "sample_id": sample_id.strip() or _next_sample_id(saved),
             "formulation": label,
             "feedstock": feedstock.strip(),
-            "des_hba": hba.strip(),
-            "des_hbd": hbd.strip(),
-            "molar_ratio": float(ratio),
-            "purity_wt_pct": float(purity),
-            "water_wt_pct": float(water),
             "lignin_yield_pct": preview,
             "replicate": int(replicate),
             "notes": notes.strip(),
             "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
             "project": project,
         }
+        if des_project:
+            row.update({"des_hba": hba.strip(), "des_hbd": hbd.strip(),
+                        "molar_ratio": float(ratio), "purity_wt_pct": float(purity),
+                        "water_wt_pct": float(water)})
         row.update(values)
         auth.save_results(user, pd.DataFrame([row]), append=True)
         total = auth.load_results(user)
