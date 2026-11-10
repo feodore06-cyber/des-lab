@@ -1365,7 +1365,15 @@ def _experiment_panel(user: str | None, name: str) -> None:
         else:
             columns[0].metric(t("res.lignin_yield"),
                               f"{float(yields.iloc[-1]) if len(yields) else 0:.2f} %")
-        columns[1].metric(t("res.lignin_mg"), f"{float(latest.get('lignin_mg') or 0):.1f} mg")
+        recovered = pd.to_numeric(part.get("lignin_mg"), errors="coerce").dropna()
+        if len(recovered) > 1 and float(recovered.max()) - float(recovered.min()) > 1e-9:
+            # the same trap as the yield: one run's number must not look like the project's number
+            columns[1].metric(t("res.lignin_mg"),
+                              f"{float(recovered.min()):.1f} – {float(recovered.max()):.1f} mg",
+                              help=t("exp.range_help", n=len(recovered)))
+        else:
+            columns[1].metric(t("res.lignin_mg"),
+                              f"{float(recovered.iloc[-1]) if len(recovered) else 0:.1f} mg")
         columns[2].metric(t("ws.runs_label"), len(part))
         heading = auth.project_formulation(user, name)
         st.caption(t("exp.header_line", hba=heading["des_hba"], hbd=heading["des_hbd"],
