@@ -37,7 +37,7 @@ class ComparabilityTests(unittest.TestCase):
         note = c.conversion_note(YIELD, RECOVERY)
         self.assertIn("denominator", note)
         self.assertIn("biomass", note)
-        self.assertIn("klason", note)
+        self.assertIn("lignin", note)
 
 
 if __name__ == "__main__":
