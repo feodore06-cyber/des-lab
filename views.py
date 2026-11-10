@@ -1090,11 +1090,11 @@ def workspace() -> None:
         default = (mapped_keys or [item["key"] for item in suggestion]
                    or list(auth.DEFAULT_VARIABLES))
         def _add_typed() -> None:
-            typed = [part.strip() for part in
-                     str(st.session_state.get("new_var_typed", "")).replace(",", " ").split()
-                     if part.strip()]
-            current = list(st.session_state.get("new_project_vars") or [])
-            st.session_state["new_project_vars"] = list(dict.fromkeys(current + typed))
+            # one entry is one variable: a name with spaces becomes underscores, it is never split
+            typed = "_".join(str(st.session_state.get("new_var_typed", "")).strip().split())
+            if typed:
+                current = list(st.session_state.get("new_project_vars") or [])
+                st.session_state["new_project_vars"] = list(dict.fromkeys(current + [typed]))
             st.session_state["new_var_typed"] = ""
 
         typed_row = st.columns([3, 1])
@@ -1249,11 +1249,11 @@ def _variables_editor(user: str, name: str) -> None:
     current_vars = auth.project_variables(user, name)
 
     def _add_typed_here() -> None:
-        typed = [part.strip() for part in
-                 str(st.session_state.get(f"vars_{name}_typed", "")).replace(",", " ").split()
-                 if part.strip()]
-        held = list(st.session_state.get(f"vars_{name}_pick") or [])
-        st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + typed))
+        # one entry is one variable: a name with spaces becomes underscores, it is never split
+        typed = "_".join(str(st.session_state.get(f"vars_{name}_typed", "")).strip().split())
+        if typed:
+            held = list(st.session_state.get(f"vars_{name}_pick") or [])
+            st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + [typed]))
         st.session_state[f"vars_{name}_typed"] = ""
 
     def _add_asked() -> None:
