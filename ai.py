@@ -251,3 +251,61 @@ def extract_comparison(variables: list, title: str, paper_text: str,
     except (TypeError, ValueError):
         result = None
     return {"values": values, "reported_result": result, "quote": str(parsed.get("quote") or "")}
+
+SUGGEST_SYSTEM = (
+    "You propose the variables a scientific experiment project should record, given its name. "
+    "Return a JSON array of objects with exactly two keys: "
+    "key (a snake_case identifier, with the unit in the name, e.g. shear_strength_MPa) and "
+    "why (one short sentence saying what it changes). Give the variables that actually drive the "
+    "result first, then the ones that describe the result. At most 8, no prose outside the JSON."
+)
+
+
+def suggest_variables(project_name: str, language: str = "en") -> list:
+    """Propose the variables worth recording for a project, or [] when unavailable."""
+    config = settings()
+    name = str(project_name or "").strip()
+    if not config["key"] or not name:
+        return []
+    payload = {
+        "model": config["model"],
+        "temperature": 0.2,
+        "messages": [
+            {"role": "system", "content": SUGGEST_SYSTEM},
+            {"role": "user", "content": json.dumps({"project": name, "language": language},
+                                                   ensure_ascii=False)},
+        ],
+    }
+    request = urllib.request.Request(
+        config["base"] + "/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": "Bearer " + config["key"]},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        for fence in ("```json", "```"):
+            raw = raw.replace(fence, "")
+        parsed = json.loads(raw.strip())
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    seen, out = set(), []
+    for item in parsed:
+        if isinstance(item, dict) and item.get("key"):
+            key = str(item["key"]).strip()
+        elif isinstance(item, str):
+            key = item.strip()
+        else:
+            continue
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append({"key": key, "why": str(item.get("why", "")).strip()
+                    if isinstance(item, dict) else ""})
+    return out[:8]
