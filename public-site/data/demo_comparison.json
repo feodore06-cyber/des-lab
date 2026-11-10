@@ -1,0 +1,47 @@
+{
+  "synthetic": true,
+  "label": "EXP-05 vs EXP-06",
+  "measures": [
+    {
+      "variable": "lignin_yield_pct",
+      "unit": "%",
+      "a": 0.96,
+      "b": 2.3,
+      "absolute_difference": 1.34,
+      "relative_difference_pct": 139.6
+    }
+  ],
+  "conditions_differing": {
+    "mixing_method": {
+      "a": "ball mill (heat gun)",
+      "b": "hotplate then ball mill"
+    }
+  },
+  "conditions_identical": {
+    "temperature_C": 120,
+    "time_min": 180,
+    "molar_ratio": 1.0,
+    "biomass_g": 3.0
+  },
+  "comparability": {
+    "status": "comparable_with_caveats",
+    "reasons": [
+      "Same result definition: lignin yield on dry biomass.",
+      "Same unit: percent.",
+      "Same material identity and measurement method.",
+      "Only one run per condition: the difference cannot be separated from run-to-run noise."
+    ]
+  },
+  "interpretation": {
+    "observed": "The run that combined hotplate and ball milling recovered more lignin (2.30 % vs 0.96 % of dry biomass).",
+    "possible_explanations": [
+      "Heating first may dissolve lignin before mechanical treatment, exposing fresh surface.",
+      "Ball milling over the whole period may simply reduce contact time with the liquid phase."
+    ],
+    "alternative_explanations": [
+      "Run-to-run variation: no replicates were recorded.",
+      "Different local temperature at the sample, even at the same set point."
+    ],
+    "limits": "Two single runs; no replicate statistics; causal attribution is not possible."
+  }
+}

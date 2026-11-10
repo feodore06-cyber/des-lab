@@ -1,0 +1,60 @@
+{
+  "synthetic": true,
+  "paper": {
+    "title": "Deep eutectic solvent pretreatment of woody biomass for lignin recovery",
+    "doi": "10.0000/example.synthetic.2024",
+    "year": 2024,
+    "note": "Synthetic example - not a real publication."
+  },
+  "extracted": [
+    {
+      "variable": "temperature_C",
+      "original": "120 °C",
+      "normalized": 120,
+      "unit": "°C",
+      "source": {
+        "page": 4,
+        "section": "Results, Table 2"
+      },
+      "status": "extracted_awaiting_review",
+      "confidence": "high"
+    },
+    {
+      "variable": "time_min",
+      "original": "3 h",
+      "normalized": 180,
+      "unit": "min",
+      "source": {
+        "page": 4,
+        "section": "Results, Table 2"
+      },
+      "status": "extracted_awaiting_review",
+      "confidence": "high"
+    },
+    {
+      "variable": "molar_ratio",
+      "original": "1:2",
+      "normalized": 2.0,
+      "unit": "mol/mol",
+      "source": {
+        "page": 4,
+        "section": "Methods"
+      },
+      "status": "corrected_by_user",
+      "confidence": "medium"
+    },
+    {
+      "variable": "lignin_recovery_pct",
+      "original": "58.3 % of Klason lignin",
+      "normalized": 58.3,
+      "unit": "%",
+      "source": {
+        "page": 5,
+        "section": "Results"
+      },
+      "status": "extracted_awaiting_review",
+      "confidence": "medium"
+    }
+  ],
+  "mapping_warning": "The paper reports lignin recovery on lignin content (58.3 %), while the project records lignin yield on dry biomass (2.30 %). These are different metrics and are not compared directly."
+}

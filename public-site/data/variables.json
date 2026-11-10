@@ -1,0 +1,89 @@
+{
+  "project": "DES extraction of lignin from oak sawdust",
+  "synthetic": true,
+  "variables": [
+    {
+      "id": "sample_id",
+      "display_name": "Sample ID",
+      "unit": "",
+      "dtype": "text",
+      "role": "identifier",
+      "priority": null,
+      "definition": "Identifier of one experimental run, unique inside its project."
+    },
+    {
+      "id": "temperature_C",
+      "display_name": "Temperature",
+      "unit": "°C",
+      "dtype": "number",
+      "role": "parameter",
+      "priority": null,
+      "definition": "Set temperature of the heating step."
+    },
+    {
+      "id": "time_min",
+      "display_name": "Reaction time",
+      "unit": "min",
+      "dtype": "number",
+      "role": "parameter",
+      "priority": null,
+      "definition": "Time the mixture was held at the set temperature."
+    },
+    {
+      "id": "molar_ratio",
+      "display_name": "Molar ratio HBD:HBA",
+      "unit": "mol/mol",
+      "dtype": "number",
+      "role": "parameter",
+      "priority": null,
+      "definition": "Moles of hydrogen-bond donor per mole of hydrogen-bond acceptor."
+    },
+    {
+      "id": "mixing_method",
+      "display_name": "Mixing method",
+      "unit": "",
+      "dtype": "category",
+      "role": "parameter",
+      "priority": null,
+      "definition": "How the mixture was agitated: hotplate, ball mill, or a sequence of both."
+    },
+    {
+      "id": "biomass_g",
+      "display_name": "Dry biomass",
+      "unit": "g",
+      "dtype": "number",
+      "role": "parameter",
+      "priority": null,
+      "definition": "Oven-dry mass of biomass charged to the reactor."
+    },
+    {
+      "id": "lignin_mg",
+      "display_name": "Recovered lignin",
+      "unit": "mg",
+      "dtype": "number",
+      "role": "result",
+      "priority": "secondary",
+      "definition": "Mass of lignin recovered after precipitation and drying."
+    },
+    {
+      "id": "lignin_yield_pct",
+      "display_name": "Lignin yield (on dry biomass)",
+      "unit": "%",
+      "dtype": "number",
+      "role": "derived",
+      "priority": "primary",
+      "definition": "Recovered lignin mass divided by dry biomass mass, times 100.",
+      "formula": "lignin_mg / (biomass_g * 1000) * 100"
+    },
+    {
+      "id": "lignin_recovery_pct",
+      "display_name": "Lignin recovery (on lignin content)",
+      "unit": "%",
+      "dtype": "number",
+      "role": "derived",
+      "priority": "secondary",
+      "definition": "Recovered lignin mass divided by the Klason lignin present in the biomass, times 100.",
+      "formula": "lignin_mg / (biomass_g * 1000 * klason_lignin_pct / 100) * 100"
+    }
+  ]
+}

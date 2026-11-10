@@ -1,0 +1,74 @@
+{
+  "project": "DES extraction of lignin from oak sawdust",
+  "synthetic": true,
+  "biomass": "oak sawdust",
+  "dry_biomass_g": 3.0,
+  "runs": [
+    {
+      "sample_id": "EXP-01",
+      "temperature_C": 110,
+      "time_min": 180,
+      "molar_ratio": 2.0,
+      "mixing_method": "hotplate",
+      "biomass_g": 3.0,
+      "lignin_mg": 56.0,
+      "lignin_yield_pct": 1.87,
+      "lignin_recovery_pct": null
+    },
+    {
+      "sample_id": "EXP-02",
+      "temperature_C": 110,
+      "time_min": 180,
+      "molar_ratio": 0.5,
+      "mixing_method": "hotplate",
+      "biomass_g": 3.0,
+      "lignin_mg": 15.2,
+      "lignin_yield_pct": 0.51,
+      "lignin_recovery_pct": null
+    },
+    {
+      "sample_id": "EXP-03",
+      "temperature_C": 150,
+      "time_min": 180,
+      "molar_ratio": 1.0,
+      "mixing_method": "hotplate",
+      "biomass_g": 3.0,
+      "lignin_mg": 25.2,
+      "lignin_yield_pct": 0.84,
+      "lignin_recovery_pct": null
+    },
+    {
+      "sample_id": "EXP-04",
+      "temperature_C": 80,
+      "time_min": 180,
+      "molar_ratio": 1.0,
+      "mixing_method": "hotplate",
+      "biomass_g": 3.0,
+      "lignin_mg": 7.8,
+      "lignin_yield_pct": 0.26,
+      "lignin_recovery_pct": null
+    },
+    {
+      "sample_id": "EXP-05",
+      "temperature_C": 120,
+      "time_min": 180,
+      "molar_ratio": 1.0,
+      "mixing_method": "ball mill (heat gun)",
+      "biomass_g": 3.0,
+      "lignin_mg": 28.9,
+      "lignin_yield_pct": 0.96,
+      "lignin_recovery_pct": null
+    },
+    {
+      "sample_id": "EXP-06",
+      "temperature_C": 120,
+      "time_min": 180,
+      "molar_ratio": 1.0,
+      "mixing_method": "hotplate then ball mill",
+      "biomass_g": 3.0,
+      "lignin_mg": 69.0,
+      "lignin_yield_pct": 2.3,
+      "lignin_recovery_pct": null
+    }
+  ]
+}
