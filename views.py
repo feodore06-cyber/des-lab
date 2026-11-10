@@ -1272,6 +1272,42 @@ def _experiment_panel(user: str | None, name: str) -> None:
 
     with st.expander(t("exp.variables_edit"), expanded=False):
         current_vars = auth.project_variables(user, name)
+
+        def _add_typed_here() -> None:
+            typed = [part.strip() for part in
+                     str(st.session_state.get(f"vars_{name}_typed", "")).replace(",", " ").split()
+                     if part.strip()]
+            held = list(st.session_state.get(f"vars_{name}_pick") or [])
+            st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + typed))
+            st.session_state[f"vars_{name}_typed"] = ""
+
+        def _add_asked() -> None:
+            asked = st.session_state.get(f"vars_{name}_picked_ai") or []
+            held = list(st.session_state.get(f"vars_{name}_pick") or [])
+            st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + asked))
+
+        if ai.available():
+            if st.button(t("exp.ai_suggest_here"), key=f"vars_{name}_ai"):
+                with st.spinner(t("exp.ai_thinking")):
+                    st.session_state[f"vars_{name}_ai_list"] = ai.suggest_variables(
+                        name, st.session_state.get(i18n.LANG_KEY, "en"))
+            asked = st.session_state.get(f"vars_{name}_ai_list") or []
+            if asked:
+                st.caption(t("exp.ai_suggest_note"))
+                picked = st.multiselect(t("exp.ai_pick_here"), [item["key"] for item in asked],
+                                        key=f"vars_{name}_picked_ai")
+                for item in asked:
+                    if item.get("why"):
+                        st.caption(f"· `{item['key']}` — {item['why']}")
+                st.button(t("exp.ai_add"), key=f"vars_{name}_add_ai", on_click=_add_asked)
+
+        typed_row = st.columns([3, 1])
+        typed_row[0].text_input(t("exp.variable_by_hand"), key=f"vars_{name}_typed",
+                                placeholder="e.g. reaction_pressure_bar",
+                                label_visibility="collapsed")
+        typed_row[1].button(t("exp.variable_add"), key=f"vars_{name}_add_typed",
+                            on_click=_add_typed_here, use_container_width=True)
+
         options = list(dict.fromkeys(list(COLUMN_CHOICES) + current_vars))
         kept = st.multiselect(t("exp.variables"), options, default=current_vars,
                               help=t("exp.variables_more_ph"), key=f"vars_{name}_pick",
@@ -1514,6 +1550,12 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         st.session_state["run_sample_project"] = project
         st.session_state["run_sample_expected"] = expected
     st.caption(t("res.new_hint"))
+    own = auth.project_variables(user, project)
+    # the form is built from this project's variables: a lignin project gets biomass and recovered
+    # lignin, an adhesive project gets its own strength and water-resistance fields
+    measured = [value for value in own
+                if value not in ("sample_id", "feedstock", "replicate", "notes",
+                                 "lignin_yield_pct", "recorded_at", "project")]
     with st.form("record_run", clear_on_submit=True):
         left, right = st.columns(2)
         sample_id = left.text_input(t("res.sample_id"), key="run_sample")
@@ -1528,75 +1570,70 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         water = formulation["water_wt_pct"]
         replicate = st.number_input(t("res.replicate"), min_value=1, value=1, step=1,
                                     key="run_replicate")
-        own = auth.project_variables(user, project)
-        a, b, c, d = st.columns(4)
-        biomass = a.number_input(t("res.biomass"), min_value=0.0, value=0.0, step=0.1,
-                                 format="%.4f", key="run_biomass")
-        lignin = (b.number_input(t("res.lignin_mg"), min_value=0.0, value=0.0, step=0.1,
-                                 format="%.3f", key="run_lignin")
-                  if "lignin_mg" in own else 0.0)
-        if "lignin_mg" not in own:
-            b.caption(t("exp.no_lignin_field"))
-        temperature = c.number_input(t("res.temperature"), min_value=0.0, value=80.0, step=5.0,
-                                     format="%.1f", key="run_temp")
-        minutes = d.number_input(t("res.time"), min_value=0.0, value=60.0, step=5.0,
-                                 format="%.0f", key="run_time")
+
+        values = {}
+        for chunk in range(0, len(measured), 3):
+            columns = st.columns(3)
+            for column, variable in zip(columns, measured[chunk:chunk + 3]):
+                key = f"run_var_{variable}"
+                unit = auth.unit_of(variable)
+                label = f"{variable} ({unit})" if unit else variable
+                if variable.endswith(("_pct", "_C", "_min", "_mg", "_g", "_rpm", "_mm",
+                                      "_ratio", "_bar", "_mL", "_MPa", "_s", "_h")):
+                    values[variable] = column.number_input(label, min_value=0.0, value=0.0,
+                                                          step=0.1, format="%.4f", key=key)
+                else:
+                    values[variable] = column.text_input(label, key=key)
         notes = st.text_input(t("res.notes"), key="run_notes")
-        extras = {}
-        for index, variable in enumerate(auth.project_variables(user, project)):
-            # the form already has a field for these; adding another would overwrite the value
-            if variable in ("sample_id", "feedstock", "biomass_g", "lignin_mg",
-                            "lignin_yield_pct", "temperature_C", "time_min", "replicate",
-                            "notes"):
-                continue
-            key = f"run_extra_{index}"
-            if variable.endswith(("_pct", "_C", "_min", "_mg", "_g", "_rpm", "_mm", "_ratio")):
-                extras[variable] = st.number_input(variable, min_value=0.0, value=0.0, step=0.1,
-                                                   format="%.4f", key=key)
-            else:
-                extras[variable] = st.text_input(variable, key=key)
-        submitted = st.form_submit_button(t("res.save_run"), type="primary", use_container_width=True)
-    preview = _yield_pct(biomass, lignin)
+        submitted = st.form_submit_button(t("res.save_run"), type="primary",
+                                         use_container_width=True)
+
+    biomass = values.get("biomass_g") or 0.0
+    lignin = values.get("lignin_mg") or 0.0
+    preview = _yield_pct(biomass, lignin) if ("biomass_g" in values and "lignin_mg" in values) else None
     label = schema.build_formulation({"des_hba": hba, "des_hbd": hbd, "molar_ratio": ratio})
     if label:
         st.caption(t("res.formulation_preview", label=label))
     if preview is not None:
         st.caption(t("res.yield_preview", pct=f"{preview:.2f}"))
+    if not measured:
+        st.warning(t("res.no_variables"))
     if submitted:
-        if biomass <= 0 or lignin <= 0:
+        if measured and all(
+                (isinstance(value, str) and not value.strip())
+                or (isinstance(value, (int, float)) and value == 0)
+                for value in values.values()):
             st.warning(t("res.need_numbers"))
-        elif ratio <= 0 or not hba.strip() or not hbd.strip():
+            return
+        if ratio <= 0 or not str(hba).strip() or not str(hbd).strip():
             st.warning(t("res.need_composition"))
-        else:
-            already = _cached_saved(user, _store_where(), project)
-            if already is not None and not already.empty and _looks_duplicate(already, sample_id,
-                                                                             lignin, biomass):
-                st.warning(t("res.duplicate_submit"))
-                return
-            row = {
-                "sample_id": sample_id.strip() or _next_sample_id(saved),
-                "formulation": label,
-                "feedstock": feedstock.strip(),
-                "des_hba": hba.strip(),
-                "des_hbd": hbd.strip(),
-                "molar_ratio": float(ratio),
-                "purity_wt_pct": float(purity),
-                "water_wt_pct": float(water),
-                "biomass_g": biomass,
-                "temperature_C": temperature,
-                "time_min": minutes,
-                "lignin_mg": lignin,
-                "lignin_yield_pct": preview,
-                "replicate": int(replicate),
-                "notes": notes.strip(),
-                "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
-                "project": project,
-            }
-            row.update(extras)
-            auth.save_results(user, pd.DataFrame([row]), append=True)
-            total = auth.load_results(user)
-            st.success(t("res.saved_run", sid=row["sample_id"], pct=f"{preview:.2f}",
-                         rows=0 if total is None else len(total)))
+            return
+        already = _cached_saved(user, _store_where(), project)
+        if already is not None and not already.empty and _looks_duplicate(
+                already, sample_id, lignin, biomass):
+            st.warning(t("res.duplicate_submit"))
+            return
+        row = {
+            "sample_id": sample_id.strip() or _next_sample_id(saved),
+            "formulation": label,
+            "feedstock": feedstock.strip(),
+            "des_hba": hba.strip(),
+            "des_hbd": hbd.strip(),
+            "molar_ratio": float(ratio),
+            "purity_wt_pct": float(purity),
+            "water_wt_pct": float(water),
+            "lignin_yield_pct": preview,
+            "replicate": int(replicate),
+            "notes": notes.strip(),
+            "recorded_at": time.strftime("%Y-%m-%d %H:%M"),
+            "project": project,
+        }
+        row.update(values)
+        auth.save_results(user, pd.DataFrame([row]), append=True)
+        total = auth.load_results(user)
+        shown = f"{preview:.2f}" if preview is not None else "—"
+        st.success(t("res.saved_run", sid=row["sample_id"], pct=shown,
+                     rows=0 if total is None else len(total)))
 
 
 def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
