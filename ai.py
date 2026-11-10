@@ -347,7 +347,7 @@ ROLE_WORDS = {
                   "volume", "mass", "concentration", "loading", "dosage", "flow",
                   "power", "frequency", "mesh", "size", "humidity", "method", "catalyst",
                   "solvent", "atmosphere", "mode", "type"),
-    "identifier": ("sample", "batch", "lot", "operator", "date", "id"),
+    "identifier": ("sample", "batch", "lot", "operator", "_date", "_id"),
 }
 
 
