@@ -239,6 +239,33 @@ class WorkspaceFlows(unittest.TestCase):
         self.assertEqual(at.text_input(key="run_sample").value, "EXP-04",
                          "three runs in the other project, so its next one is EXP-04")
 
+    def test_the_compare_page_offers_a_ranking_of_every_run(self):
+        os.environ["DESLAB_DATA_DIR"] = tempfile.mkdtemp()
+        auth.ensure_store()
+        auth.create_project("Chuanyu", "DES")
+        auth.set_project_variables("Chuanyu", "DES", ["temperature_C", "lignin_yield_pct"])
+        items = auth.variable_items("Chuanyu", "DES")
+        items[1]["role"] = "dependent"
+        auth.set_variable_items("Chuanyu", "DES", items)
+        auth.save_results("Chuanyu", pd.DataFrame([
+            {"sample_id": "EXP-01", "project": "DES", "temperature_C": 110,
+             "lignin_yield_pct": 1.87},
+            {"sample_id": "EXP-02", "project": "DES", "temperature_C": 150,
+             "lignin_yield_pct": 0.84}]), append=False)
+
+        def entry():
+            import views
+
+            views.compare_page()
+
+        at = AppTest.from_function(entry, default_timeout=TIMEOUT)
+        at.session_state[auth.SESSION_KEY] = "Chuanyu"
+        at.run()
+        self.assertEqual(exceptions(at), [])
+        labels = [str(item.label) for item in at.expander]
+        self.assertTrue(any("Rank" in label for label in labels),
+                        f"the comparison page must offer the ranking panel, got {labels}")
+
     def test_the_top_bar_switches_to_results_and_the_calculator(self):
         at = fresh_at()
         self.assertEqual(exceptions(at), [])

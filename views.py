@@ -699,7 +699,6 @@ def compare_page() -> None:
     st.markdown(t("cmp.title"))
     st.warning(t("cmp.disclaimer"))
     st.caption(t("cmp.sub"))
-    _ranking_hook = True
     user = auth.current_user()
     if not user:
         st.info(t("guide.signin_hint"))
@@ -721,6 +720,8 @@ def compare_page() -> None:
             left_row = _pick_run(saved, user, "cmp_a", "cmp.run_a")
         with b_col:
             right_row = _pick_run(saved, user, "cmp_b", "cmp.run_b", run_index=1)
+        if left_row:
+            _project_ranking(user, left_row.get("project") or auth.DEFAULT_PROJECT)
         if left_row is None or right_row is None:
             st.info(t("res.empty_records"))
             return
@@ -742,6 +743,8 @@ def compare_page() -> None:
 
     st.subheader(t("cmp.mine"))
     mine_row = _pick_run(saved, user, "cmp_mine", "cmp.pick_run")
+    if mine_row:
+        _project_ranking(user, mine_row.get("project") or auth.DEFAULT_PROJECT)
     if mine_row is None:
         st.info(t("res.empty_records"))
         return
