@@ -914,19 +914,20 @@ def _render_outcome() -> None:
             or auth.DEFAULT_PROJECT) or ["lignin_yield_pct"]
     for position, measure in enumerate(measures):
         unit = auth.unit_of(measure) or ("%" if "pct" in str(measure) else "")
+        st.markdown(f"**{measure.replace('_', ' ')}{f' ({unit})' if unit else ''}**")
         columns = st.columns(3)
         values = (details.get("mine", {}).get(measure),
                   details.get("theirs", {}).get(measure),
                   outcome["delta"] if position == 0 else None)
         for column, name, value in zip(columns,
                                        (sides["mine"], sides["theirs"], t("cmp.delta")), values):
-            title = f"{name} · {measure}" if name != t("cmp.delta") else name
+            title = name
             if isinstance(value, (int, float)) and value == value:
                 shown = f"{value:+.2f}" if name == t("cmp.delta") else f"{value:.2f}"
                 column.metric(title, f"{shown} {unit}".strip())
             else:
                 column.metric(title, "—")
-        st.caption(t("cmp.measure_note", what=measure.replace("_", " ")))
+    st.caption(t("cmp.measure_note", what=", ".join(m.replace("_", " ") for m in measures)))
 
 
     # what actually differed: the result is not caused by one variable, so show them all
