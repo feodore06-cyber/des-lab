@@ -185,172 +185,32 @@ def summarise_papers(items: list, language: str = "en") -> dict:
     return {index: str(value).strip() for index, value in enumerate(parsed) if str(value).strip()}
 
 EXTRACT_SYSTEM = (
-    "Read a paper's title and abstract and extract ONLY values that are explicitly stated. "
-    "Return a JSON object with these keys and nothing else: feedstock, molar_ratio (number, HBD:HBA), "
-    "purity_wt_pct, water_wt_pct, temperature_C, time_min, lignin_yield_pct, basis, quote, found. "
-    "Use null for a key that is not stated. 'quote' is the short sentence from the abstract that "
-    "contains the numbers you used (empty if none). 'found' is the number of keys that are not null. "
-    "Never guess and never convert units you are unsure about."
+    "You read a paper's text and copy out the numbers that describe its experiment. You are given a "
+    "list of variable names the lab records. For each one, if the paper states a value, return it as "
+    "a number in a JSON object; if the paper does not state it, leave that key out entirely. Also "
+    "return reported_result with the paper's own headline number for the same measurement, and quote "
+    "with the sentence you took it from. Never guess: an omitted key is better than an invented "
+    "number."
 )
 
 
-def extract_from_paper(title: str, abstract: str) -> dict:
-    """Return the values explicitly stated in a paper; {} when unavailable."""
+def extract_comparison(variables: list, title: str, paper_text: str,
+                       language: str = "en") -> dict:
+    """Copy the paper's numbers out of a title plus the text the user pasted.
+
+    Returns {"values": {variable: number}, "reported_result": number or None, "quote": str}, or an
+    empty dict when nothing usable came back.
+    """
     config = settings()
-    if not config["key"] or not abstract:
+    if not config["key"] or not (title.strip() or paper_text.strip()):
         return {}
     payload = {
         "model": config["model"],
         "temperature": 0.0,
         "messages": [
             {"role": "system", "content": EXTRACT_SYSTEM},
-            {"role": "user", "content": json.dumps({"title": title, "abstract": abstract[:4000]},
-                                                   ensure_ascii=False)},
-        ],
-    }
-    request = urllib.request.Request(
-        f"{config['base']}/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {config['key']}"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            body = json.load(response)
-        raw = str(body["choices"][0]["message"]["content"]).strip()
-        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        parsed = json.loads(raw)
-    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
-            json.JSONDecodeError):
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-SUGGEST_SYSTEM = (
-    "You design the data table for a new experiment in a biomaterials lab. Given a short project "
-    "name, list the variables worth recording for every run. Return a JSON array of objects, each "
-    "with 'key' (snake_case, unit in the name when it applies, e.g. temperature_C, time_min, "
-    "stirring_rpm) and 'why' (at most 8 words, in the requested language). Between 4 and 9 entries. "
-    "Prefer measurable numbers over free text. Always include the result the lab would report. "
-    "No duplicates, no prose outside the JSON."
-)
-
-
-def suggest_variables(project_name: str, language: str = "en") -> list:
-    """Ask for variable keys that fit a project name. Returns [] when no model is configured."""
-    name = " ".join(str(project_name or "").split())
-    if not name:
-        return []
-    config = settings()
-    if not config["key"]:
-        return []
-    payload = {
-        "model": config["model"],
-        "temperature": 0.4,
-        "messages": [
-            {"role": "system", "content": SUGGEST_SYSTEM},
             {"role": "user", "content": json.dumps(
-                {"project": name, "answer_in": "Chinese" if language == "zh" else "English"},
-                ensure_ascii=False)},
-        ],
-    }
-    request = urllib.request.Request(
-        f"{config['base']}/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {config['key']}"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            body = json.load(response)
-        raw = str(body["choices"][0]["message"]["content"]).strip()
-        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        parsed = json.loads(raw)
-    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
-            json.JSONDecodeError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    clean = []
-    for item in parsed:
-        if isinstance(item, dict) and item.get("key"):
-            key = " ".join(str(item["key"]).split()).replace(" ", "_")[:32]
-            clean.append({"key": key, "why": str(item.get("why") or "")[:60]})
-        elif isinstance(item, str):
-            clean.append({"key": " ".join(item.split()).replace(" ", "_")[:32], "why": ""})
-    return [item for item in clean if item["key"]]
-
-COLUMNS_SYSTEM = (
-    "You receive the header row of a spreadsheet from a biomaterials lab, plus a few example rows. "
-    "Map every column to a clean snake_case key with its unit in the name when the unit is evident "
-    "(temperature_C, time_min, lignin_yield_pct). Keep the original order. If two columns mean the "
-    "same thing, give them the same key. Return a JSON array of objects with 'original' and 'key'. "
-    "No prose, one entry per input column."
-)
-
-
-def normalise_columns(columns: list, sample: list, language: str = "en") -> list:
-    """Return [{original, key}] for a spreadsheets headers, or [] when no model is configured."""
-    config = settings()
-    if not config["key"] or not columns:
-        return []
-    payload = {
-        "model": config["model"],
-        "temperature": 0.0,
-        "messages": [
-            {"role": "system", "content": COLUMNS_SYSTEM},
-            {"role": "user", "content": json.dumps(
-                {"columns": [str(value) for value in columns], "sample_rows": sample[:3],
-                 "answer_in": "Chinese" if language == "zh" else "English"},
-                ensure_ascii=False, default=str)},
-        ],
-    }
-    request = urllib.request.Request(
-        f"{config['base']}/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {config['key']}"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            body = json.load(response)
-        raw = str(body["choices"][0]["message"]["content"]).strip()
-        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        parsed = json.loads(raw)
-    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
-            json.JSONDecodeError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    pairs = []
-    for item in parsed:
-        if isinstance(item, dict) and item.get("original") and item.get("key"):
-            pairs.append({"original": str(item["original"]),
-                          "key": " ".join(str(item["key"]).split()).replace(" ", "_")[:32]})
-    return pairs
-
-FIELDS_SYSTEM = (
-    "You are told the variables a lab records, and a paper's title and a quoted sentence. Pick which "
-    "of those variables are worth comparing against this paper, most useful first. Return a JSON "
-    "array of the variable names exactly as given, at most 8, and only ones from the list. No prose."
-)
-
-
-def suggest_comparison_fields(variables: list, title: str, quote: str,
-                              language: str = "en") -> list:
-    """Return the subset of variables worth comparing with this paper, or [] on failure."""
-    config = settings()
-    if not config["key"] or not variables:
-        return []
-    payload = {
-        "model": config["model"],
-        "temperature": 0.0,
-        "messages": [
-            {"role": "system", "content": FIELDS_SYSTEM},
-            {"role": "user", "content": json.dumps(
-                {"variables": variables, "paper_title": title, "paper_quote": quote},
+                {"variables": variables, "title": title, "paper_text": paper_text[:6000]},
                 ensure_ascii=False)},
         ],
     }
@@ -370,7 +230,24 @@ def suggest_comparison_fields(variables: list, title: str, quote: str,
         parsed = json.loads(raw.strip())
     except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
             json.JSONDecodeError):
-        return []
-    if not isinstance(parsed, list):
-        return []
-    return [str(value) for value in parsed if isinstance(value, str)]
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+
+    # accept both shapes: values nested under a key, or the variable names at the top level
+    flat = parsed.get("values")
+    if not isinstance(flat, dict) or not flat:
+        flat = {key: value for key, value in parsed.items() if key in variables}
+    values = {}
+    for key, value in flat.items():
+        if key in variables:
+            try:
+                values[key] = float(value)
+            except (TypeError, ValueError):
+                continue
+    result = parsed.get("reported_result")
+    try:
+        result = float(result) if result is not None else None
+    except (TypeError, ValueError):
+        result = None
+    return {"values": values, "reported_result": result, "quote": str(parsed.get("quote") or "")}

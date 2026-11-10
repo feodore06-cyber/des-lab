@@ -751,41 +751,52 @@ def compare_page() -> None:
     own = [value for value in auth.project_variables(
         user, mine_row.get("project") or auth.DEFAULT_PROJECT)
         if value not in ("sample_id", "notes", "recorded_at", "replicate")]
+
+    st.markdown(t("cmp.paper_title"))
+    st.caption(t("cmp.paper_help"))
+    reference = st.session_state.get("compare_ref") or {}
+    paper_title = st.text_input(t("cmp.title_field"), value=str(reference.get("title") or ""),
+                                placeholder="10.1016/j.indcrop.2022.115040 or the title")
+    paper_text = st.text_area(t("cmp.paste"), height=120,
+                              placeholder=t("cmp.paste_ph"))
+
     if ai.available():
-        if st.button(t("cmp.ai_pick_fields"), key="ai_pick_fields"):
+        if st.button(t("cmp.read_with_ai"), key="cmp_read"):
             with st.spinner(t("cmp.ai_thinking")):
-                chosen = ai.suggest_comparison_fields(
-                    own, extracted.get("_title", ""), extracted.get("quote", ""),
+                found = ai.extract_comparison(
+                    own, paper_title, paper_text,
                     st.session_state.get(i18n.LANG_KEY, "en"))
-            if chosen:
-                st.session_state["cmp_fields"] = [v for v in chosen if v in own] or own
-        own = st.session_state.get("cmp_fields") or own
-        st.caption(t("cmp.ai_pick_note"))
+            if found and (found.get("values") or found.get("reported_result")):
+                st.session_state["cmp_filled"] = found
+                for key, value in (found.get("values") or {}).items():
+                    st.session_state[f"cmp_field_{key}"] = f"{value:g}"
+                if found.get("reported_result") is not None:
+                    st.session_state["cmp_reported"] = f"{found['reported_result']:g}"
+            else:
+                st.session_state["cmp_filled"] = {"empty": True}
+            st.rerun()
+        filled = st.session_state.get("cmp_filled")
+        if filled and filled.get("empty"):
+            st.warning(t("cmp.nothing_read"))
+        elif filled:
+            st.success(t("cmp.read_ok", n=len(filled.get("values") or {})))
+            if filled.get("quote"):
+                st.caption("“" + str(filled["quote"]) + "”")
+            st.caption(t("cmp.read_check_hint"))
+    else:
+        st.caption(t("cmp.ai_offline"))
 
     with st.form("compare_paper"):
-        label = st.text_input(t("cmp.title_field"),
-                              value=str(st.session_state.get("compare_ref", {}).get("title", "")),
-                              placeholder="10.1016/j.indcrop.2022.115040")
         basis_labels = [t(key) for key in BASIS_KEYS]
-        preface = str(extracted.get("basis") or "").lower()
-        chosen_basis = 0
-        for index, key in enumerate(BASIS_KEYS):
-            if preface and t(key).lower() in preface:
-                chosen_basis = index
-        basis = st.selectbox(t("cmp.basis"), basis_labels, index=chosen_basis,
-                             key="compare_basis")
+        basis = st.selectbox(t("cmp.basis"), basis_labels, index=0, key="compare_basis")
         for chunk in range(0, len(own), 3):
             columns = st.columns(3)
             for column, variable in zip(columns, own[chunk:chunk + 3]):
-                value = extracted.get(variable)
                 column.text_input(variable.replace("_", " "),
-                                  value="" if value is None else str(value),
-                                  placeholder="" if mine_row.get(variable) is None
-                                  else str(mine_row.get(variable)),
-                                  key=f"cmp_field_{variable}")
-        reported = st.text_input(t("cmp.yield"),
-                                 value=str(extracted.get("lignin_yield_pct") or ""),
-                                 placeholder="")
+                                  key=f"cmp_field_{variable}",
+                                  placeholder=t("cmp.blank_if_absent"))
+        reported = st.text_input(t("cmp.yield"), key="cmp_reported",
+                                 placeholder=t("cmp.blank_if_absent"))
         if st.form_submit_button(t("cmp.run_btn"), type="primary"):
             if not str(reported).strip():
                 st.error(t("cmp.need_numbers"))
@@ -800,7 +811,7 @@ def compare_page() -> None:
                     mine[variable] = mine_row.get(variable)
                 mine["replicates"] = 3
                 st.session_state["compare_result"] = {
-                    "mine": mine, "theirs": theirs, "label": label or pick,
+                    "mine": mine, "theirs": theirs, "label": paper_title or pick,
                     "sides": {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}}
                 st.session_state["compare_outcome"] = compare.compare(mine, theirs)
 
