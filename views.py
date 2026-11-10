@@ -38,6 +38,7 @@ import store
 import i18n
 import mailer
 from i18n import t
+import derive
 import lab_core
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
@@ -1694,6 +1695,8 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
                         "molar_ratio": float(ratio), "purity_wt_pct": float(purity),
                         "water_wt_pct": float(water)})
         row.update(values)
+        # a derived variable is computed from the measurements, never typed by hand
+        row = derive.recompute(row, auth.project_variable_items(user, project))
         auth.save_results(user, pd.DataFrame([row]), append=True)
         total = auth.load_results(user)
         shown = f"{preview:.2f}" if preview is not None else "—"

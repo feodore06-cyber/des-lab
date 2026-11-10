@@ -1433,9 +1433,26 @@ def set_project_result(username: str, name: str, variable: str) -> None:
         store.project_result_set(username, name, variable)
     _forget_cached_reads()
 
-VARIABLE_ROLES = ("parameter", "result", "identifier", "covariate")
-ROLE_LABELS = {"parameter": "condition", "result": "result",
-               "identifier": "label", "covariate": "other"}
+VARIABLE_ROLES = ("independent", "controlled", "dependent", "derived", "metadata")
+ROLE_LABELS = {"independent": "independent", "controlled": "controlled",
+               "dependent": "dependent (result)", "derived": "derived (calculated)",
+               "metadata": "metadata"}
+RESULT_ROLES = ("dependent", "derived")
+PRIORITIES = ("primary", "secondary", "")
+
+
+def _default_priority(role: str, position: int) -> str:
+    if role not in RESULT_ROLES:
+        return ""
+    return "primary" if position == 0 else "secondary"
+
+
+def _role_from_legacy(value: str) -> str:
+    """Old four-role names map onto the PRD five."""
+    return {"parameter": "independent", "result": "dependent", "identifier": "metadata",
+            "covariate": "metadata", "derived": "derived", "independent": "independent",
+            "controlled": "controlled", "dependent": "dependent",
+            "metadata": "metadata"}.get(str(value or ""), "metadata")
 
 
 def variable_items(username: str | None, name: str) -> list:
@@ -1473,23 +1490,45 @@ def variable_items(username: str | None, name: str) -> list:
         for position, item in enumerate(parsed["items"]):
             if not isinstance(item, dict) or not item.get("name"):
                 continue
+            role = _role_from_legacy(item.get("role") or ai.role_of(
+                str(item["name"]), str(item.get("unit") or "")))
             items.append({
                 "name": str(item["name"]),
+                "display_name": str(item.get("display_name")
+                                    or str(item["name"]).replace("_", " ")),
                 "unit": str(item.get("unit") or unit_of(str(item["name"])) or ""),
-                "role": str(item.get("role") or ai.role_of(str(item["name"]),
-                                                           str(item.get("unit") or ""))),
+                "dtype": str(item.get("dtype") or ("number" if item.get("unit")
+                                                   or "pct" in str(item["name"]) else "text")),
+                "role": role,
+                "priority": str(item.get("priority") or _default_priority(role, position)),
+                "definition": str(item.get("definition") or ""),
+                "synonyms": list(item.get("synonyms") or []),
+                "method": str(item.get("method") or ""),
+                "formula": str(item.get("formula") or ""),
                 "hidden": bool(item.get("hidden")),
                 "position": int(item.get("position", position)),
                 "removed": bool(item.get("removed")),
             })
-        return sorted(items, key=lambda entry: entry["position"])
+        items = sorted(items, key=lambda entry: entry["position"])
+        # the first result of a project is its primary outcome unless the researcher said otherwise
+        results = [entry for entry in items if entry["role"] in RESULT_ROLES]
+        if results and not any(entry["priority"] == "primary" for entry in results):
+            results[0]["priority"] = "primary"
+        return items
     if isinstance(parsed, list):
         names = [str(value) for value in parsed if value]
     if not names:
         names = list(DEFAULT_VARIABLES)
-    return [{"name": value, "unit": unit_of(value) or "", "role": ai.role_of(value),
-             "hidden": False, "position": position, "removed": False}
-            for position, value in enumerate(names)]
+    items = []
+    for position, value in enumerate(names):
+        role = _role_from_legacy(ai.role_of(value))
+        items.append({"name": value, "display_name": value.replace("_", " "),
+                      "unit": unit_of(value) or "",
+                      "dtype": "number" if unit_of(value) or "pct" in value else "text",
+                      "role": role, "priority": _default_priority(role, position),
+                      "definition": "", "synonyms": [], "method": "", "formula": "",
+                      "hidden": False, "position": position, "removed": False})
+    return items
 
 
 def set_variable_items(username: str, name: str, items: list) -> None:
@@ -1497,9 +1536,18 @@ def set_variable_items(username: str, name: str, items: list) -> None:
     for position, item in enumerate(items):
         if not item.get("name"):
             continue
+        role = _role_from_legacy(item.get("role") or ai.role_of(str(item["name"])))
         cleaned.append({"name": str(item["name"]),
+                        "display_name": str(item.get("display_name") or item["name"]),
                         "unit": str(item.get("unit") or ""),
-                        "role": str(item.get("role") or ai.role_of(str(item["name"]))),
+                        "dtype": str(item.get("dtype") or "number"),
+                        "role": role,
+                        "priority": str(item.get("priority")
+                                        or _default_priority(role, position)),
+                        "definition": str(item.get("definition") or ""),
+                        "synonyms": list(item.get("synonyms") or []),
+                        "method": str(item.get("method") or ""),
+                        "formula": str(item.get("formula") or ""),
                         "hidden": bool(item.get("hidden")),
                         "position": position,
                         "removed": bool(item.get("removed"))})
@@ -1518,5 +1566,8 @@ def project_variable_items(username: str | None, name: str) -> list:
 
 
 def project_result_variables(username: str | None, name: str) -> list:
-    return [item["name"] for item in project_variable_items(username, name)
-            if item["role"] == "result"]
+    """Result variables, primary first: a project may optimise more than one thing."""
+    items = [item for item in project_variable_items(username, name)
+             if item["role"] in RESULT_ROLES]
+    items.sort(key=lambda item: (item.get("priority") != "primary", item["position"]))
+    return [item["name"] for item in items]
