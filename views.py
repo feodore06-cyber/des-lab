@@ -1454,14 +1454,14 @@ def _photos_section(user: str | None, frame: pd.DataFrame, project: str | None =
 def _looks_duplicate(frame: pd.DataFrame, sample_id: str, lignin_mg: float,
                      biomass_g: float) -> bool:
     """True when the same run is already stored, so a double click cannot add it twice."""
-    wanted = (str(sample_id or "").strip().lower(), round(float(lignin_mg), 4),
-              round(float(biomass_g), 4))
-    if not wanted[0] or "sample_id" not in frame.columns:
+    # the ID is not part of the identity: a double click can move the suggested ID on, while the
+    # measurement behind it is still the same run
+    wanted = (round(float(lignin_mg), 4), round(float(biomass_g), 4))
+    if "sample_id" not in frame.columns:
         return False
     for _, row in frame.iterrows():
         try:
-            other = (str(row.get("sample_id", "")).strip().lower(),
-                     round(float(row.get("lignin_mg")), 4),
+            other = (round(float(row.get("lignin_mg")), 4),
                      round(float(row.get("biomass_g")), 4))
         except (TypeError, ValueError):
             continue
@@ -1480,15 +1480,19 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     # the next sample ID counts inside this project only: EXP-05 after EXP-04 of the same project
     if "project" in saved.columns and project:
         saved = saved[saved["project"].fillna(auth.DEFAULT_PROJECT) == project]
-    # the field keeps its value between runs; reset it when the project changes so the next ID
-    # really is computed for the project now on screen
-    if st.session_state.get("run_project") != project:
-        st.session_state["run_project"] = project
-        st.session_state.pop("run_sample", None)
+    # the next ID is decided by this project's rows: when the project changes, or when its rows
+    # change (a run was just saved), put the right value in the field instead of keeping a stale one
+    expected = _next_sample_id(saved)
+    if (st.session_state.get("run_sample_project") != project
+            or st.session_state.get("run_sample_expected") != expected
+            or "run_sample" not in st.session_state):
+        st.session_state["run_sample"] = expected
+        st.session_state["run_sample_project"] = project
+        st.session_state["run_sample_expected"] = expected
     st.caption(t("res.new_hint"))
     with st.form("record_run", clear_on_submit=True):
         left, right = st.columns(2)
-        sample_id = left.text_input(t("res.sample_id"), value=_next_sample_id(saved), key="run_sample")
+        sample_id = left.text_input(t("res.sample_id"), key="run_sample")
         feedstock = right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
                                      key="run_feedstock")
         formulation = auth.project_formulation(user, project)
