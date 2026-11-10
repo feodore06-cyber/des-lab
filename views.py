@@ -1563,52 +1563,54 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         st.session_state["run_sample"] = expected
         st.session_state["run_sample_project"] = project
         st.session_state["run_sample_expected"] = expected
+    note = st.session_state.pop("run_saved_note", None)
+    if note:
+        st.success(note)
     st.caption(t("res.new_hint"))
     own = auth.project_variables(user, project)
     # the form is built from this project's variables: a lignin project gets biomass and recovered
     # lignin, an adhesive project gets its own strength and water-resistance fields
     # the formulation fields come from the project, not from a per-run box: rendering them here
-    # would let an empty box overwrite the配方 the project was started with
+    # would let an empty box overwrite the formulation the project was started with
     measured = [value for value in own
                 if value not in ("sample_id", "feedstock", "replicate", "notes",
                                  "lignin_yield_pct", "recorded_at", "project",
                                  "des_hba", "des_hbd", "molar_ratio", "purity_wt_pct",
                                  "water_wt_pct")]
-    with st.form("record_run", clear_on_submit=True):
-        left, right = st.columns(2)
-        sample_id = left.text_input(t("res.sample_id"), key="run_sample")
-        feedstock = (right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
-                                      key="run_feedstock")
-                     if "feedstock" in own else "")
-        formulation = auth.project_formulation(user, project)
-        # a DES formulation is only shown for a project that actually records one
-        des_project = (any(value in own for value in ("des_hba", "des_hbd", "molar_ratio"))
-                       or auth.formulation_stored(user, project))
-        if des_project:
-            st.caption(t("res.project_formulation", hba=formulation["des_hba"],
-                         hbd=formulation["des_hbd"], ratio=formulation["molar_ratio"],
-                         purity=formulation["purity_wt_pct"]))
-        hba, hbd = formulation["des_hba"], formulation["des_hbd"]
-        ratio, purity = formulation["molar_ratio"], formulation["purity_wt_pct"]
-        water = formulation["water_wt_pct"]
-        replicate = st.number_input(t("res.replicate"), min_value=1, value=1, step=1,
-                                    key="run_replicate")
+    left, right = st.columns(2)
+    sample_id = left.text_input(t("res.sample_id"), key="run_sample")
+    feedstock = (right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),
+                                  key="run_feedstock")
+                 if "feedstock" in own else "")
+    formulation = auth.project_formulation(user, project)
+    # a DES formulation is only shown for a project that actually records one
+    des_project = (any(value in own for value in ("des_hba", "des_hbd", "molar_ratio"))
+                   or auth.formulation_stored(user, project))
+    if des_project:
+        st.caption(t("res.project_formulation", hba=formulation["des_hba"],
+                     hbd=formulation["des_hbd"], ratio=formulation["molar_ratio"],
+                     purity=formulation["purity_wt_pct"]))
+    hba, hbd = formulation["des_hba"], formulation["des_hbd"]
+    ratio, purity = formulation["molar_ratio"], formulation["purity_wt_pct"]
+    water = formulation["water_wt_pct"]
+    replicate = st.number_input(t("res.replicate"), min_value=1, value=1, step=1,
+                                key="run_replicate")
 
-        values = {}
-        for chunk in range(0, len(measured), 3):
-            columns = st.columns(3)
-            for column, variable in zip(columns, measured[chunk:chunk + 3]):
-                key = f"run_var_{variable}"
-                unit = auth.unit_of(variable)
-                label = f"{variable} ({unit})" if unit else variable
-                if variable.endswith(("_pct", "_C", "_min", "_mg", "_g", "_rpm", "_mm",
-                                      "_ratio", "_bar", "_mL", "_MPa", "_s", "_h")):
-                    values[variable] = column.number_input(label, min_value=0.0, value=0.0,
-                                                          step=0.1, format="%.4f", key=key)
-                else:
-                    values[variable] = column.text_input(label, key=key)
-        notes = st.text_input(t("res.notes"), key="run_notes")
-        submitted = st.form_submit_button(t("res.save_run"), type="primary",
+    values = {}
+    for chunk in range(0, len(measured), 3):
+        columns = st.columns(3)
+        for column, variable in zip(columns, measured[chunk:chunk + 3]):
+            key = f"run_var_{variable}"
+            unit = auth.unit_of(variable)
+            label = f"{variable} ({unit})" if unit else variable
+            if variable.endswith(("_pct", "_C", "_min", "_mg", "_g", "_rpm", "_mm",
+                                  "_ratio", "_bar", "_mL", "_MPa", "_s", "_h")):
+                values[variable] = column.number_input(label, min_value=0.0, value=0.0,
+                                                      step=0.1, format="%.4f", key=key)
+            else:
+                values[variable] = column.text_input(label, key=key)
+    notes = st.text_input(t("res.notes"), key="run_notes")
+    submitted = st.button(t("res.save_run"), type="primary",
                                          use_container_width=True)
 
     biomass = values.get("biomass_g") or 0.0
@@ -1656,8 +1658,13 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         auth.save_results(user, pd.DataFrame([row]), append=True)
         total = auth.load_results(user)
         shown = f"{preview:.2f}" if preview is not None else "—"
-        st.success(t("res.saved_run", sid=row["sample_id"], pct=shown,
-                     rows=0 if total is None else len(total)))
+        st.session_state["run_saved_note"] = t("res.saved_run", sid=row["sample_id"], pct=shown,
+                                                rows=0 if total is None else len(total))
+        # advance the suggested ID and start the next run with a clean sheet
+        # the widgets cannot be cleared after they were created in this run; the rerun picks the
+        # advanced ID up from the project's rows instead
+        st.session_state["run_sample_project"] = None
+        st.rerun()
 
 
 def _records_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
