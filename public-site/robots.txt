@@ -29,4 +29,4 @@ Disallow: /login
 Disallow: /admin
 Disallow: /private
 
-Sitemap: https://example.github.io/biomat-public/sitemap.xml
+Sitemap: https://feodore06-cyber.github.io/des-lab/sitemap.xml

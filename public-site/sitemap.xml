@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://example.github.io/biomat-public/</loc>
+    <loc>https://feodore06-cyber.github.io/des-lab/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://example.github.io/biomat-public/docs/overview.md</loc>
+    <loc>https://feodore06-cyber.github.io/des-lab/docs/overview.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://example.github.io/biomat-public/docs/features.md</loc>
+    <loc>https://feodore06-cyber.github.io/des-lab/docs/features.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://example.github.io/biomat-public/llms.txt</loc>
+    <loc>https://feodore06-cyber.github.io/des-lab/llms.txt</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

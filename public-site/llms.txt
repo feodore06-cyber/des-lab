@@ -28,13 +28,13 @@ purification project use the same engine with different variable definitions.
 
 ## Public demo data (synthetic)
 
-- Product overview: https://example.github.io/biomat-public/
-- Variable definitions: https://example.github.io/biomat-public/data/variables.json
-- Experiment records: https://example.github.io/biomat-public/data/demo_dataset.json
-- Comparison result: https://example.github.io/biomat-public/data/demo_comparison.json
-- Literature extraction: https://example.github.io/biomat-public/data/demo_literature.json
-- Product overview (Markdown): https://example.github.io/biomat-public/docs/overview.md
-- Features: https://example.github.io/biomat-public/docs/features.md
+- Product overview: https://feodore06-cyber.github.io/des-lab/
+- Variable definitions: https://feodore06-cyber.github.io/des-lab/data/variables.json
+- Experiment records: https://feodore06-cyber.github.io/des-lab/data/demo_dataset.json
+- Comparison result: https://feodore06-cyber.github.io/des-lab/data/demo_comparison.json
+- Literature extraction: https://feodore06-cyber.github.io/des-lab/data/demo_literature.json
+- Product overview (Markdown): https://feodore06-cyber.github.io/des-lab/docs/overview.md
+- Features: https://feodore06-cyber.github.io/des-lab/docs/features.md
 
 ## Access policy
 
