@@ -906,28 +906,28 @@ def _render_outcome() -> None:
         st.caption(t("cmp.guard_note"))
     st.subheader(t("cmp.side_by_side"))
     sides = details.get("sides") or {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}
-    # say what the number is: a yield, a strength, a recovery - not just "0.96 %"
-    measure = details.get("measure") or "lignin_yield_pct"
-    if not details.get("measure"):
-        wanted = auth.project_result_variables(
+    # every result variable of the project gets a row of numbers, not just the first
+    measures = details.get("measures") or ([details["measure"]] if details.get("measure") else [])
+    if not measures:
+        measures = auth.project_result_variables(
             auth.current_user(), (details.get("mine") or {}).get("project")
-            or auth.DEFAULT_PROJECT)
-        measure = wanted[0] if wanted else measure
-    if measure == "lignin_yield_pct" and details.get("measure"):
-        measure = details["measure"]
-    unit = "%" if "pct" in str(measure) else ""
-    cols = st.columns(3)
-    values = (details.get("mine", {}).get(measure),
-              details.get("theirs", {}).get(measure),
-              outcome["delta"])
-    for column, name, value in zip((cols[0], cols[1], cols[2]),
-                                   (sides["mine"], sides["theirs"], t("cmp.delta")), values):
-        if isinstance(value, (int, float)) and value == value:
-            shown = f"{value:+.2f}" if name == t("cmp.delta") else f"{value:.2f}"
-            column.metric(name, f"{shown} {unit}".strip())
-        else:
-            column.metric(name, "—")
-    st.caption(t("cmp.measure_note", what=measure.replace("_", " ")))
+            or auth.DEFAULT_PROJECT) or ["lignin_yield_pct"]
+    for position, measure in enumerate(measures):
+        unit = auth.unit_of(measure) or ("%" if "pct" in str(measure) else "")
+        columns = st.columns(3)
+        values = (details.get("mine", {}).get(measure),
+                  details.get("theirs", {}).get(measure),
+                  outcome["delta"] if position == 0 else None)
+        for column, name, value in zip(columns,
+                                       (sides["mine"], sides["theirs"], t("cmp.delta")), values):
+            title = f"{name} · {measure}" if name != t("cmp.delta") else name
+            if isinstance(value, (int, float)) and value == value:
+                shown = f"{value:+.2f}" if name == t("cmp.delta") else f"{value:.2f}"
+                column.metric(title, f"{shown} {unit}".strip())
+            else:
+                column.metric(title, "—")
+        st.caption(t("cmp.measure_note", what=measure.replace("_", " ")))
+
 
     # what actually differed: the result is not caused by one variable, so show them all
     pair = _condition_rows(details.get("mine", {}), details.get("theirs", {}))
