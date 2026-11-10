@@ -1244,6 +1244,64 @@ def _latest_experiment(user: str | None) -> str | None:
     return values[-1] if values else None
 
 
+def _variables_editor(user: str, name: str) -> None:
+    """Edit, add or remove the variables this project records, right where they are read."""
+    current_vars = auth.project_variables(user, name)
+
+    def _add_typed_here() -> None:
+        typed = [part.strip() for part in
+                 str(st.session_state.get(f"vars_{name}_typed", "")).replace(",", " ").split()
+                 if part.strip()]
+        held = list(st.session_state.get(f"vars_{name}_pick") or [])
+        st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + typed))
+        st.session_state[f"vars_{name}_typed"] = ""
+
+    def _add_asked() -> None:
+        asked = st.session_state.get(f"vars_{name}_picked_ai") or []
+        held = list(st.session_state.get(f"vars_{name}_pick") or [])
+        st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + asked))
+
+    if ai.available():
+        if st.button(t("exp.ai_suggest_here"), key=f"vars_{name}_ai"):
+            with st.spinner(t("exp.ai_thinking")):
+                st.session_state[f"vars_{name}_ai_list"] = ai.suggest_variables(
+                    name, st.session_state.get(i18n.LANG_KEY, "en"))
+        asked = st.session_state.get(f"vars_{name}_ai_list") or []
+        if asked:
+            st.caption(t("exp.ai_suggest_note"))
+            picked = st.multiselect(t("exp.ai_pick_here"), [item["key"] for item in asked],
+                                    key=f"vars_{name}_picked_ai")
+            for item in asked:
+                if item.get("why"):
+                    st.caption(f"· `{item['key']}` — {item['why']}")
+            st.button(t("exp.ai_add"), key=f"vars_{name}_add_ai", on_click=_add_asked)
+
+    typed_row = st.columns([3, 1])
+    typed_row[0].text_input(t("exp.variable_by_hand"), key=f"vars_{name}_typed",
+                            placeholder="e.g. reaction_pressure_bar",
+                            label_visibility="collapsed")
+    typed_row[1].button(t("exp.variable_add"), key=f"vars_{name}_add_typed",
+                        on_click=_add_typed_here, use_container_width=True)
+
+    options = list(dict.fromkeys(list(COLUMN_CHOICES) + current_vars))
+    kept = st.multiselect(t("exp.variables"), options, default=current_vars,
+                          help=t("exp.variables_more_ph"), key=f"vars_{name}_pick",
+                          accept_new_options=True)
+    if kept:
+        st.caption(" · ".join(
+            f"{value} ({auth.unit_of(value)})" if auth.unit_of(value) else value
+            for value in kept))
+    if st.button(t("exp.variables_save"), key=f"vars_{name}_save"):
+        try:
+            auth.set_project_variables(user, name, kept)
+        except ValueError as exc:
+            st.error(t(str(exc)))
+        else:
+            st.success(t("exp.variables_saved"))
+            st.rerun()
+
+
+
 def _experiment_panel(user: str | None, name: str) -> None:
     """One experiment, read like a report: overview, formulation, process, results, records."""
     frame = auth.load_results(user)
@@ -1269,61 +1327,6 @@ def _experiment_panel(user: str | None, name: str) -> None:
     if wanted != state:
         auth.set_project_status(user, name, wanted)
         st.rerun()
-
-    with st.expander(t("exp.variables_edit"), expanded=False):
-        current_vars = auth.project_variables(user, name)
-
-        def _add_typed_here() -> None:
-            typed = [part.strip() for part in
-                     str(st.session_state.get(f"vars_{name}_typed", "")).replace(",", " ").split()
-                     if part.strip()]
-            held = list(st.session_state.get(f"vars_{name}_pick") or [])
-            st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + typed))
-            st.session_state[f"vars_{name}_typed"] = ""
-
-        def _add_asked() -> None:
-            asked = st.session_state.get(f"vars_{name}_picked_ai") or []
-            held = list(st.session_state.get(f"vars_{name}_pick") or [])
-            st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + asked))
-
-        if ai.available():
-            if st.button(t("exp.ai_suggest_here"), key=f"vars_{name}_ai"):
-                with st.spinner(t("exp.ai_thinking")):
-                    st.session_state[f"vars_{name}_ai_list"] = ai.suggest_variables(
-                        name, st.session_state.get(i18n.LANG_KEY, "en"))
-            asked = st.session_state.get(f"vars_{name}_ai_list") or []
-            if asked:
-                st.caption(t("exp.ai_suggest_note"))
-                picked = st.multiselect(t("exp.ai_pick_here"), [item["key"] for item in asked],
-                                        key=f"vars_{name}_picked_ai")
-                for item in asked:
-                    if item.get("why"):
-                        st.caption(f"· `{item['key']}` — {item['why']}")
-                st.button(t("exp.ai_add"), key=f"vars_{name}_add_ai", on_click=_add_asked)
-
-        typed_row = st.columns([3, 1])
-        typed_row[0].text_input(t("exp.variable_by_hand"), key=f"vars_{name}_typed",
-                                placeholder="e.g. reaction_pressure_bar",
-                                label_visibility="collapsed")
-        typed_row[1].button(t("exp.variable_add"), key=f"vars_{name}_add_typed",
-                            on_click=_add_typed_here, use_container_width=True)
-
-        options = list(dict.fromkeys(list(COLUMN_CHOICES) + current_vars))
-        kept = st.multiselect(t("exp.variables"), options, default=current_vars,
-                              help=t("exp.variables_more_ph"), key=f"vars_{name}_pick",
-                              accept_new_options=True)
-        if kept:
-            st.caption(" · ".join(
-                f"{value} ({auth.unit_of(value)})" if auth.unit_of(value) else value
-                for value in kept))
-        if st.button(t("exp.variables_save"), key=f"vars_{name}_save"):
-            try:
-                auth.set_project_variables(user, name, kept)
-            except ValueError as exc:
-                st.error(t(str(exc)))
-            else:
-                st.success(t("exp.variables_saved"))
-                st.rerun()
 
     with st.expander(t("exp.rename"), expanded=False):
         with st.form(f"rename_{name}"):
@@ -1373,6 +1376,9 @@ def _experiment_panel(user: str | None, name: str) -> None:
                 if column in part.columns]
         st.dataframe(part[keep], width="stretch", hide_index=True)
         st.caption(t("exp.overview_note"))
+        st.divider()
+        st.caption(t("exp.variables_here"))
+        _variables_editor(user, name)
 
     with tab_formulation:
         current = auth.project_formulation(user, name)
