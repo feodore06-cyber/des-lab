@@ -38,6 +38,7 @@ import store
 import i18n
 import mailer
 from i18n import t
+import comparability
 import derive
 import lab_core
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
@@ -905,6 +906,35 @@ def _render_outcome() -> None:
     if guard:
         st.warning(t("cmp.guard_title") + "\n\n- " + "\n- ".join(guard))
         st.caption(t("cmp.guard_note"))
+    # the comparability verdict comes before any number: two values that mean different things
+    # must not be printed side by side as if a difference between them were meaningful
+    verdict = details.get("comparability") or {}
+    if not verdict:
+        project = (details.get("mine") or {}).get("project") or auth.DEFAULT_PROJECT
+        items = {item["name"]: item
+                 for item in auth.project_variable_items(auth.current_user(), project)}
+        wanted = (details.get("measures") or [details.get("measure")])[0]
+        mine_item = items.get(wanted, {})
+        theirs_item = details.get("theirs_item") or mine_item
+        verdict = comparability.check(details.get("mine") or {}, details.get("theirs") or {},
+                                      mine_item, theirs_item,
+                                      replicates=int(details.get("replicates") or 1))
+    if verdict:
+        status = verdict.get("status")
+        label = t(f"cmp.status_{status}")
+        text_lines = "\n\n- ".join(verdict.get("reasons") or [])
+        if status == "not_comparable":
+            st.error(t("cmp.not_comparable_title", status=label) + "\n\n- " + text_lines)
+            if verdict.get("conversion"):
+                st.info(verdict["conversion"])
+            return
+        if status == "insufficient_information":
+            st.warning(t("cmp.insufficient_title", status=label) + "\n\n- " + text_lines)
+        elif status == "comparable_with_caveats":
+            st.info(t("cmp.caveats_title", status=label) + "\n\n- " + text_lines)
+        else:
+            st.success(t("cmp.direct_title", status=label))
+
     st.subheader(t("cmp.side_by_side"))
     sides = details.get("sides") or {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}
     # every result variable of the project gets a row of numbers, not just the first
