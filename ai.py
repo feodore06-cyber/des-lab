@@ -309,3 +309,111 @@ def suggest_variables(project_name: str, language: str = "en") -> list:
         out.append({"key": key, "why": str(item.get("why", "")).strip()
                     if isinstance(item, dict) else ""})
     return out[:8]
+
+RESULT_STEMS = ("yield", "recovery", "strength", "purity", "efficiency", "conversion",
+                "retention", "content", "performance", "activity")
+CONDITION_STEMS = ("temperature", "time", "ratio", "pressure", "speed", "rpm", "ph", "volume",
+                   "mass", "purity", "purity_pct")
+
+
+def guess_result(variables: list) -> str:
+    """Pick the variable that reads like the measured outcome rather than a condition.
+
+    This is a guess from the names alone; the project can always set it explicitly.
+    """
+    names = [str(value) for value in variables or []]
+    if not names:
+        return ""
+    scored = []
+    for name in names:
+        low = name.lower()
+        score = 0
+        if any(stem in low for stem in RESULT_STEMS):
+            score += 3
+        if low.endswith(("_pct", "_percent", "_MPa", "_mg", "_g_per_g")):
+            score += 2
+        if any(stem in low for stem in CONDITION_STEMS):
+            score -= 2
+        scored.append((score, name))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return scored[0][1] if scored and scored[0][0] > 0 else ""
+
+ROLE_WORDS = {
+    "result": ("yield", "recovery", "strength", "purity", "efficiency", "conversion",
+               "retention", "performance", "activity", "selectivity", "content", "rate",
+               "degree", "improvement", "increase", "output", "recovered", "obtained",
+               "measured", "mass_balance"),
+    "parameter": ("temperature", "time", "ratio", "pressure", "speed", "rpm", "ph",
+                  "volume", "mass", "concentration", "loading", "dosage", "flow",
+                  "power", "frequency", "mesh", "size", "humidity", "method", "catalyst",
+                  "solvent", "atmosphere", "mode", "type"),
+    "identifier": ("sample", "batch", "lot", "operator", "date", "id"),
+}
+
+
+def role_of(name: str, unit: str = "", description: str = "") -> str:
+    """Guess a variable's scientific role from its name and unit.
+
+    parameter = something you set, result = something you measure and optimise,
+    identifier = a label, covariate = anything else worth recording.
+    """
+    low = str(name or "").lower()
+    if any(word in low for word in ROLE_WORDS["identifier"]) and not unit:
+        return "identifier"
+    if any(word in low for word in ROLE_WORDS["result"]):
+        return "result"
+    if any(word in low for word in ROLE_WORDS["parameter"]):
+        return "parameter"
+    # a percentage with no other clue is usually an outcome
+    if str(unit or "").strip() == "%" and not any(word in low for word in ROLE_WORDS["parameter"]):
+        return "result"
+    return "covariate"
+
+
+def classify_variables(project_name: str, description: str, variables: list) -> list:
+    """Ask the model what each variable is for; fall back to the words in its name."""
+    config = settings()
+    names = [str(value) for value in variables or []]
+    if not names:
+        return []
+    guessed = [{"name": name, "role": role_of(name), "unit": "",
+                "why": "read from the variable name"} for name in names]
+    if not config["key"]:
+        return guessed
+    system = (
+        "You classify the variables of a scientific experiment. For each variable decide one role: "
+        "parameter (a condition the experimenter sets), result (a measured outcome that is optimised), "
+        "identifier (a label), covariate (recorded but neither). Also give the unit if the name implies "
+        "one. Answer with a JSON array of objects {name, role, unit, why}; keep the names exactly."
+    )
+    payload = {"model": config["model"], "temperature": 0.0, "messages": [
+        {"role": "system", "content": system},
+        {"role": "user", "content": json.dumps(
+            {"project": project_name, "description": description, "variables": names},
+            ensure_ascii=False)}]}
+    request = urllib.request.Request(
+        config["base"] + "/chat/completions", data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json",
+                 "Authorization": "Bearer " + config["key"]}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            body = json.load(response)
+        raw = str(body["choices"][0]["message"]["content"]).strip()
+        for fence in ("```json", "```"):
+            raw = raw.replace(fence, "")
+        parsed = json.loads(raw.strip())
+    except (urllib.error.URLError, TimeoutError, OSError, KeyError, ValueError, IndexError,
+            json.JSONDecodeError):
+        return guessed
+    if not isinstance(parsed, list):
+        return guessed
+    by_name = {str(item.get("name")): item for item in parsed if isinstance(item, dict)}
+    out = []
+    for name in names:
+        item = by_name.get(name) or {}
+        role = str(item.get("role") or "").strip().lower()
+        out.append({"name": name, "role": role if role in
+                    ("parameter", "result", "identifier", "covariate") else role_of(name),
+                    "unit": str(item.get("unit") or "").strip(),
+                    "why": str(item.get("why") or "").strip()})
+    return out

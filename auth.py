@@ -24,6 +24,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import ai
+
 import schema
 import store
 
@@ -1244,23 +1246,14 @@ EXTRA_VARIABLES = ["stirring_rpm", "stirring_time_min", "solid_liquid_ratio", "p
 
 
 def project_variables(username: str | None, name: str) -> list:
-    """The measured columns this project records; defaults to the standard set."""
-    if not username:
-        return list(DEFAULT_VARIABLES)
-    stored = None
-    if store.enabled():
-        try:
-            raw = store.project_variables_get(username, name)
-            if raw:
-                stored = json.loads(raw)
-        except Exception:
-            stored = None
-    if stored is None:
-        mapping = _local_projects().get("_variables") or {}
-        stored = mapping.get(f"{username}::{name}")
-    if not stored:
-        return list(DEFAULT_VARIABLES)
-    return [str(value) for value in stored]
+    """Names of the variables this project still records, in their chosen order."""
+    return [item["name"] for item in project_variable_items(username, name)]
+
+
+def project_visible_variables(username: str | None, name: str) -> list:
+    """The ones the table shows: a hidden column keeps its data but is not displayed."""
+    return [item["name"] for item in project_variable_items(username, name)
+            if not item["hidden"]]
 
 
 def set_project_variables(username: str, name: str, values: list) -> None:
@@ -1419,3 +1412,111 @@ def formulation_stored(username: str | None, name: str) -> bool:
             pass
     mapping = _local_projects().get("_formulation") or {}
     return bool(mapping.get(f"{username}::{name}"))
+
+def project_result(username: str | None, name: str) -> str:
+    """The variable that holds this project's outcome: stored, else guessed from the names."""
+    if not username or not name:
+        return ""
+    stored = ""
+    if store.enabled():
+        try:
+            stored = store.project_result_get(username, name)
+        except Exception:
+            stored = ""
+    if stored and stored in project_variables(username, name):
+        return stored
+    return ai.guess_result(project_variables(username, name))
+
+
+def set_project_result(username: str, name: str, variable: str) -> None:
+    if store.enabled():
+        store.project_result_set(username, name, variable)
+    _forget_cached_reads()
+
+VARIABLE_ROLES = ("parameter", "result", "identifier", "covariate")
+ROLE_LABELS = {"parameter": "condition", "result": "result",
+               "identifier": "label", "covariate": "other"}
+
+
+def variable_items(username: str | None, name: str) -> list:
+    """The variables of a project as objects: name, unit, role, hidden, position, removed.
+
+    Older projects stored a bare list of names; they are upgraded here, once, without touching any
+    recorded value.
+    """
+    if not username:
+        return []
+    raw = None
+    if store.enabled():
+        try:
+            raw = store.project_variables_get(username, name)
+        except Exception:
+            raw = None
+    if raw is None:
+        mapping = _local_projects().get("_variables") or {}
+        raw = mapping.get(f"{username}::{name}")
+        if raw is not None:
+            raw = json.dumps(raw)
+
+    parsed = None
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            parsed = None
+    elif isinstance(raw, list):
+        parsed = raw
+
+    names = []
+    if isinstance(parsed, dict) and isinstance(parsed.get("items"), list):
+        items = []
+        for position, item in enumerate(parsed["items"]):
+            if not isinstance(item, dict) or not item.get("name"):
+                continue
+            items.append({
+                "name": str(item["name"]),
+                "unit": str(item.get("unit") or unit_of(str(item["name"])) or ""),
+                "role": str(item.get("role") or ai.role_of(str(item["name"]),
+                                                           str(item.get("unit") or ""))),
+                "hidden": bool(item.get("hidden")),
+                "position": int(item.get("position", position)),
+                "removed": bool(item.get("removed")),
+            })
+        return sorted(items, key=lambda entry: entry["position"])
+    if isinstance(parsed, list):
+        names = [str(value) for value in parsed if value]
+    if not names:
+        names = list(DEFAULT_VARIABLES)
+    return [{"name": value, "unit": unit_of(value) or "", "role": ai.role_of(value),
+             "hidden": False, "position": position, "removed": False}
+            for position, value in enumerate(names)]
+
+
+def set_variable_items(username: str, name: str, items: list) -> None:
+    cleaned = []
+    for position, item in enumerate(items):
+        if not item.get("name"):
+            continue
+        cleaned.append({"name": str(item["name"]),
+                        "unit": str(item.get("unit") or ""),
+                        "role": str(item.get("role") or ai.role_of(str(item["name"]))),
+                        "hidden": bool(item.get("hidden")),
+                        "position": position,
+                        "removed": bool(item.get("removed"))})
+    payload = json.dumps({"items": cleaned}, ensure_ascii=False)
+    if store.enabled():
+        store.project_variables_set(username, name, payload)
+    mapping = _local_projects()
+    mapping.setdefault("_variables", {})[f"{username}::{name}"] = json.loads(payload)
+    _save_local_projects(mapping)
+    _forget_cached_reads()
+
+
+def project_variable_items(username: str | None, name: str) -> list:
+    """Only the variables still in use (removed ones stay in the project record for history)."""
+    return [item for item in variable_items(username, name) if not item["removed"]]
+
+
+def project_result_variables(username: str | None, name: str) -> list:
+    return [item["name"] for item in project_variable_items(username, name)
+            if item["role"] == "result"]

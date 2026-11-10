@@ -908,6 +908,13 @@ def _render_outcome() -> None:
     sides = details.get("sides") or {"mine": t("cmp.mine"), "theirs": t("cmp.ref")}
     # say what the number is: a yield, a strength, a recovery - not just "0.96 %"
     measure = details.get("measure") or "lignin_yield_pct"
+    if not details.get("measure"):
+        wanted = auth.project_result_variables(
+            auth.current_user(), (details.get("mine") or {}).get("project")
+            or auth.DEFAULT_PROJECT)
+        measure = wanted[0] if wanted else measure
+    if measure == "lignin_yield_pct" and details.get("measure"):
+        measure = details["measure"]
     unit = "%" if "pct" in str(measure) else ""
     cols = st.columns(3)
     values = (details.get("mine", {}).get(measure),
@@ -1245,61 +1252,82 @@ def _latest_experiment(user: str | None) -> str | None:
 
 
 def _variables_editor(user: str, name: str) -> None:
-    """Edit, add or remove the variables this project records, right where they are read."""
-    current_vars = auth.project_variables(user, name)
+    """Add, hide, remove and classify the variables this project records."""
+    items = auth.variable_items(user, name)
 
-    def _add_typed_here() -> None:
-        # one entry is one variable: a name with spaces becomes underscores, it is never split
-        typed = "_".join(str(st.session_state.get(f"vars_{name}_typed", "")).strip().split())
-        if typed:
-            held = list(st.session_state.get(f"vars_{name}_pick") or [])
-            st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + [typed]))
-        st.session_state[f"vars_{name}_typed"] = ""
-
-    def _add_asked() -> None:
-        asked = st.session_state.get(f"vars_{name}_picked_ai") or []
-        held = list(st.session_state.get(f"vars_{name}_pick") or [])
-        st.session_state[f"vars_{name}_pick"] = list(dict.fromkeys(held + asked))
+    def _add(names: list) -> None:
+        known = {item["name"] for item in items}
+        fresh = []
+        for value in names:
+            clean = "_".join(str(value).strip().split())
+            if clean and clean not in known:
+                fresh.append({"name": clean, "unit": auth.unit_of(clean) or "",
+                              "role": ai.role_of(clean), "hidden": False, "removed": False})
+        if not fresh and not names:
+            return
+        guessed = []
+        if fresh and ai.available():
+            with st.spinner(t("exp.ai_thinking")):
+                guessed = ai.classify_variables(name, "", [item["name"] for item in fresh])
+        by_name = {item["name"]: item for item in guessed}
+        merged = [dict(item, role=by_name.get(item["name"], {}).get("role") or item["role"],
+                       unit=by_name.get(item["name"], {}).get("unit") or item["unit"])
+                  for item in fresh]
+        auth.set_variable_items(user, name, items + merged)
+        st.rerun()
 
     if ai.available():
         if st.button(t("exp.ai_suggest_here"), key=f"vars_{name}_ai"):
             with st.spinner(t("exp.ai_thinking")):
-                st.session_state[f"vars_{name}_ai_list"] = ai.suggest_variables(
-                    name, st.session_state.get(i18n.LANG_KEY, "en"))
+                asked = ai.classify_variables(name, "", [
+                    item["key"] for item in ai.suggest_variables(
+                        name, st.session_state.get(i18n.LANG_KEY, "en"))])
+            st.session_state[f"vars_{name}_ai_list"] = asked
         asked = st.session_state.get(f"vars_{name}_ai_list") or []
         if asked:
             st.caption(t("exp.ai_suggest_note"))
-            picked = st.multiselect(t("exp.ai_pick_here"), [item["key"] for item in asked],
-                                    key=f"vars_{name}_picked_ai")
-            for item in asked:
-                if item.get("why"):
-                    st.caption(f"· `{item['key']}` — {item['why']}")
-            st.button(t("exp.ai_add"), key=f"vars_{name}_add_ai", on_click=_add_asked)
+            ticked = [item["name"] for item in asked
+                      if st.checkbox(f"{item['name']} — {item['role']}"
+                                     + (f" — {item['why']}" if item.get("why") else ""),
+                                     key=f"vars_{name}_ask_{item['name']}")]
+            if st.button(t("exp.ai_add"), key=f"vars_{name}_add_ai"):
+                _add(ticked or [item["name"] for item in asked])
 
     typed_row = st.columns([3, 1])
     typed_row[0].text_input(t("exp.variable_by_hand"), key=f"vars_{name}_typed",
                             placeholder="e.g. reaction_pressure_bar",
                             label_visibility="collapsed")
     typed_row[1].button(t("exp.variable_add"), key=f"vars_{name}_add_typed",
-                        on_click=_add_typed_here, use_container_width=True)
+                        on_click=lambda: _add([st.session_state.get(f"vars_{name}_typed", "")]),
+                        use_container_width=True)
 
-    options = list(dict.fromkeys(list(COLUMN_CHOICES) + current_vars))
-    kept = st.multiselect(t("exp.variables"), options, default=current_vars,
-                          help=t("exp.variables_more_ph"), key=f"vars_{name}_pick",
-                          accept_new_options=True)
-    if kept:
-        st.caption(" · ".join(
-            f"{value} ({auth.unit_of(value)})" if auth.unit_of(value) else value
-            for value in kept))
+    if not items:
+        st.caption(t("exp.no_variables_yet"))
+        return
+    frame = pd.DataFrame([{"variable": item["name"], "unit": item["unit"],
+                           "role": auth.ROLE_LABELS.get(item["role"], item["role"]),
+                           "hidden": item["hidden"]} for item in items])
+    edited = st.data_editor(
+        frame, hide_index=True, width="stretch", num_rows="fixed", key=f"vars_{name}_table",
+        column_config={
+            "variable": st.column_config.TextColumn(t("exp.col_variable"), disabled=True),
+            "unit": st.column_config.TextColumn(t("exp.col_unit"), disabled=True),
+            "role": st.column_config.SelectboxColumn(
+                t("exp.col_role"),
+                options=[auth.ROLE_LABELS[value] for value in auth.VARIABLE_ROLES]),
+            "hidden": st.column_config.CheckboxColumn(t("exp.col_hidden")),
+        })
     if st.button(t("exp.variables_save"), key=f"vars_{name}_save"):
-        try:
-            auth.set_project_variables(user, name, kept)
-        except ValueError as exc:
-            st.error(t(str(exc)))
-        else:
-            st.success(t("exp.variables_saved"))
-            st.rerun()
-
+        by_label = {auth.ROLE_LABELS[value]: value for value in auth.VARIABLE_ROLES}
+        updated = []
+        for (_, row), original in zip(edited.iterrows(), items):
+            updated.append({**original,
+                            "role": by_label.get(str(row["role"]), original["role"]),
+                            "hidden": bool(row["hidden"])})
+        auth.set_variable_items(user, name, updated)
+        st.success(t("exp.variables_saved"))
+        st.rerun()
+    st.caption(t("exp.hide_note"))
 
 
 def _experiment_panel(user: str | None, name: str) -> None:
@@ -1388,7 +1416,11 @@ def _experiment_panel(user: str | None, name: str) -> None:
             st.caption(t("exp.header_line", hba=heading["des_hba"], hbd=heading["des_hbd"],
                          ratio=heading["molar_ratio"], runs=len(part)))
         # the columns are this project's own variables: a GFP project does not show lignin
-        keep = ["sample_id"] + [value for value in own if value in part.columns]
+        visible = auth.project_visible_variables(user, name)
+        results = auth.project_result_variables(user, name)
+        ordered = [value for value in results if value in visible] + \
+                  [value for value in visible if value not in results]
+        keep = ["sample_id"] + [value for value in ordered if value in part.columns]
         keep = list(dict.fromkeys(value for value in keep if value in part.columns))
         st.dataframe(part[keep] if keep else part, width="stretch", hide_index=True)
         st.caption(t("exp.overview_note"))
@@ -1575,16 +1607,14 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
     if note:
         st.success(note)
     st.caption(t("res.new_hint"))
-    own = auth.project_variables(user, project)
-    # the form is built from this project's variables: a lignin project gets biomass and recovered
-    # lignin, an adhesive project gets its own strength and water-resistance fields
-    # the formulation fields come from the project, not from a per-run box: rendering them here
-    # would let an empty box overwrite the formulation the project was started with
-    measured = [value for value in own
-                if value not in ("sample_id", "feedstock", "replicate", "notes",
-                                 "lignin_yield_pct", "recorded_at", "project",
-                                 "des_hba", "des_hbd", "molar_ratio", "purity_wt_pct",
-                                 "water_wt_pct")]
+    own = auth.project_visible_variables(user, project)
+    results = auth.project_result_variables(user, project)
+    reserved = {"sample_id", "feedstock", "replicate", "notes", "recorded_at", "project",
+                "des_hba", "des_hbd", "molar_ratio", "purity_wt_pct", "water_wt_pct",
+                "lignin_yield_pct", "formulation"}
+    # conditions first, then the measured outcome: the numbers you set, then the number you got
+    measured = ([value for value in own if value not in reserved and value not in results]
+                + [value for value in own if value in results and value not in reserved])
     left, right = st.columns(2)
     sample_id = left.text_input(t("res.sample_id"), key="run_sample")
     feedstock = (right.text_input(t("res.feedstock"), placeholder=t("res.feedstock_ph"),

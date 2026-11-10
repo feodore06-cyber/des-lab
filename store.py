@@ -84,6 +84,7 @@ alter table projects add column if not exists status text not null default 'In p
 alter table projects add column if not exists formulation text;
 alter table projects add column if not exists variables text;
 alter table projects add column if not exists pinned_at timestamptz;
+alter table projects add column if not exists result_variable text;
 """
 
 
@@ -608,6 +609,20 @@ def session_drop(token_hash: str) -> None:
 def session_purge(now) -> None:
     with _connect() as conn:
         conn.execute("delete from sessions where expires < %s", (now,))
+        conn.commit()
+
+
+def project_result_get(owner: str, name: str) -> str:
+    with _connect() as conn:
+        row = conn.execute("select result_variable from projects where owner = %s and name = %s",
+                           (owner, name)).fetchone()
+    return str(row[0]) if row and row[0] else ""
+
+
+def project_result_set(owner: str, name: str, variable: str) -> None:
+    with _connect() as conn:
+        conn.execute("update projects set result_variable = %s where owner = %s and name = %s",
+                     (variable or None, owner, name))
         conn.commit()
 
 
