@@ -42,6 +42,7 @@ import comparability
 import comparison
 import derive
 import lab_core
+import literature
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
 import papers
@@ -538,6 +539,48 @@ def _library_results(query: str, since, citations: int, sort: str, limit: int) -
     return run(query, since, citations, sort, limit)
 
 
+def _saved_papers(user: str) -> None:
+    """The literature the researcher kept, with the review state of every extracted value."""
+    papers = auth.papers_of(user)
+    st.subheader(t("lib.saved_title"))
+    if not papers:
+        st.caption(t("lib.saved_none"))
+        return
+    for paper in papers:
+        counts = literature.review(paper.get("values") or [])
+        title = paper.get("title") or paper.get("doi") or f"#{paper['id']}"
+        with st.expander(f"{title} \u00b7 {counts['total']} value(s) \u00b7 "
+                         f"{counts['extracted_awaiting_review']} to check"):
+            if paper.get("doi"):
+                st.caption(f"DOI: `{paper['doi']}`")
+            values = paper.get("values") or []
+            if not values:
+                st.caption(t("lib.saved_empty"))
+                continue
+            for value in values:
+                columns = st.columns([2, 3, 1, 2])
+                columns[0].markdown(f"**{value.get('variable')}**")
+                normalised = value.get("normalized")
+                columns[1].caption(f"{value.get('original') or '-'} -> "
+                                   f"{normalised if normalised is not None else '-'}")
+                columns[2].caption(f"p.{value['page']}" if value.get("page") else "-")
+                columns[3].caption(str(value.get("status", "")).replace("_", " "))
+            counts = literature.review(values)
+            st.caption(t("lib.saved_counts", total=counts["total"],
+                         pending=counts["extracted_awaiting_review"],
+                         verified=counts["verified"] + counts["corrected_by_user"],
+                         missing=counts["without_source"]))
+            with st.form(f"review_{paper['id']}"):
+                name = st.text_input(t("lib.review_variable"), key=f"rv_{paper['id']}")
+                corrected = st.text_input(t("lib.review_value"), key=f"rc_{paper['id']}")
+                accept = st.form_submit_button(t("lib.review_accept"))
+            if accept and name.strip():
+                updated = literature.verify(values, name.strip(),
+                                            corrected if corrected.strip() else None)
+                auth.review_paper(user, paper["id"], updated)
+                st.rerun()
+
+
 def library() -> None:
     if st.session_state.get("compare_inline"):
         if st.button("← " + t("lib.back_to_papers"), key="leave_compare"):
@@ -548,6 +591,10 @@ def library() -> None:
 
     st.markdown(t("lib.title"))
     st.caption(t("lib.sub"))
+    user = auth.current_user()
+    if user:
+        _saved_papers(user)
+        st.divider()
     with st.form("paper_search"):
         query = st.text_input(t("lib.query"), placeholder=t("lib.query_ph"))
         a, b, c, d = st.columns(4)
