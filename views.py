@@ -1355,34 +1355,42 @@ def _experiment_panel(user: str | None, name: str) -> None:
 
     latest = part.iloc[-1]
     with tab_overview:
-        yields = pd.to_numeric(part.get("lignin_yield_pct"), errors="coerce").dropna()
-        columns = st.columns(3)
-        if len(yields) > 1 and float(yields.max()) - float(yields.min()) > 1e-9:
-            # several runs that disagree: show the range, not one of them dressed up as the answer
-            columns[0].metric(t("res.lignin_yield"),
-                              f"{float(yields.min()):.2f} – {float(yields.max()):.2f} %",
-                              help=t("exp.range_help", n=len(yields)))
-        else:
-            columns[0].metric(t("res.lignin_yield"),
-                              f"{float(yields.iloc[-1]) if len(yields) else 0:.2f} %")
-        recovered = pd.to_numeric(part.get("lignin_mg"), errors="coerce").dropna()
-        if len(recovered) > 1 and float(recovered.max()) - float(recovered.min()) > 1e-9:
-            # the same trap as the yield: one run's number must not look like the project's number
-            columns[1].metric(t("res.lignin_mg"),
-                              f"{float(recovered.min()):.1f} – {float(recovered.max()):.1f} mg",
-                              help=t("exp.range_help", n=len(recovered)))
-        else:
-            columns[1].metric(t("res.lignin_mg"),
-                              f"{float(recovered.iloc[-1]) if len(recovered) else 0:.1f} mg")
-        columns[2].metric(t("ws.runs_label"), len(part))
-        heading = auth.project_formulation(user, name)
-        st.caption(t("exp.header_line", hba=heading["des_hba"], hbd=heading["des_hbd"],
-                     ratio=heading["molar_ratio"], runs=len(part)))
-        # the conditions are what tells two runs apart: keep them next to the result
-        keep = [column for column in ("sample_id", "temperature_C", "time_min", "mixing_method",
-                                      "stirring_rpm", "lignin_mg", "lignin_yield_pct")
-                if column in part.columns]
-        st.dataframe(part[keep], width="stretch", hide_index=True)
+        own = [value for value in auth.project_variables(user, name)
+               if value not in ("sample_id", "recorded_at", "notes")]
+        des_project = (any(value in own for value in ("des_hba", "des_hbd", "molar_ratio"))
+                       or auth.formulation_stored(user, name))
+        shows_yield = "lignin_yield_pct" in own
+        shows_lignin = "lignin_mg" in own
+
+        metrics = st.columns(3)
+        if shows_yield:
+            yields = pd.to_numeric(part.get("lignin_yield_pct"), errors="coerce").dropna()
+            if len(yields) > 1 and float(yields.max()) - float(yields.min()) > 1e-9:
+                metrics[0].metric(t("res.lignin_yield"),
+                                  f"{float(yields.min()):.2f} – {float(yields.max()):.2f} %",
+                                  help=t("exp.range_help", n=len(yields)))
+            else:
+                metrics[0].metric(t("res.lignin_yield"),
+                                  f"{float(yields.iloc[-1]) if len(yields) else 0:.2f} %")
+        if shows_lignin:
+            recovered = pd.to_numeric(part.get("lignin_mg"), errors="coerce").dropna()
+            if len(recovered) > 1 and float(recovered.max()) - float(recovered.min()) > 1e-9:
+                metrics[1].metric(t("res.lignin_mg"),
+                                  f"{float(recovered.min()):.1f} – {float(recovered.max()):.1f} mg",
+                                  help=t("exp.range_help", n=len(recovered)))
+            else:
+                metrics[1].metric(t("res.lignin_mg"),
+                                  f"{float(recovered.iloc[-1]) if len(recovered) else 0:.1f} mg")
+        metrics[2].metric(t("ws.runs_label"), len(part))
+
+        if des_project:
+            heading = auth.project_formulation(user, name)
+            st.caption(t("exp.header_line", hba=heading["des_hba"], hbd=heading["des_hbd"],
+                         ratio=heading["molar_ratio"], runs=len(part)))
+        # the columns are this project's own variables: a GFP project does not show lignin
+        keep = ["sample_id"] + [value for value in own if value in part.columns]
+        keep = list(dict.fromkeys(value for value in keep if value in part.columns))
+        st.dataframe(part[keep] if keep else part, width="stretch", hide_index=True)
         st.caption(t("exp.overview_note"))
         st.divider()
         st.caption(t("exp.variables_here"))
