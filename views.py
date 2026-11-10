@@ -39,6 +39,7 @@ import i18n
 import mailer
 from i18n import t
 import comparability
+import comparison
 import derive
 import lab_core
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
@@ -959,6 +960,15 @@ def _render_outcome() -> None:
             else:
                 column.metric(title, "—")
     st.caption(t("cmp.measure_note", what=", ".join(m.replace("_", " ") for m in measures)))
+    first = measures[0]
+    left_value = (details.get("mine") or {}).get(first)
+    right_value = (details.get("theirs") or {}).get(first)
+    relative = comparison.relative_difference(left_value, right_value)
+    if relative is not None:
+        st.caption(t("cmp.relative", pct=f"{relative:+.1f}"))
+    counts = comparison.replicate_stats([left_value, right_value])
+    if counts["n"] == 2:
+        st.caption(t("cmp.replicates_note"))
 
 
     # what actually differed: the result is not caused by one variable, so show them all
