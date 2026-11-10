@@ -1253,6 +1253,20 @@ def _latest_experiment(user: str | None) -> str | None:
     return values[-1] if values else None
 
 
+def _stored_values(user: str, name: str, columns: list) -> list:
+    """Which of these variables already hold data, so removal can be described honestly."""
+    frame = auth.load_results(user)
+    if frame is None or frame.empty:
+        return []
+    if "project" in frame.columns:
+        frame = frame[frame["project"].fillna(auth.DEFAULT_PROJECT) == name]
+    held = []
+    for column in columns:
+        if column in frame.columns and frame[column].notna().any():
+            held.append(f"{column} ({int(frame[column].notna().sum())})")
+    return held
+
+
 def _variables_editor(user: str, name: str) -> None:
     """Add, hide, remove and classify the variables this project records."""
     items = auth.variable_items(user, name)
@@ -1306,29 +1320,55 @@ def _variables_editor(user: str, name: str) -> None:
     if not items:
         st.caption(t("exp.no_variables_yet"))
         return
-    frame = pd.DataFrame([{"variable": item["name"], "unit": item["unit"],
-                           "role": auth.ROLE_LABELS.get(item["role"], item["role"]),
-                           "hidden": item["hidden"]} for item in items])
+    frame = pd.DataFrame([{
+        "variable": item["name"],
+        "display_name": item.get("display_name") or item["name"].replace("_", " "),
+        "unit": item["unit"],
+        "role": auth.ROLE_LABELS.get(item["role"], item["role"]),
+        "priority": item.get("priority") or "",
+        "formula": item.get("formula") or "",
+        "hidden": item["hidden"],
+        "remove": False,
+    } for item in items])
     edited = st.data_editor(
         frame, hide_index=True, width="stretch", num_rows="fixed", key=f"vars_{name}_table",
         column_config={
             "variable": st.column_config.TextColumn(t("exp.col_variable"), disabled=True),
-            "unit": st.column_config.TextColumn(t("exp.col_unit"), disabled=True),
+            "display_name": st.column_config.TextColumn(t("exp.col_display")),
+            "unit": st.column_config.TextColumn(t("exp.col_unit")),
             "role": st.column_config.SelectboxColumn(
                 t("exp.col_role"),
                 options=[auth.ROLE_LABELS[value] for value in auth.VARIABLE_ROLES]),
+            "priority": st.column_config.SelectboxColumn(
+                t("exp.col_priority"), options=["primary", "secondary", ""]),
+            "formula": st.column_config.TextColumn(t("exp.col_formula"),
+                                                   help=t("exp.formula_help")),
             "hidden": st.column_config.CheckboxColumn(t("exp.col_hidden")),
+            "remove": st.column_config.CheckboxColumn(t("exp.col_remove")),
         })
+    going = [str(row["variable"]) for _, row in edited.iterrows() if bool(row["remove"])]
+    if going:
+        held = _stored_values(user, name, going)
+        if held:
+            st.warning(t("exp.remove_history", names=", ".join(held)))
     if st.button(t("exp.variables_save"), key=f"vars_{name}_save"):
         by_label = {auth.ROLE_LABELS[value]: value for value in auth.VARIABLE_ROLES}
         updated = []
         for (_, row), original in zip(edited.iterrows(), items):
+            role = by_label.get(str(row["role"]), original["role"])
             updated.append({**original,
-                            "role": by_label.get(str(row["role"]), original["role"]),
-                            "hidden": bool(row["hidden"])})
+                            "display_name": str(row["display_name"] or original["name"]),
+                            "unit": str(row["unit"] or ""),
+                            "role": role,
+                            "priority": str(row["priority"] or "") if role in auth.RESULT_ROLES
+                            else "",
+                            "formula": str(row["formula"] or "") if role == "derived" else "",
+                            "hidden": bool(row["hidden"]),
+                            "removed": bool(row["remove"]) or original.get("removed", False)})
         auth.set_variable_items(user, name, updated)
         st.success(t("exp.variables_saved"))
         st.rerun()
+
     st.caption(t("exp.hide_note"))
 
 
