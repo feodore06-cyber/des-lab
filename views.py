@@ -44,6 +44,7 @@ import comparison
 import dataset
 import derive
 import lab_core
+import research
 import literature
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
@@ -1278,7 +1279,7 @@ def workspace() -> None:
         incoming, mapping = None, {}
         if upload is not None:
             try:
-                incoming = _read_any(upload.name, upload.getvalue())[0]
+                incoming, source_info = _read_any(upload.name, upload.getvalue())
             except (ValueError, UnicodeError, pd.errors.ParserError) as exc:
                 st.error(t("res.read_error", error=t(str(exc))))
             if incoming is not None and not incoming.empty:
@@ -1344,22 +1345,39 @@ def workspace() -> None:
         if picked:
             st.caption(" · ".join(f"{value} {('(' + auth.unit_of(value) + ')') if auth.unit_of(value) else ''}"
                                   for value in picked))
-        extra = ""
         if st.button(t("res.project_create"), type="primary", key="create_project_btn"):
+            variables = [{"name": value, "unit": auth.unit_of(value) or "",
+                          "data_type": "", "role": ai.role_of(value)} for value in picked]
+            rows, source = [], {}
+            if incoming is not None and not incoming.empty:
+                prepared = incoming.rename(columns=mapping) if mapping else incoming
+                rows = research.sample_rows(prepared)
+                source = {"file": getattr(upload, "name", None),
+                          "sheet": (source_info or {}).get("sheet")}
+                conflicts = research.find_conflicts(rows, set())
+                if conflicts["inside_file"] or conflicts["missing"]:
+                    st.error(t("res.import_conflicts"))
+                    for sid, where in list(conflicts["inside_file"].items())[:5]:
+                        st.caption(t("res.conflict_inside", sid=sid, rows=", ".join(where)))
+                    if conflicts["missing"]:
+                        st.caption(t("res.conflict_missing",
+                                     rows=", ".join(str(value) for value in
+                                                    conflicts["missing"][:10])))
+                    st.stop()
             try:
-                created = auth.create_project(user, name)
-                wanted = list(picked) + [item.strip() for item in extra.split(",") if item.strip()]
-                auth.set_project_variables(user, created, wanted or list(auth.DEFAULT_VARIABLES))
-                if incoming is not None and not incoming.empty:
-                    prepared = incoming.rename(columns=mapping) if mapping else incoming.copy()
-                    prepared["project"] = created
-                    if "recorded_at" not in prepared.columns:
-                        prepared["recorded_at"] = time.strftime("%Y-%m-%d %H:%M")
-                    auth.save_results(user, prepared, append=False)
+                result = research.create_project_with_data(
+                    user, name, st.session_state.get("new_project_desc", ""), variables, rows,
+                    source)
             except ValueError as exc:
                 st.error(t(str(exc)))
             else:
                 st.session_state.pop("ai_vars", None)
+                st.session_state.pop("column_map", None)
+                st.session_state.pop("new_project_vars", None)
+                st.success(t("exp.created", name=result["project"],
+                             variables=result["variables"], rows=result["imported"]))
+                st.session_state["project_wanted"] = result["project"]
+                st.rerun()
                 st.session_state.pop("column_map", None)
                 st.session_state["ws_open"] = created
                 st.session_state["project_wanted"] = created
