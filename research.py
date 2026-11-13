@@ -51,8 +51,26 @@ def normalise_variables(items: list) -> tuple[list, list]:
 
 
 def sample_rows(frame: pd.DataFrame, mapping: dict | None = None) -> list:
-    """Turn an uploaded table into plain rows plus provenance, without touching the file."""
-    work = frame.rename(columns=mapping) if mapping else frame.copy()
+    """Turn an uploaded table into plain rows plus provenance, without touching the file.
+
+    Two headers that map to the same standard name would silently drop a column, so the second one
+    is kept under a distinct key and the caller is expected to have warned about the clash.
+    """
+    work = frame.copy()
+    if mapping:
+        renamed, used = [], {}
+        for original in work.columns:
+            target = mapping.get(str(original))
+            if not target:
+                renamed.append(str(original))
+                continue
+            if target in used:
+                used[target] += 1
+                renamed.append(f"{target}__{used[target]}")
+            else:
+                used[target] = 1
+                renamed.append(target)
+        work.columns = renamed
     rows = []
     for position, record in enumerate(work.to_dict("records")):
         row = {}

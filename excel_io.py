@@ -230,3 +230,31 @@ def to_csv_bytes(frame: pd.DataFrame) -> bytes:
 
 def is_excel(filename: str) -> bool:
     return str(filename).lower().endswith((".xlsx", ".xlsm", ".xls"))
+
+
+def frame_with_original_headers(content: bytes, sheet: str | None = None):
+    """Return one sheet exactly as written, using the detected header row.
+
+    Unlike read_table this does not rename anything: the original column names are what the
+    researcher and the AI have to see, and the mapping is proposed afterwards.
+    """
+    sheets = read_workbook(content)
+    if not sheets:
+        raise ValueError("The workbook has no sheets.")
+    chosen = None
+    for name, raw in sheets:
+        if sheet is None or name == sheet:
+            chosen = (name, raw)
+            break
+    if chosen is None:
+        chosen = sheets[0]
+    name, raw = chosen
+    header_row = find_header_row(raw)
+    if header_row is None:
+        raise ValueError("Could not find a header row in this sheet.")
+    header = [("" if cell is None else str(cell).strip()) for cell in raw.iloc[header_row].tolist()]
+    body = raw.iloc[header_row + 1:].copy()
+    body.columns = header
+    body = body.reset_index(drop=True)
+    keep = [column for column in body.columns if str(column).strip()]
+    return name, body[keep]

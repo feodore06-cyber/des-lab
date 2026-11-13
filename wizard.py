@@ -6,6 +6,7 @@ import pandas as pd
 
 import ai
 import auth
+import columnmap
 import excel_io
 import i18n
 import research
@@ -68,9 +69,10 @@ def render(user: str, start_open: bool = False) -> None:
                 names = [name for name, _ in sheets]
                 state["sheets"] = names
                 state["sheet"] = names[0] if names else ""
-                info = excel_io.read_table(content, sheet=state["sheet"] or None)
-                state["frame"] = info["frame"]
-                state["info"] = info
+                name, frame = excel_io.frame_with_original_headers(
+                    content, state["sheet"] or None)
+                state["frame"] = frame
+                state["info"] = {"sheet": name}
             else:
                 state["frame"] = pd.read_csv(__import__("io").BytesIO(content),
                                              encoding="utf-8-sig")
@@ -86,9 +88,9 @@ def render(user: str, start_open: bool = False) -> None:
                                   if state.get("sheet") in state["sheets"] else 0)
             if chosen != state.get("sheet") and upload is not None:
                 state["sheet"] = chosen
-                info = excel_io.read_table(upload.getvalue(), sheet=chosen)
-                state["frame"] = info["frame"]
-                state["info"] = info
+                name, frame = excel_io.frame_with_original_headers(upload.getvalue(), chosen)
+                state["frame"] = frame
+                state["info"] = {"sheet": name}
                 st.rerun()
 
         frame = state.get("frame")
@@ -123,15 +125,19 @@ def render(user: str, start_open: bool = False) -> None:
                     str(item["original"]): str(item.get("key") or
                                                research.normalise_name(item["original"]))
                     for item in (pairs or [])}
-            rows = [{"original": name,
-                     "standard": state.get("mapping", {}).get(name)
-                     or (st.session_state.get("wizard_mapping") or {}).get(name)
-                     or research.normalise_name(name),
-                     "unit": auth.unit_of(research.normalise_name(name)) or "",
-                     "type": "number" if auth.unit_of(research.normalise_name(name)) else "text",
-                     "role": ai.role_of(research.normalise_name(name)),
-                     "include": True}
-                    for name in columns_in]
+            proposals = columnmap.suggest_all(columns_in)
+            clashes = columnmap.duplicates(proposals)
+            rows = []
+            for proposal in proposals:
+                name = str(proposal["name"] or "")
+                rows.append({"original": proposal["original"],
+                             "standard": name,
+                             "unit": proposal["unit"],
+                             "type": proposal["data_type"],
+                             "role": proposal["role"],
+                             "confidence": proposal["confidence"],
+                             "include": bool(name) and proposal["original"] not in
+                             [item for names in clashes.values() for item in names[1:]]})
             edited = st.data_editor(pd.DataFrame(rows), hide_index=True, width="stretch",
                                     num_rows="fixed", key="wiz_map_table",
                                     column_config={
@@ -144,9 +150,14 @@ def render(user: str, start_open: bool = False) -> None:
                                         "role": st.column_config.SelectboxColumn(
                                             t("exp.col_role"),
                                             options=[auth.ROLE_LABELS[v] for v in auth.VARIABLE_ROLES]),
+                                        "confidence": st.column_config.TextColumn(
+                                            t("wiz.confidence"), disabled=True),
                                         "include": st.column_config.CheckboxColumn(t("wiz.include")),
                                     })
             st.caption(t("wiz.map_note"))
+            if clashes:
+                for name, originals in clashes.items():
+                    st.warning(t("wiz.clash", name=name, columns=", ".join(originals)))
             mapping = {}
             by_label = {auth.ROLE_LABELS[v]: v for v in auth.VARIABLE_ROLES}
             for _, row in edited.iterrows():
