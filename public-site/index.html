@@ -1,172 +1,337 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BioMat Lab · Scientific Intelligence Platform (public demo)</title>
+<title>BioMat Lab — scientific intelligence platform (public demo)</title>
 <meta name="description" content="A scientific intelligence platform for experiment records, AI-assisted variable understanding and scientific comparison. Public demo with synthetic data.">
 <link rel="canonical" href="https://feodore06-cyber.github.io/des-lab/">
 <style>
- body{font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#16233a;max-width:900px;margin:0 auto;padding:40px 20px;background:#fbfbfa}
- h1{font-size:2rem;margin:0 0 .2em} h2{margin-top:2.2em;border-top:1px solid #e3e3df;padding-top:1.2em}
- h3{margin-top:1.4em} code{background:#f0f0ec;padding:.1em .3em;border-radius:3px}
- table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.95rem}
- th,td{border:1px solid #ddd;padding:.45em .6em;text-align:left;vertical-align:top}
- th{background:#f3f3ef} .note{color:#5a6473;font-size:.9rem}
- .tag{display:inline-block;background:#e8eefb;color:#1d3b7a;border-radius:999px;padding:.1em .6em;font-size:.8rem}
+  :root{
+    --paper:#FAFAF7; --ink:#1C1F23; --muted:#5C6470; --line:#E2E2DC;
+    --primary:#0F5C5C; --primary-soft:#E7F0EF; --accent:#C77D0D; --accent-soft:#FBF1DF;
+    --ok:#2E7D4F; --ok-soft:#E6F2EA; --wait:#B8791A; --wait-soft:#FBF0DA;
+    --none:#6B7280; --none-soft:#EEEEEA;
+    --mono:"JetBrains Mono","IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sans:Inter,"Noto Sans SC",-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--sans)}
+  .num,td.num,th.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  a{color:var(--primary);text-decoration-thickness:1px;text-underline-offset:2px}
+  .banner{background:var(--accent-soft);color:#6B4408;font-size:.82rem;letter-spacing:.02em;
+    padding:.45rem 1.2rem;text-align:center;border-bottom:1px solid #EFDFC2}
+  header.top{position:sticky;top:0;z-index:10;background:rgba(250,250,247,.96);
+    border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+  .top-in{max-width:1080px;margin:0 auto;display:flex;gap:1.2rem;align-items:center;
+    padding:.7rem 1.2rem;flex-wrap:wrap}
+  .brand{font-weight:650;letter-spacing:-.01em}
+  .brand span{color:var(--primary)}
+  nav.anchors{display:flex;gap:.9rem;flex-wrap:wrap;font-size:.86rem}
+  nav.anchors a{color:var(--muted);text-decoration:none}
+  nav.anchors a:hover{color:var(--primary)}
+  .signin{margin-left:auto;font-size:.85rem;border:1px solid var(--line);border-radius:6px;
+    padding:.3rem .7rem;color:var(--muted);text-decoration:none;background:#fff}
+  main{max-width:1080px;margin:0 auto;padding:2.4rem 1.2rem 5rem}
+  h1{font-size:clamp(1.9rem,3.2vw,2.6rem);line-height:1.15;letter-spacing:-.02em;margin:0 0 .6rem}
+  h1 em{font-style:normal;color:var(--primary)}
+  .lede{font-size:1.1rem;color:var(--muted);max-width:46em;margin:0 0 1.6rem}
+  h2{font-size:1.28rem;margin:3rem 0 .4rem;letter-spacing:-.01em;scroll-margin-top:5rem}
+  h2 .idx{font-family:var(--mono);font-size:.8rem;color:var(--accent);margin-right:.5rem}
+  h3{font-size:1rem;margin:1.6rem 0 .3rem}
+  p{margin:.5rem 0}
+  .sub{color:var(--muted);font-size:.94rem}
+  .hero{display:grid;grid-template-columns:1.15fr .85fr;gap:1.2rem;align-items:start;margin:1.4rem 0 0}
+  @media (max-width:820px){.hero{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:1rem 1.1rem}
+  .hero-demo .row{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;
+    padding:.35rem 0;border-bottom:1px dashed var(--line);font-size:.92rem}
+  .hero-demo .row:last-of-type{border-bottom:0}
+  .hero-demo .k{color:var(--muted)}
+  .hero-demo .v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .hero-demo .v.win{color:var(--primary);font-weight:600}
+  .badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.76rem;line-height:1;
+    padding:.28rem .5rem;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+  .b-param{background:var(--none-soft);color:#3F4650;border-color:#DCDCD4}
+  .b-result{background:var(--ok-soft);color:var(--ok);border-color:#CFE4D7}
+  .b-derived{background:var(--primary-soft);color:var(--primary);border-color:#CDE0DE}
+  .status{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;padding:.3rem .6rem;
+    border-radius:6px;font-weight:550;white-space:nowrap}
+  .s-direct{background:var(--ok-soft);color:#1F5C39}
+  .s-caveat{background:var(--wait-soft);color:#7A4B06}
+  .s-no{background:#FBE9E7;color:#8C2F22}
+  .s-ins{background:var(--none-soft);color:#4B5260}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.7rem 0}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  th,td{border-bottom:1px solid var(--line);padding:.5rem .6rem;text-align:left;vertical-align:top}
+  th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+    font-weight:600;background:#fff}
+  tbody tr:hover{background:#FCFCF9}
+  td.num,th.num{text-align:right}
+  tr.diff td{background:var(--accent-soft)}
+  tr.diff td:first-child{box-shadow:inset 3px 0 0 var(--accent);font-weight:600}
+  .pill{font-family:var(--mono);font-size:.82rem}
+  .formulas{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+  @media (max-width:760px){.formulas{grid-template-columns:1fr}}
+  .formula{background:#fff;border:1px solid var(--line);border-radius:10px;padding:1rem}
+  .formula h4{margin:0 0 .5rem;font-size:.95rem;display:flex;gap:.5rem;align-items:center}
+  .frac{display:flex;flex-direction:column;align-items:center;gap:.15rem;margin:.6rem 0;
+    font-family:var(--mono);font-size:.88rem}
+  .frac .above{padding:0 .4rem;color:var(--primary);border-bottom:1.5px solid var(--ink)}
+  .frac .below{padding:.15rem .4rem 0;color:var(--accent)}
+  .value{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:1.02rem;margin:.2rem 0}
+  .same{background:var(--primary-soft);border:1px solid #CDE0DE;border-radius:8px;
+    padding:.7rem .9rem;font-size:.92rem;margin:1rem 0}
+  .blocks{display:grid;gap:.7rem;margin:.9rem 0}
+  .blk{border-radius:8px;padding:.75rem .9rem;font-size:.92rem}
+  .blk b{display:block;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--muted);margin-bottom:.2rem}
+  .blk.observed{background:#fff;border:1px solid var(--line);border-left:3px solid var(--primary)}
+  .blk.possible{background:#fff;border:1px solid var(--line)}
+  .blk.alternative{background:#FDFDFA;border:1px solid var(--line)}
+  .blk.limits{background:transparent;border:1.5px dashed #C9C9C1}
+  .dev{background:#fff;border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem;
+    font-family:var(--mono);font-size:.84rem;line-height:1.95}
+  .dev a{word-break:break-all}
+  footer{border-top:1px solid var(--line);margin-top:3rem;padding-top:1.2rem;
+    color:var(--muted);font-size:.85rem}
+  details.var{border:1px solid var(--line);border-radius:8px;background:#fff;padding:.6rem .9rem}
+  details.var summary{cursor:pointer;font-weight:550}
 </style>
 </head>
 <body>
 
-<p><a href="/">BioMat Lab</a> · <span class="tag">public demo · synthetic data</span></p>
+<div class="banner">Synthetic data · public demo — the working platform is private and requires sign-in</div>
 
-<h1>BioMat Lab — scientific intelligence platform</h1>
-<p>BioMat Lab records laboratory experiments, understands what each measured variable means, and
-compares results — between two runs of your own work, and against published literature. It is
-built to be topic-agnostic: a deep eutectic solvent (DES) extraction project and a protein
-purification project use the same engine with different variable definitions.</p>
+<header class="top">
+  <div class="top-in">
+    <div class="brand">BioMat <span>Lab</span></div>
+    <nav class="anchors">
+      <a href="#compare">Comparison</a>
+      <a href="#comparability">Comparability</a>
+      <a href="#literature">Literature</a>
+      <a href="#project">Project</a>
+      <a href="#records">Records</a>
+      <a href="#dev">For developers / AI</a>
+    </nav>
+    <a class="signin" href="https://appapppy-9ukmar4jdiggrjkenjyffk.streamlit.app/?view=signin">Sign in</a>
+  </div>
+</header>
 
-<p class="note">Everything on this page is synthetic example data. The working platform is private:
-project and experiment records are only visible after signing in, and this public page never reads
-them.</p>
+<main>
+  <h1>Experiments you can <em>compare</em>, not just record.</h1>
+  <p class="lede">BioMat Lab keeps each project's own variables, knows which of them are conditions
+  and which are outcomes, and refuses to compare two numbers whose definitions differ. It is
+  topic-agnostic: a DES lignin extraction and a protein purification project share the engine.</p>
 
-<h2 id="capabilities">A. What the platform does</h2>
-<ul>
-  <li><strong>Project-scoped variables.</strong> Each project defines its own measured variables with
-      a unit, a scientific role and, for derived values, a formula. No chemistry field is hard-coded.</li>
-  <li><strong>Variable roles.</strong> A variable is a <em>parameter</em> (a condition you set), a
-      <em>result</em> (an outcome you measure), a <em>derived</em> result (computed from other
-      measurements), an <em>identifier</em> or a <em>covariate</em>. The AI proposes the role from the
-      name, the unit and the project description; the researcher can change it.</li>
-  <li><strong>Comparability check.</strong> Before two numbers are compared, the platform checks
-      whether they mean the same thing: same result definition, same unit, same numerator and
-      denominator, same material, same measurement method.</li>
-  <li><strong>Literature extraction.</strong> Given a paper, the platform extracts parameters and
-      results, keeps the source location of every value, and marks each value as extracted, verified
-      or corrected.</li>
-  <li><strong>CSV / JSON export.</strong> Records leave the platform in an open format.</li>
-</ul>
+  <div class="hero">
+    <div class="card hero-demo">
+      <div class="row"><span class="k">Same temperature, time, ratio</span>
+        <span class="v">120 °C · 180 min · 1:2</span></div>
+      <div class="row"><span class="k">EXP-05 · ball mill, heat gun</span><span class="v">0.96 %</span></div>
+      <div class="row"><span class="k">EXP-06 · hotplate, then ball mill</span>
+        <span class="v win">2.30 %</span></div>
+      <div class="row"><span class="k">Difference</span>
+        <span class="v">+1.34 pp · +139.6 %</span></div>
+      <p class="sub" style="margin:.7rem 0 0">One condition differs. The platform names it first, then
+      explains, and never claims causation from two runs.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">What it does</h3>
+      <p class="sub" style="margin:0">Project-scoped variable definitions with units, roles,
+      priorities and formulas · a four-state comparability verdict · literature values with page
+      provenance · CSV and JSON export that carries the schema.</p>
+      <p style="margin:.8rem 0 0">
+        <span class="status s-direct">✓ directly comparable</span>
+        <span class="status s-caveat">△ with caveats</span><br>
+        <span class="status s-no">✕ not comparable</span>
+        <span class="status s-ins">? insufficient</span>
+      </p>
+    </div>
+  </div>
 
-<h2 id="project">B. Example project</h2>
-<p><strong>DES extraction of lignin from oak sawdust.</strong> Biomass: oak sawdust, 3 g dry per run.
-Hydrogen-bond acceptor: choline chloride. The project records six runs with different temperature,
-molar ratio and mixing method.</p>
+  <h2 id="compare"><span class="idx">01</span>Comparison workspace</h2>
+  <p class="sub">EXP-05 vs EXP-06. Machine-readable copy:
+    <a href="data/demo_comparison.json">data/demo_comparison.json</a>.</p>
 
-<p>Variables of this project (also published as
-<a href="data/variables.json">data/variables.json</a>):</p>
+  <h3>Results</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Result</th><th class="num">EXP-05</th><th class="num">EXP-06</th>
+      <th class="num">Absolute</th><th class="num">Relative</th></tr></thead>
+    <tbody><tr><td>Lignin yield (%)</td><td class="num">0.96</td><td class="num">2.30</td>
+      <td class="num">+1.34</td><td class="num">+139.6 %</td></tr></tbody>
+  </table>
+  </div>
 
-<table>
-  <thead><tr><th>Variable</th><th>Unit</th><th>Role</th><th>Priority</th><th>Definition</th></tr></thead>
-  <tbody>
-    <tr><td>temperature_C</td><td>°C</td><td>parameter</td><td>—</td><td>Set temperature of the heating step</td></tr>
-    <tr><td>time_min</td><td>min</td><td>parameter</td><td>—</td><td>Time held at the set temperature</td></tr>
-    <tr><td>molar_ratio</td><td>mol/mol</td><td>parameter</td><td>—</td><td>Moles of donor per mole of acceptor</td></tr>
-    <tr><td>mixing_method</td><td>—</td><td>parameter</td><td>—</td><td>hotplate, ball mill, or a sequence of both</td></tr>
-    <tr><td>biomass_g</td><td>g</td><td>parameter</td><td>—</td><td>Dry biomass charged to the reactor</td></tr>
-    <tr><td>lignin_mg</td><td>mg</td><td>result</td><td>secondary</td><td>Recovered lignin mass</td></tr>
-    <tr><td>lignin_yield_pct</td><td>%</td><td>derived</td><td>primary</td><td>Recovered lignin / dry biomass × 100</td></tr>
-    <tr><td>lignin_recovery_pct</td><td>%</td><td>derived</td><td>secondary</td><td>Recovered lignin / lignin present in biomass × 100</td></tr>
-  </tbody>
-</table>
+  <h3>Conditions</h3>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Condition</th><th>EXP-05</th><th>EXP-06</th></tr></thead>
+    <tbody>
+      <tr><td>Temperature (°C)</td><td class="num">120</td><td class="num">120</td></tr>
+      <tr><td>Time (min)</td><td class="num">180</td><td class="num">180</td></tr>
+      <tr><td>Molar ratio HBD:HBA</td><td class="num">1.0</td><td class="num">1.0</td></tr>
+      <tr><td>Dry biomass (g)</td><td class="num">3.0</td><td class="num">3.0</td></tr>
+      <tr class="diff"><td>Mixing method</td><td>ball mill (heat gun)</td>
+        <td>hotplate then ball mill</td></tr>
+    </tbody>
+  </table>
+  </div>
 
-<h2 id="records">C. Experiment records</h2>
-<p>The table below is the project overview: columns are generated from the project's variables, and
-the result column is placed first after the sample identifier. Machine-readable copy:
-<a href="data/demo_dataset.json">data/demo_dataset.json</a>.</p>
+  <h3>Interpretation</h3>
+  <div class="blocks">
+    <div class="blk observed"><b>Observed</b>The run that heated first and milled afterwards recovered
+      more lignin: 2.30 % vs 0.96 % of dry biomass.</div>
+    <div class="blk possible"><b>Possible explanations</b>Heating may dissolve lignin before mechanical
+      treatment, exposing fresh surface; or milling for the whole period may shorten contact with the
+      liquid phase.</div>
+    <div class="blk alternative"><b>Alternative explanations</b>Run-to-run variation (no replicates were
+      recorded), or a different local temperature at the sample despite the same set point.</div>
+    <div class="blk limits"><b>Limits</b>Two single runs, no replicate statistics. A causal claim is
+      not supported.</div>
+  </div>
 
-<table>
-  <thead><tr><th>Sample</th><th>Lignin yield (%)</th><th>Temperature (°C)</th><th>Time (min)</th><th>Molar ratio</th><th>Mixing</th><th>Biomass (g)</th><th>Recovered lignin (mg)</th></tr></thead>
-  <tbody>
-    <tr><td>EXP-01</td><td>1.87</td><td>110</td><td>180</td><td>2.0</td><td>hotplate</td><td>3.0</td><td>56.0</td></tr>
-    <tr><td>EXP-02</td><td>0.51</td><td>110</td><td>180</td><td>0.5</td><td>hotplate</td><td>3.0</td><td>15.2</td></tr>
-    <tr><td>EXP-03</td><td>0.84</td><td>150</td><td>180</td><td>1.0</td><td>hotplate</td><td>3.0</td><td>25.2</td></tr>
-    <tr><td>EXP-04</td><td>0.26</td><td>80</td><td>180</td><td>1.0</td><td>hotplate</td><td>3.0</td><td>7.8</td></tr>
-    <tr><td>EXP-05</td><td>0.96</td><td>120</td><td>180</td><td>1.0</td><td>ball mill (heat gun)</td><td>3.0</td><td>28.9</td></tr>
-    <tr><td>EXP-06</td><td>2.30</td><td>120</td><td>180</td><td>1.0</td><td>hotplate then ball mill</td><td>3.0</td><td>69.0</td></tr>
-  </tbody>
-</table>
+  <h2 id="comparability"><span class="idx">02</span>Scientific comparability</h2>
+  <p class="sub">Two numbers are compared only after their definitions are compared. The verdict is
+  one of four states, and it is shown before any difference is calculated.</p>
 
-<h2 id="compare">D. Comparison workspace — EXP-05 vs EXP-06</h2>
-<p>Full example: <a href="data/demo_comparison.json">data/demo_comparison.json</a>.</p>
+  <h3>Yield and recovery are not the same measurement</h3>
+  <div class="formulas">
+    <div class="formula">
+      <h4>Lignin yield <span class="badge b-derived">derived</span></h4>
+      <div class="frac"><span class="above">recovered lignin</span>
+        <span class="below">dry biomass</span></div>
+      <p class="value">388 mg ÷ 3 000 mg = 12.93 %</p>
+      <p class="sub" style="margin:.3rem 0 0">How much of the wood became lignin product.</p>
+    </div>
+    <div class="formula">
+      <h4>Lignin recovery <span class="badge b-derived">derived</span></h4>
+      <div class="frac"><span class="above">recovered lignin</span>
+        <span class="below">lignin present (Klason)</span></div>
+      <p class="value">388 mg ÷ 660 mg = 58.8 %</p>
+      <p class="sub" style="margin:.3rem 0 0">How much of the lignin in the wood was extracted.</p>
+    </div>
+  </div>
+  <p class="same"><strong>The same 388 mg gives two different numbers.</strong> A comparison between a
+  yield and a recovery is reported as <span class="status s-no">✕ not comparable</span>, with both
+  definitions shown and a conversion requested before any difference is computed.</p>
 
-<h3>Results</h3>
-<table>
-  <thead><tr><th>Result</th><th>EXP-05</th><th>EXP-06</th><th>Absolute difference</th><th>Relative difference</th></tr></thead>
-  <tbody><tr><td>Lignin yield (%)</td><td>0.96</td><td>2.30</td><td>+1.34</td><td>+139.6 %</td></tr></tbody>
-</table>
+  <h2 id="literature"><span class="idx">03</span>Literature intelligence</h2>
+  <p class="sub">Every extracted value keeps its wording, its normalised value, its unit and the place
+  it came from. Machine-readable copy:
+    <a href="data/demo_literature.json">data/demo_literature.json</a>.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Variable</th><th>In the paper</th><th>Normalised</th><th>Source</th>
+      <th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill">temperature_C</span></td><td>120 °C</td><td class="num">120 °C</td>
+        <td>p.4 · Results, Table 2</td><td><span class="status s-caveat">△ awaiting review</span></td></tr>
+      <tr><td><span class="pill">time_min</span></td><td>3 h</td><td class="num">180 min</td>
+        <td>p.4 · Results, Table 2</td><td><span class="status s-caveat">△ awaiting review</span></td></tr>
+      <tr><td><span class="pill">molar_ratio</span></td><td>1:2</td><td class="num">2.0</td>
+        <td>p.4 · Methods</td><td><span class="status s-ins">◆ corrected by user</span></td></tr>
+      <tr><td><span class="pill">lignin_recovery_pct</span></td><td>58.3 % of Klason lignin</td>
+        <td class="num">58.3 %</td><td>p.5 · Results</td>
+        <td><span class="status s-caveat">△ awaiting review</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="sub">Values the paper does not report are marked <em>not reported</em>; they are never
+  filled in by inference.</p>
 
-<h3>Conditions</h3>
-<table>
-  <thead><tr><th></th><th>EXP-05</th><th>EXP-06</th></tr></thead>
-  <tbody>
-    <tr><td>Temperature (°C)</td><td>120</td><td>120</td></tr>
-    <tr><td>Time (min)</td><td>180</td><td>180</td></tr>
-    <tr><td>Molar ratio</td><td>1.0</td><td>1.0</td></tr>
-    <tr><td>Biomass (g)</td><td>3.0</td><td>3.0</td></tr>
-    <tr><td><strong>Mixing method</strong></td><td><strong>ball mill (heat gun)</strong></td><td><strong>hotplate then ball mill</strong></td></tr>
-  </tbody>
-</table>
+  <h2 id="project"><span class="idx">04</span>Project and variables</h2>
+  <p><strong>DES extraction of lignin from oak sawdust.</strong> Dry biomass 3 g per run; choline
+  chloride as acceptor; six recorded runs. <a href="data/variables.json">data/variables.json</a></p>
 
-<h3>Interpretation</h3>
-<p><strong>Observed:</strong> the run that heated first and milled afterwards recovered more lignin
-(2.30 % vs 0.96 % of dry biomass).</p>
-<p><strong>Possible explanations:</strong> heating may dissolve lignin before mechanical treatment,
-exposing fresh surface; or milling for the whole period may shorten contact with the liquid phase.</p>
-<p><strong>Alternative explanations:</strong> run-to-run variation (no replicates were recorded);
-or a different local temperature at the sample despite the same set point.</p>
-<p><strong>Limits:</strong> two single runs, no replicate statistics, so no causal claim is made.</p>
+  <details class="var" open>
+    <summary>Variable definitions (8)</summary>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Variable</th><th>Unit</th><th>Role</th><th>Priority</th>
+        <th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill">temperature_C</span></td><td>°C</td>
+          <td><span class="badge b-param">parameter</span></td><td class="sub">—</td>
+          <td>Set temperature of the heating step</td></tr>
+        <tr><td><span class="pill">time_min</span></td><td>min</td>
+          <td><span class="badge b-param">parameter</span></td><td class="sub">—</td>
+          <td>Time held at the set temperature</td></tr>
+        <tr><td><span class="pill">molar_ratio</span></td><td>mol/mol</td>
+          <td><span class="badge b-param">parameter</span></td><td class="sub">—</td>
+          <td>Moles of donor per mole of acceptor</td></tr>
+        <tr><td><span class="pill">mixing_method</span></td><td>—</td>
+          <td><span class="badge b-param">parameter</span></td><td class="sub">—</td>
+          <td>hotplate, ball mill, or a sequence of both</td></tr>
+        <tr><td><span class="pill">biomass_g</span></td><td>g</td>
+          <td><span class="badge b-param">parameter</span></td><td class="sub">—</td>
+          <td>Dry biomass charged to the reactor</td></tr>
+        <tr><td><span class="pill">lignin_mg</span></td><td>mg</td>
+          <td><span class="badge b-result">result</span></td><td class="sub">secondary</td>
+          <td>Recovered lignin mass</td></tr>
+        <tr><td><span class="pill">lignin_yield_pct</span></td><td>%</td>
+          <td><span class="badge b-derived">derived</span></td><td class="sub">primary</td>
+          <td>Recovered lignin ÷ dry biomass × 100</td></tr>
+        <tr><td><span class="pill">lignin_recovery_pct</span></td><td>%</td>
+          <td><span class="badge b-derived">derived</span></td><td class="sub">secondary</td>
+          <td>Recovered lignin ÷ lignin present × 100</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </details>
 
-<h2 id="literature">E. Literature intelligence</h2>
-<p>Example extraction: <a href="data/demo_literature.json">data/demo_literature.json</a>.
-The paper in this example is synthetic.</p>
-<table>
-  <thead><tr><th>Variable</th><th>In the paper</th><th>Normalised</th><th>Source</th><th>Status</th></tr></thead>
-  <tbody>
-    <tr><td>temperature_C</td><td>120 °C</td><td>120 °C</td><td>p.4, Results, Table 2</td><td>extracted, awaiting review</td></tr>
-    <tr><td>time_min</td><td>3 h</td><td>180 min</td><td>p.4, Results, Table 2</td><td>extracted, awaiting review</td></tr>
-    <tr><td>molar_ratio</td><td>1:2</td><td>2.0 mol/mol</td><td>p.4, Methods</td><td>corrected by user</td></tr>
-    <tr><td>lignin_recovery_pct</td><td>58.3 % of Klason lignin</td><td>58.3 %</td><td>p.5, Results</td><td>extracted, awaiting review</td></tr>
-  </tbody>
-</table>
-<p>Every extracted value keeps its original wording, its normalised value, its unit and its source
-location, so the researcher can check it in one click. Values the paper does not report are marked
-<em>not reported</em> rather than filled in.</p>
+  <h2 id="records"><span class="idx">05</span>Experiment records</h2>
+  <p class="sub">Columns come from the project's variables; the result sits first after the sample
+  identifier. Machine-readable copy: <a href="data/demo_dataset.json">data/demo_dataset.json</a>.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Sample</th><th class="num">Lignin yield (%)</th><th class="num">Temp (°C)</th>
+      <th class="num">Time (min)</th><th class="num">Ratio</th><th>Mixing</th>
+      <th class="num">Biomass (g)</th><th class="num">Recovered (mg)</th></tr></thead>
+    <tbody>
+      <tr><td class="pill">EXP-01</td><td class="num">1.87</td><td class="num">110</td>
+        <td class="num">180</td><td class="num">2.0</td><td>hotplate</td>
+        <td class="num">3.0</td><td class="num">56.0</td></tr>
+      <tr><td class="pill">EXP-02</td><td class="num">0.51</td><td class="num">110</td>
+        <td class="num">180</td><td class="num">0.5</td><td>hotplate</td>
+        <td class="num">3.0</td><td class="num">15.2</td></tr>
+      <tr><td class="pill">EXP-03</td><td class="num">0.84</td><td class="num">150</td>
+        <td class="num">180</td><td class="num">1.0</td><td>hotplate</td>
+        <td class="num">3.0</td><td class="num">25.2</td></tr>
+      <tr><td class="pill">EXP-04</td><td class="num">0.26</td><td class="num">80</td>
+        <td class="num">180</td><td class="num">1.0</td><td>hotplate</td>
+        <td class="num">3.0</td><td class="num">7.8</td></tr>
+      <tr><td class="pill">EXP-05</td><td class="num">0.96</td><td class="num">120</td>
+        <td class="num">180</td><td class="num">1.0</td><td>ball mill (heat gun)</td>
+        <td class="num">3.0</td><td class="num">28.9</td></tr>
+      <tr><td class="pill">EXP-06</td><td class="num">2.30</td><td class="num">120</td>
+        <td class="num">180</td><td class="num">1.0</td><td>hotplate then ball mill</td>
+        <td class="num">3.0</td><td class="num">69.0</td></tr>
+    </tbody>
+  </table>
+  </div>
 
-<h2 id="comparability">F. Scientific comparability</h2>
-<p>Two numbers are only compared after their definitions are compared. The platform returns one of
-four statuses:</p>
-<ol>
-  <li><strong>Directly comparable</strong> — same definition, unit, material and method.</li>
-  <li><strong>Comparable with caveats</strong> — same definition, but a caveat such as a single run.</li>
-  <li><strong>Not directly comparable</strong> — the numbers mean different things.</li>
-  <li><strong>Insufficient information</strong> — one side lacks the definition or the method.</li>
-</ol>
+  <h2 id="dev"><span class="idx">06</span>For developers / AI</h2>
+  <p class="sub">Plain HTTP, no JavaScript required. Every value below is synthetic.</p>
+  <div class="dev">
+    <div>GET <a href="llms.txt">/llms.txt</a> — product summary written for a model</div>
+    <div>GET <a href="data/variables.json">/data/variables.json</a> — variable definitions</div>
+    <div>GET <a href="data/demo_dataset.json">/data/demo_dataset.json</a> — six experiment records</div>
+    <div>GET <a href="data/demo_comparison.json">/data/demo_comparison.json</a> — one comparison result</div>
+    <div>GET <a href="data/demo_literature.json">/data/demo_literature.json</a> — literature extraction</div>
+    <div>GET <a href="docs/overview.md">/docs/overview.md</a> — product overview</div>
+    <div>GET <a href="docs/features.md">/docs/features.md</a> — feature documentation</div>
+    <div>GET <a href="robots.txt">/robots.txt</a> — Claude-User and Claude-SearchBot allowed,
+      ClaudeBot disallowed</div>
+    <div>GET <a href="sitemap.xml">/sitemap.xml</a></div>
+  </div>
 
-<h3>Worked example: lignin yield vs lignin recovery</h3>
-<table>
-  <thead><tr><th>Metric</th><th>Definition</th><th>Example value</th></tr></thead>
-  <tbody>
-    <tr><td>Lignin yield</td><td>recovered lignin / dry biomass</td><td>12.93 % (388 mg from 3 g)</td></tr>
-    <tr><td>Lignin recovery</td><td>recovered lignin / lignin in the biomass</td><td>58.8 % (388 mg from 660 mg)</td></tr>
-  </tbody>
-</table>
-<p>Both come from the same 388 mg of lignin, yet they are not the same measurement. A comparison
-between a yield and a recovery is reported as <strong>not directly comparable</strong>, with the two
-definitions shown side by side, and the platform asks for a conversion to a common basis before any
-difference is calculated.</p>
-
-<h2 id="docs">Documentation</h2>
-<ul>
-  <li><a href="docs/overview.md">Product overview (Markdown)</a></li>
-  <li><a href="docs/features.md">Feature documentation</a></li>
-  <li><a href="data/variables.json">Example variable definitions (JSON)</a></li>
-  <li><a href="data/demo_dataset.json">Example experiment records (JSON)</a></li>
-  <li><a href="data/demo_comparison.json">Example comparison result (JSON)</a></li>
-  <li><a href="data/demo_literature.json">Example literature extraction (JSON)</a></li>
-</ul>
-
-<p class="note">Private platform: sign-in required. This public site contains synthetic examples only
-and has no access to research records, credentials or configuration.</p>
-<!-- deployed-marker: trigger the first Pages build -->
+  <footer>
+    <p>Public demo only. The working platform requires sign-in; it exposes no research record, no
+    credential and no configuration here. Records export to CSV and JSON, and derived values store
+    their formula so that they can be recomputed.</p>
+  </footer>
+</main>
 </body>
 </html>
