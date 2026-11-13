@@ -314,6 +314,8 @@ class WorkspaceFlows(unittest.TestCase):
         fields = [field for field in at.text_input if field.label == "Project name"]
         self.assertTrue(fields, f"no project-name field; have {[f.label for f in at.text_input]}")
         fields[0].set_value("hot press").run()
+        for step in range(3):
+            at = press(at, "Next")
         at = press(at, "Create project")
         self.assertEqual(exceptions(at), [], "a widget key must not be written after creation")
         self.assertIn("hot press", auth.list_projects("Chuanyu"),

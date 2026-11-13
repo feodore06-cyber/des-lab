@@ -45,6 +45,7 @@ import dataset
 import derive
 import lab_core
 import research
+import wizard
 import literature
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
@@ -1270,6 +1271,10 @@ def workspace() -> None:
         if st.button("← " + t("ws.back"), key="ws_back"):
             st.session_state["ws_mode"] = "home"
             st.rerun()
+        legacy = st.checkbox(t("ws.legacy"), key="ws_legacy")
+        if not legacy:
+            wizard.render(user, start_open=True)
+            return
         st.markdown(f"### {t('ws.new')}")
         st.caption(t("ws.how"))
         name = st.text_input(t("res.project_name"), placeholder=t("res.project_ph"),

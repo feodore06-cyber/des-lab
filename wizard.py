@@ -201,6 +201,11 @@ def _summary(user: str) -> None:
                     continue
         conflicts = research.find_conflicts(rows, set())
 
+    if not variables:
+        # a project with nothing chosen still gets the standard starting set, as before
+        variables = {name: {"name": name, "unit": auth.unit_of(name) or "",
+                            "data_type": "", "role": ai.role_of(name)}
+                     for name in auth.DEFAULT_VARIABLES}
     st.markdown(f"#### {t('wiz.review')}")
     st.caption(f"{t('res.project_name')}: **{state.get('name') or '—'}**")
     if state.get("description"):
@@ -246,7 +251,7 @@ def _summary(user: str) -> None:
     columns = st.columns([1, 1])
     if columns[0].button(t("wiz.back"), key="wiz_back4"):
         _goto(3)
-    blocked = bool(conflicts.get("inside_file")) or not variables
+    blocked = bool(conflicts.get("inside_file"))
     if columns[1].button(t("wiz.create"), type="primary", key="wiz_create",
                          disabled=blocked):
         source = {"file": state.get("file") or None, "sheet": state.get("sheet") or None}
