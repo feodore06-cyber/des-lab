@@ -255,15 +255,44 @@ def replace(username: str, kind: str, frame: pd.DataFrame) -> int:
         return append(username, kind, frame)
 
 
+def _has_runs(conn) -> bool:
+    try:
+        row = conn.execute("select to_regclass('public.runs') is not null").fetchone()
+        return bool(row and row[0])
+    except Exception:
+        return False
+
+
 def load(username: str, kind: str) -> pd.DataFrame:
+    """Records and runs together: a migrated row is served from runs only, so it is not doubled."""
+    payloads = []
     with _connect() as conn:
         rows = conn.execute(
             "select payload from records where username = %s and kind = %s order by id",
             (username, kind),
         ).fetchall()
-    if not rows:
+        payloads.extend(row[0] for row in rows)
+        if kind == "results" and _has_runs(conn):
+            migrated = {str(row[0]) for row in conn.execute(
+                "select legacy_record_id from runs where owner = %s"
+                " and legacy_record_id is not null", (username,)).fetchall()}
+            if migrated:
+                keep = []
+                for row in conn.execute(
+                        "select id, payload from records where username = %s and kind = %s"
+                        " order by id", (username, kind)).fetchall():
+                    if str(row[0]) not in migrated:
+                        keep.append(row[1])
+                payloads = keep
+            extra = conn.execute(
+                "select payload || jsonb_build_object('sample_id', sample_id,"
+                " 'project', project,"
+                " 'recorded_at', coalesce(recorded_at, imported_at)) "
+                "from runs where owner = %s order by id", (username,)).fetchall()
+            payloads.extend(row[0] for row in extra)
+    if not payloads:
         return pd.DataFrame()
-    return pd.DataFrame([row[0] for row in rows])
+    return pd.DataFrame(payloads)
 
 
 def load_all(kind: str, limit: int = 5000) -> pd.DataFrame:
@@ -664,6 +693,48 @@ def paper_delete(paper_id: int, owner: str) -> None:
     with _connect() as conn:
         conn.execute("delete from papers where id = %s and owner = %s", (paper_id, owner))
         conn.commit()
+
+
+def variable_rows(owner: str, project: str) -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "select name, display_name, unit, data_type, role, priority, definition,"
+            " synonyms, method, formula, hidden, position, removed_at"
+            " from project_variables where owner = %s and project = %s order by position, name",
+            (owner, project)).fetchall()
+    return [{"name": row[0], "display_name": row[1], "unit": row[2], "data_type": row[3],
+             "role": row[4], "priority": row[5], "definition": row[6],
+             "synonyms": row[7] or [], "method": row[8], "formula": row[9],
+             "hidden": bool(row[10]), "position": row[11], "removed": row[12] is not None}
+            for row in rows]
+
+
+def variable_put(owner: str, project: str, items: list) -> None:
+    """Replace the project's variable set in one statement per row; the key is the name."""
+    with _connect() as conn:
+        with conn.transaction():
+            conn.execute("delete from project_variables where owner = %s and project = %s",
+                         (owner, project))
+            for position, item in enumerate(items):
+                if not item.get("name"):
+                    continue
+                conn.execute(
+                    "insert into project_variables (owner, project, name, display_name, unit,"
+                    " data_type, role, priority, definition, synonyms, method, formula, hidden,"
+                    " position) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+                    " on conflict (owner, project, name) do update set"
+                    " display_name = excluded.display_name, unit = excluded.unit,"
+                    " data_type = excluded.data_type, role = excluded.role,"
+                    " priority = excluded.priority, definition = excluded.definition,"
+                    " synonyms = excluded.synonyms, method = excluded.method,"
+                    " formula = excluded.formula, hidden = excluded.hidden,"
+                    " position = excluded.position",
+                    (owner, project, item["name"], item.get("display_name") or item["name"],
+                     item.get("unit") or "", item.get("data_type") or "",
+                     item.get("role") or "", item.get("priority") or "",
+                     item.get("definition") or "", json.dumps(item.get("synonyms") or []),
+                     item.get("method") or "", item.get("formula") or "",
+                     bool(item.get("hidden")), position))
 
 
 def project_rows(owners: list[str]) -> list[dict]:

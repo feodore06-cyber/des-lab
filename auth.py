@@ -1456,6 +1456,30 @@ def _role_from_legacy(value: str) -> str:
             "metadata": "metadata"}.get(str(value or ""), "metadata")
 
 
+def _items_from_table(username: str, name: str) -> list:
+    try:
+        rows = store.variable_rows(username, name)
+    except Exception:
+        return []
+    out = []
+    for row in rows:
+        role = _role_from_legacy(row.get("role") or ai.role_of(str(row["name"])))
+        out.append({"name": row["name"],
+                    "display_name": row.get("display_name") or str(row["name"]).replace("_", " "),
+                    "unit": row.get("unit") or unit_of(str(row["name"])) or "",
+                    "dtype": row.get("data_type") or ("number" if row.get("unit") else "text"),
+                    "role": role,
+                    "priority": row.get("priority") or _default_priority(role, row.get("position") or 0),
+                    "definition": row.get("definition") or "",
+                    "synonyms": list(row.get("synonyms") or []),
+                    "method": row.get("method") or "",
+                    "formula": row.get("formula") or "",
+                    "hidden": bool(row.get("hidden")),
+                    "position": int(row.get("position") or 0),
+                    "removed": bool(row.get("removed"))})
+    return out
+
+
 def variable_items(username: str | None, name: str) -> list:
     """The variables of a project as objects: name, unit, role, hidden, position, removed.
 
@@ -1464,6 +1488,10 @@ def variable_items(username: str | None, name: str) -> list:
     """
     if not username:
         return []
+    if store.enabled():
+        from_table = _items_from_table(username, name)
+        if from_table:
+            return from_table
     raw = None
     if store.enabled():
         try:
@@ -1553,6 +1581,11 @@ def set_variable_items(username: str, name: str, items: list) -> None:
                         "position": position,
                         "removed": bool(item.get("removed"))})
     payload = json.dumps({"items": cleaned}, ensure_ascii=False)
+    if store.enabled():
+        try:
+            store.variable_put(username, name, cleaned)
+        except Exception:
+            pass
     before = {item["name"]: item for item in variable_items(username, name)}
     after = {item["name"]: item for item in cleaned}
     changes = {}
