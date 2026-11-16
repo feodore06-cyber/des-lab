@@ -12,7 +12,9 @@ import research
 # units are matched inside brackets, or as a trailing token - never as letters inside a word,
 # otherwise "HBA" would be read as hours
 UNITS = [
-    ("°c", "°c"), ("℃", "°c"), ("celsius", "°c"),
+    ("°c", "°c"), ("℃", "°c"), ("celsius", "°c"), ("c", "°c"),
+    ("pct", "%"), ("percent", "%"), ("vv", "v/v"), ("vol", "v/v"),
+    ("wt", "wt%"),
     ("mg", "mg"), ("毫克", "mg"),
     ("g", "g"), ("克", "g"),
     ("min", "min"), ("mins", "min"), ("minute", "min"), ("分钟", "min"),

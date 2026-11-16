@@ -45,6 +45,7 @@ import dataset
 import derive
 import lab_core
 import research
+import tidy
 import wizard
 import literature
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
@@ -1653,6 +1654,30 @@ def _variables_editor(user: str, name: str) -> None:
         st.rerun()
 
     st.caption(t("exp.hide_note"))
+
+    # ordering and roles in one go, plus a manual nudge for single rows
+    controls = st.columns([2, 1, 1])
+    target = controls[0].selectbox(t("exp.move_which"), [item["name"] for item in items],
+                                   key=f"vars_{name}_move")
+    if controls[1].button(t("exp.move_up"), key=f"vars_{name}_up"):
+        auth.set_variable_items(user, name, tidy.move(items, target, -1))
+        st.rerun()
+    if controls[2].button(t("exp.move_down"), key=f"vars_{name}_down"):
+        auth.set_variable_items(user, name, tidy.move(items, target, 1))
+        st.rerun()
+
+    if st.button(t("exp.tidy"), key=f"vars_{name}_tidy"):
+        result = tidy.ai_tidy(name, items)
+        auth.set_variable_items(user, name, result["items"])
+        st.session_state[f"vars_{name}_tidy_note"] = result
+        st.rerun()
+    note = st.session_state.pop(f"vars_{name}_tidy_note", None)
+    if note:
+        if note.get("duplicates"):
+            for concept, names in note["duplicates"].items():
+                st.warning(t("exp.looks_duplicate", names=", ".join(names)))
+        if note.get("changes"):
+            st.caption(t("exp.tidy_changes", n=len(note["changes"])))
 
 
 def _experiment_panel(user: str | None, name: str) -> None:
