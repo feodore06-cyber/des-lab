@@ -439,23 +439,26 @@ page = st.navigation([entry[1] for entry in NAV], position="hidden")
 views.PAGE_OBJECTS = {key: page_object for key, page_object, _label in NAV}
 
 if user:
-    bar = st.columns([1.7, 0.95, 0.95, 0.85, 1.0, 0.9, 0.95, 0.85, 1.3, 0.95],
-                      vertical_alignment="center", gap="small")
-    bar[0].markdown(
+        # two rows: the account sits above, the navigation gets the full width below. Eight buttons
+    # plus a language switch and logout never fit on one line without truncating the labels.
+    head = st.columns([1.7, 1.0, 1.0, 1.0])
+    head[0].markdown(
         '<div class="bm-brand"><img src="app/static/astar_mark.png" alt="">'
         '<span class="bm-wordmark">BioMat Lab</span></div>', unsafe_allow_html=True)
-    for column, entry in zip(bar[1:8], NAV[:7]):
+    i18n.language_switch(head[2])
+    with head[3]:
+        if st.button(t("app.logout"), key="logout", use_container_width=True):
+            auth.logout()
+            st.query_params.clear()
+            st.rerun()
+
+    nav = st.columns(len(NAV[:8]) + 1)
+    for column, entry in zip(nav[:8], NAV[:8]):
         with column:
             # a page_link renders but does not navigate for function-defined pages; a button that
             # switches to the object created in this very run does work
             if st.button(entry[2], key=f"nav_{entry[0]}", use_container_width=True):
                 st.switch_page(entry[1])
-    i18n.language_switch(bar[7])
-    with bar[8]:
-        if st.button(t("app.logout"), key="logout", use_container_width=True):
-            auth.logout()
-            st.query_params.clear()
-            st.rerun()
 
     if auth.hosted_mode() and not store.enabled():
         st.warning(t("app.hosted_warning"))
