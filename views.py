@@ -1262,6 +1262,23 @@ def insights() -> None:
         _project_ranking(user, project)
 
 
+FLASH_SECONDS = 3.0
+
+
+def _fresh_project() -> str:
+    """The project just created, for a few seconds; then it is forgotten."""
+    flash = st.session_state.get("new_project_flash")
+    if isinstance(flash, dict):
+        name, at = flash.get("name"), float(flash.get("at") or 0)
+        if name and time.time() - at < FLASH_SECONDS:
+            return str(name)
+        st.session_state.pop("new_project_flash", None)
+        return ""
+    if isinstance(flash, str):
+        return flash
+    return ""
+
+
 def workspace() -> None:
     """The signed-in home. New work happens here, so no button ever has to leave the page."""
     user = auth.current_user()
@@ -1446,6 +1463,10 @@ def workspace() -> None:
     # a pinned project comes first, then the one with the most recent run
     grouped.sort(key=lambda item: (item["pinned"] != "", item["pinned"], item["last"] != "",
                                    item["last"]), reverse=True)
+    just_made = _fresh_project()
+    if just_made:
+        grouped = ([item for item in grouped if item["name"] == just_made]
+                   + [item for item in grouped if item["name"] != just_made])
 
     pending = st.session_state.get("ws_delete")
     if pending:
@@ -1471,7 +1492,7 @@ def workspace() -> None:
         with st.container(border=True):
             head, tail = st.columns([3, 1])
             key = CHIP_CLASS.get(item["status"], "running")
-            fresh = st.session_state.get("new_project_flash") == item["name"]
+            fresh = item["name"] == _fresh_project()
             badges = (f'<div class="bm-status bm-status-{key}">'
                       f'{_status_label(item["status"])}</div>')
             if fresh:
