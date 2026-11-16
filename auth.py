@@ -634,6 +634,16 @@ def login(username: str, password: str) -> bool:
 
 
 # ---------------------------------------------------------------- record files
+def _memo(key, builder):
+    """Remember a read for the rest of this browser session; writes clear it."""
+    cache = st.session_state.setdefault("_read_cache", {})
+    if key in cache:
+        return cache[key]
+    value = builder()
+    cache[key] = value
+    return value
+
+
 def _flag(name: str) -> str | None:
     """Read a deployment setting from the environment or from Streamlit secrets.
 
@@ -725,6 +735,11 @@ DEFAULT_PROJECT = "General"
 
 
 def list_projects(username: str | None) -> list:
+    # not memoised: a newly created project must appear immediately, and this is one cheap query
+    return _list_projects(username)
+
+
+def _list_projects(username: str | None) -> list:
     """Projects visible to this account: its own plus its interns', always with General first."""
     owners = data_owners(username)
     names = []
@@ -737,7 +752,9 @@ def list_projects(username: str | None) -> list:
     found = list(names)
     for owner in owners:
         found += [value for value in (local.get(owner) or []) if value]
-    found += [str(value) for value in (_project_values(username) or []) if value]
+    if not found:
+        # only when nothing else knows the names; this reads every record, so it stays last
+        found += [str(value) for value in (_project_values(username) or []) if value]
 
     # one entry per name, in first-seen order: the list used to repeat itself because three
     # sources were concatenated without checking
@@ -855,6 +872,10 @@ def create_project(username: str, name: str) -> str:
 
 def _forget_cached_reads() -> None:
     """A write makes every cached view stale."""
+    try:
+        st.session_state.pop("_read_cache", None)
+    except Exception:
+        pass
     try:
         st.cache_data.clear()
     except Exception:
@@ -1380,6 +1401,10 @@ def project_meta(username: str | None) -> dict:
     """name -> {created, pinned} for the projects this account can see."""
     if not username or not store.enabled():
         return {}
+    return _memo(("meta", username), lambda: _project_meta(username))
+
+
+def _project_meta(username: str | None) -> dict:
     try:
         rows = store.project_rows(data_owners(username))
     except Exception:
@@ -1489,7 +1514,7 @@ def variable_items(username: str | None, name: str) -> list:
     if not username:
         return []
     if store.enabled():
-        from_table = _items_from_table(username, name)
+        from_table = _memo(("vars", username, name), lambda: _items_from_table(username, name))
         if from_table:
             return from_table
     raw = None

@@ -264,35 +264,39 @@ def _has_runs(conn) -> bool:
 
 
 def load(username: str, kind: str) -> pd.DataFrame:
-    """Records and runs together: a migrated row is served from runs only, so it is not doubled."""
-    payloads = []
+    """Records and runs in a single round trip; a migrated row is served from runs only.
+
+    Each of these used to be its own query - three round trips per page. They are now one, because
+    every click in the UI pays for them.
+    """
+    query_records = (
+        "select payload from records where username = %s and kind = %s"
+        " and not exists (select 1 from runs x where x.legacy_record_id = records.id)"
+        " order by id")
+    query_runs = (
+        "select payload || jsonb_build_object('sample_id', sample_id,"
+        " 'project', project, 'recorded_at', coalesce(recorded_at, imported_at))"
+        " from runs where owner = %s order by id")
     with _connect() as conn:
-        rows = conn.execute(
-            "select payload from records where username = %s and kind = %s order by id",
-            (username, kind),
-        ).fetchall()
-        payloads.extend(row[0] for row in rows)
-        if kind == "results" and _has_runs(conn):
-            migrated = {str(row[0]) for row in conn.execute(
-                "select legacy_record_id from runs where owner = %s"
-                " and legacy_record_id is not null", (username,)).fetchall()}
-            if migrated:
-                keep = []
-                for row in conn.execute(
-                        "select id, payload from records where username = %s and kind = %s"
-                        " order by id", (username, kind)).fetchall():
-                    if str(row[0]) not in migrated:
-                        keep.append(row[1])
-                payloads = keep
-            extra = conn.execute(
-                "select payload || jsonb_build_object('sample_id', sample_id,"
-                " 'project', project,"
-                " 'recorded_at', coalesce(recorded_at, imported_at)) "
-                "from runs where owner = %s order by id", (username,)).fetchall()
-            payloads.extend(row[0] for row in extra)
-    if not payloads:
+        try:
+            rows = conn.execute(
+                "select payload from records where username = %s and kind = %s"
+                " and not exists (select 1 from runs x where x.legacy_record_id = records.id)"
+                " union all " + query_runs, (username, kind, username)).fetchall()
+        except Exception:
+            rows = []
+            if kind == "results":
+                try:
+                    rows = conn.execute(query_runs, (username,)).fetchall()
+                except Exception:
+                    rows = []
+            else:
+                rows = conn.execute(
+                    "select payload from records where username = %s and kind = %s",
+                    (username, kind)).fetchall()
+    if not rows:
         return pd.DataFrame()
-    return pd.DataFrame(payloads)
+    return pd.DataFrame([row[0] for row in rows])
 
 
 def load_all(kind: str, limit: int = 5000) -> pd.DataFrame:
