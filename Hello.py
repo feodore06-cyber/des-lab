@@ -207,6 +207,7 @@ STYLE = """
   .bm-status-pending { background: #FDF1DF; color: #8A5A11; }
   .bm-status-done    { background: #E4F2EC; color: #0F7A5A; }
   .bm-status-review  { background: #FBEAEA; color: #A32A1C; }
+  .bm-status-new     { background: #FFF3D6; color: #8A5A11; }
 
   /* ---------- cards ---------- */
   div[data-testid="stMetric"] {
@@ -458,6 +459,7 @@ if user:
             # a page_link renders but does not navigate for function-defined pages; a button that
             # switches to the object created in this very run does work
             if st.button(entry[2], key=f"nav_{entry[0]}", use_container_width=True):
+                st.session_state.pop("new_project_flash", None)
                 st.switch_page(entry[1])
 
     if auth.hosted_mode() and not store.enabled():

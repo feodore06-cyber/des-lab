@@ -1468,8 +1468,13 @@ def workspace() -> None:
         with st.container(border=True):
             head, tail = st.columns([3, 1])
             key = CHIP_CLASS.get(item["status"], "running")
-            head.markdown(f'<div class="bm-status bm-status-{key}">'
-                          f'{_status_label(item["status"])}</div>', unsafe_allow_html=True)
+            fresh = st.session_state.get("new_project_flash") == item["name"]
+            badges = (f'<div class="bm-status bm-status-{key}">'
+                      f'{_status_label(item["status"])}</div>')
+            if fresh:
+                # shown once, until the researcher leaves this page
+                badges = ('<div class="bm-status bm-status-new">NEW</div>' + badges)
+            head.markdown(badges, unsafe_allow_html=True)
             head.markdown(f"**{item['name']}**")
             bits = [t("ws.runs", n=item["runs"]) if item["runs"] else t("ws.empty_project")]
             if item["created"]:

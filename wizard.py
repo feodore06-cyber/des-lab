@@ -345,9 +345,9 @@ def _summary(user: str) -> None:
         except ValueError as exc:
             st.error(t(str(exc)))
         else:
-            st.success(t("exp.created", name=result["project"],
-                         variables=result["variables"], rows=result["imported"]))
+            st.session_state["new_project_flash"] = result["project"]
             st.session_state["project_wanted"] = result["project"]
+            st.session_state["ws_mode"] = "home"
             _reset()
 
 
