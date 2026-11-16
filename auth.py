@@ -635,7 +635,18 @@ def login(username: str, password: str) -> bool:
 
 # ---------------------------------------------------------------- record files
 def _memo(key, builder):
-    """Remember a read for the rest of this browser session; writes clear it."""
+    """Remember a read for the rest of this browser session; writes clear it.
+
+    Outside a real script run (tests, scripts) there is no per-session state - session_state is one
+    process-wide dict there - so nothing is cached and every call reads the truth.
+    """
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        if get_script_run_ctx() is None:
+            return builder()
+    except Exception:
+        return builder()
     cache = st.session_state.setdefault("_read_cache", {})
     if key in cache:
         return cache[key]
@@ -901,6 +912,7 @@ def save_results(username: str, frame: pd.DataFrame, append: bool = True) -> Pat
         except (OSError, pd.errors.ParserError, UnicodeDecodeError):
             pass
     frame.to_csv(path, index=False, encoding="utf-8-sig")
+    _forget_cached_reads()
     return path
 
 
@@ -918,6 +930,17 @@ def _import_results_csv(username: str) -> None:
 
 
 def load_results(username: str) -> pd.DataFrame | None:
+    """Rows this account may read, remembered for the rest of this session.
+
+    The page asks for them several times per click; without this memo each ask was another round
+    trip. Every write clears the memo, so a saved row is visible immediately.
+    """
+    if not username:
+        return None
+    return _memo(("results", username), lambda: _load_results_uncached(username))
+
+
+def _load_results_uncached(username: str) -> pd.DataFrame | None:
     """Rows this account may read: its own, plus its own interns' when it is a supervisor.
 
     Every row carries ``_owner`` so a later save can put edits back where they belong.
