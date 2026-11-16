@@ -2,6 +2,7 @@
 
 import ai
 import columnmap
+import research
 
 ORDER = {"metadata": 0, "independent": 1, "controlled": 2, "covariate": 3,
          "dependent": 4, "derived": 5}
@@ -15,7 +16,8 @@ def tidy(items: list) -> dict:
     """
     prepared = []
     for item in items or []:
-        name = str(item.get("name") or "").strip()
+        # the same lowercase rule as everywhere else: Temperature_C and temperature_c are one name
+        name = research.normalise_name(item.get("name"))
         if not name:
             continue
         proposal = columnmap.suggest(name)
@@ -34,6 +36,9 @@ def tidy(items: list) -> dict:
     by_name = {str(item.get("name")): item for item in items or []}
     for entry in ordered:
         before = by_name.get(entry["name"], {})
+        if str(before.get("name") or "") != entry["name"]:
+            changes.append({"variable": entry["name"], "field": "name",
+                            "from": before.get("name"), "to": entry["name"]})
         if before.get("role") and before.get("role") != entry["role"]:
             changes.append({"variable": entry["name"], "field": "role",
                             "from": before.get("role"), "to": entry["role"]})
