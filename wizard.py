@@ -195,7 +195,7 @@ def _summary(user: str) -> None:
     frame = state.get("frame")
     mapping = state.get("mapping") or {}
 
-    variables = {}
+    variables = dict(state.get("variables") or {})
     if frame is not None and not frame.empty:
         for original, spec in mapping.items():
             proposal = columnmap.suggest(spec["name"])
@@ -207,7 +207,8 @@ def _summary(user: str) -> None:
         proposal = columnmap.suggest(item["name"])
         variables.setdefault(item["name"], {
             "name": item["name"], "unit": item.get("unit") or proposal["unit"],
-            "data_type": proposal["data_type"], "role": item.get("role") or proposal["role"]})
+            "data_type": item.get("data_type") or proposal["data_type"],
+            "role": item.get("role") or proposal["role"]})
 
     rows, conflicts = [], {}
     if frame is not None and not frame.empty and mapping:
@@ -229,9 +230,43 @@ def _summary(user: str) -> None:
     if state.get("description"):
         st.caption(f"{t('wiz.description')}: {state['description']}")
     if variables:
-        st.dataframe(pd.DataFrame(list(variables.values())), hide_index=True, width="stretch")
-    else:
-        st.warning(t("wiz.need_variable"))
+        rows_of_vars = []
+        for item in variables.values():
+            rows_of_vars.append({"name": item["name"], "unit": item.get("unit", ""),
+                                 "type": item.get("data_type", ""),
+                                 "role": auth.ROLE_LABELS.get(item.get("role"), item.get("role")),
+                                 "remove": False})
+        edited_vars = st.data_editor(
+            pd.DataFrame(rows_of_vars), hide_index=True, width="stretch", num_rows="fixed",
+            key="wiz_var_table",
+            column_config={
+                "name": st.column_config.TextColumn(t("exp.col_variable"), disabled=True),
+                "unit": st.column_config.TextColumn(t("exp.col_unit")),
+                "type": st.column_config.SelectboxColumn(
+                    t("wiz.type"), options=["number", "text", "category", "boolean"]),
+                "role": st.column_config.SelectboxColumn(
+                    t("exp.col_role"), options=[auth.ROLE_LABELS[v] for v in auth.VARIABLE_ROLES]),
+                "remove": st.column_config.CheckboxColumn(t("exp.col_remove")),
+            })
+        # the edits are applied immediately: unit, type, role and removal all survive the next step
+        variables = variables_from_rows(edited_vars.to_dict("records"))
+        state["variables"] = variables
+
+        if ai.available():
+            if st.button(t("wiz.detect"), key="wiz_detect_units"):
+                with st.spinner(t("exp.ai_thinking")):
+                    proposals = columnmap.ai_suggest(
+                        list(variables), [], st.session_state.get(i18n.LANG_KEY, "en"))
+                by_name = {item["name"]: item for item in proposals}
+                for name, item in variables.items():
+                    proposal = by_name.get(name) or columnmap.suggest(name)
+                    item["unit"] = item.get("unit") or proposal.get("unit", "")
+                    item["data_type"] = item.get("data_type") or proposal.get("data_type", "")
+                    if item.get("role") in ("", "covariate", None):
+                        item["role"] = proposal.get("role") or item["role"]
+                st.rerun()
+        st.caption(t("wiz.var_table_note"))
+
     st.caption(t("wiz.import_summary", rows=len(rows), mapped=len(mapping),
                  excluded=max(0, len(frame.columns) - len(mapping)) if frame is not None else 0))
     if conflicts.get("inside_file"):
@@ -269,8 +304,16 @@ def _summary(user: str) -> None:
     if st.button(t("exp.variable_add"), key="wiz_add_manual"):
         name = research.normalise_name(typed)
         if name and name not in variables:
+            proposal = columnmap.suggest(name)
+            if ai.available():
+                with st.spinner(t("exp.ai_thinking")):
+                    found = columnmap.ai_suggest([name], [],
+                                                 st.session_state.get(i18n.LANG_KEY, "en"))
+                if found:
+                    proposal = found[0]
             state["manual"] = list(state.get("manual") or []) + [
-                {"name": name, "unit": auth.unit_of(name) or ""}]
+                {"name": name, "unit": proposal["unit"],
+                 "role": proposal["role"], "data_type": proposal["data_type"]}]
             st.rerun()
 
     columns = st.columns([1, 1])
@@ -294,6 +337,20 @@ def _summary(user: str) -> None:
 
 
 RESERVED_FOR_RUN = {"project", "_owner"}
+
+
+def variables_from_rows(rows: list) -> dict:
+    """Turn the edited table back into variable definitions; a ticked remove drops the row."""
+    by_label = {auth.ROLE_LABELS[value]: value for value in auth.VARIABLE_ROLES}
+    out = {}
+    for row in rows or []:
+        name = str(row.get("name") or "").strip()
+        if not name or bool(row.get("remove")):
+            continue
+        out[name] = {"name": name, "unit": str(row.get("unit") or ""),
+                     "data_type": str(row.get("type") or ""),
+                     "role": by_label.get(str(row.get("role")), "independent")}
+    return out
 
 
 def page() -> None:
