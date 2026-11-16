@@ -9,14 +9,17 @@ import re
 import ai
 import research
 
+# units are matched inside brackets, or as a trailing token - never as letters inside a word,
+# otherwise "HBA" would be read as hours
 UNITS = [
-    ("°c", "°c"), ("℃", "°c"), ("(c)", "°c"), ("celsius", "°c"),
+    ("°c", "°c"), ("℃", "°c"), ("celsius", "°c"),
     ("mg", "mg"), ("毫克", "mg"),
-    ("(g)", "g"), ("克", "g"),
-    ("min", "min"), ("分钟", "min"), ("mins", "min"), ("minute", "min"),
-    ("h", "h"), ("hr", "h"), ("hours", "h"), ("小时", "h"),
+    ("g", "g"), ("克", "g"),
+    ("min", "min"), ("mins", "min"), ("minute", "min"), ("分钟", "min"),
+    ("h", "h"), ("hr", "h"), ("hrs", "h"), ("hour", "h"), ("小时", "h"),
     ("%", "%"), ("wt%", "%"), ("percent", "%"), ("百分", "%"),
-    ("ml", "ml"), ("(l)", "l"), ("mpa", "mpa"), ("bar", "bar"), ("rpm", "rpm"),
+    ("ml", "ml"), ("l", "l"), ("mpa", "mpa"), ("bar", "bar"), ("rpm", "rpm"),
+    ("mol/mol", "mol/mol"), ("w", "w"),
 ]
 
 # token -> canonical concept; the unit suffix is added afterwards
@@ -28,6 +31,8 @@ CONCEPTS = [
     (("样品编号", "样品", "sample id", "sample_id", "sample", "编号"), "sample_id"),
     (("得率", "产率", "yield"), "yield"),
     (("纯度", "purity"), "purity"),
+    (("纤维素", "cellulose"), "cellulose"),
+    (("半纤维素", "hemicellulose", "xylan"), "hemicellulose"),
     (("水分", "含水", "moisture", "water"), "moisture"),
     (("压力", "pressure"), "pressure"),
     (("转速", "搅拌", "rpm", "stir"), "stir"),
@@ -47,6 +52,8 @@ ROLE_BY_CONCEPT = {
     "lignin": "dependent",
     "yield": "dependent",
     "purity": "dependent",
+    "cellulose": "dependent",
+    "hemicellulose": "dependent",
 }
 
 SUFFIX = {"°c": "c", "mg": "mg", "g": "g", "min": "min", "h": "h", "%": "pct",
@@ -55,8 +62,17 @@ SUFFIX = {"°c": "c", "mg": "mg", "g": "g", "min": "min", "h": "h", "%": "pct",
 
 def _unit(text: str) -> str:
     low = text.lower().replace("（", "(").replace("）", ")")
+    inside = re.findall(r"\(([^)]*)\)", low)
+    for chunk in inside:
+        chunk = chunk.strip()
+        for token, unit in UNITS:
+            if chunk == token:
+                return unit
+    # a trailing unit is accepted ("reaction time min", "lignin mg")
+    tail = re.split(r"[\s_]+", low.strip())[-1] if low.strip() else ""
+    tail = tail.strip("()")
     for token, unit in UNITS:
-        if token in low:
+        if tail == token:
             return unit
     return ""
 
