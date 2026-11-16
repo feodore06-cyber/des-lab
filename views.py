@@ -1192,6 +1192,9 @@ def dashboard() -> None:
 
     st.divider()
     st.caption(t("dash.next"))
+    st.divider()
+    # the per-project summary used to be its own page; it belongs next to the overview
+    insights()
 
 
 def _attention_notes(user: str, frame, papers: list) -> list:

@@ -419,23 +419,24 @@ NAV = [
     ("dashboard", st.Page(_gate(views.dashboard), title=t("nav.dashboard"), url_path="dashboard"),
      t("nav.dashboard")),
     ("experiments", st.Page(_front, title=t("nav.experiments"), default=True), t("nav.experiments")),
-    ("results", st.Page(_gate(views.results), title=t("nav.results"), url_path="results"),
-     t("nav.results")),
     ("calculator", st.Page(_gate(views.calculator), title=t("app.page_calc"), url_path="calculator"),
      t("app.page_calc")),
     ("papers", st.Page(_gate(views.library), title=t("nav.papers"), url_path="papers"),
      t("nav.papers")),
     ("compare", st.Page(_gate(views.compare_page), title=t("nav.compare"), url_path="compare"),
      t("nav.compare")),
-    ("insights", st.Page(_gate(views.insights), title=t("nav.insights"), url_path="insights"),
-     t("nav.insights")),
     ("profile", st.Page(_gate(views.guide), title=t("nav.profile"), url_path="guide"),
      t("nav.profile")),
     ("feedback", st.Page(_gate(views.feedback), title=t("app.page_feedback"), url_path="feedback"),
      t("app.page_feedback")),
 ]
 
-page = st.navigation([entry[1] for entry in NAV], position="hidden")
+EXTRA_PAGES = [
+    ("results", st.Page(_gate(views.results), title=t("nav.results"), url_path="results")),
+    ("insights", st.Page(_gate(views.insights), title=t("nav.insights"), url_path="insights")),
+]
+page = st.navigation([entry[1] for entry in NAV] + [entry[1] for entry in EXTRA_PAGES],
+                     position="hidden")
 # views needs the page objects to move between pages; a file path does not resolve for these pages
 views.PAGE_OBJECTS = {key: page_object for key, page_object, _label in NAV}
 
@@ -454,7 +455,7 @@ if user:
             st.rerun()
 
     nav = st.columns(len(NAV[:8]) + 1)
-    for column, entry in zip(nav[:8], NAV[:8]):
+    for column, entry in zip(nav[:len(NAV)], NAV):
         with column:
             # a page_link renders but does not navigate for function-defined pages; a button that
             # switches to the object created in this very run does work

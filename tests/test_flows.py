@@ -270,29 +270,34 @@ class WorkspaceFlows(unittest.TestCase):
         at = fresh_at()
         keys = [button.key for button in at.button if button.key and button.key.startswith("nav_")]
         self.assertIn("nav_dashboard", keys, f"the top bar has no Dashboard button: {keys}")
-        self.assertIn("nav_insights", keys, f"the top bar has no Insights button: {keys}")
+        self.assertNotIn("nav_insights", keys,
+                         "Insights is part of the dashboard now, not a separate button")
         at.button(key="nav_dashboard").click()
         at.run()
         self.assertEqual(exceptions(at), [])
-        text = " ".join(str(item.value) for item in at.markdown)
-        self.assertIn("Dashboard", text, "the dashboard did not open")
-        at.button(key="nav_insights").click()
-        at.run()
-        self.assertEqual(exceptions(at), [])
+        rendered = " ".join(str(item.value) for item in at.markdown)
+        self.assertIn("Dashboard", rendered, "the dashboard did not open")
+        self.assertIn("Insights", rendered, "the dashboard must carry the insights section")
 
-    def test_the_top_bar_switches_to_results_and_the_calculator(self):
+    def test_the_top_bar_switches_to_the_calculator(self):
         at = fresh_at()
         self.assertEqual(exceptions(at), [])
         keys = [button.key for button in at.button if button.key and button.key.startswith("nav_")]
-        self.assertIn("nav_results", keys, f"the top bar has no Results button: {keys}")
-        at.button(key="nav_results").click()
-        at.run()
-        self.assertEqual(exceptions(at), [])
-        self.assertEqual([title.value for title in at.title], ["Results and Figures"])
+        self.assertIn("nav_calculator", keys, f"the top bar has no calculator button: {keys}")
         at.button(key="nav_calculator").click()
         at.run()
         self.assertEqual(exceptions(at), [])
         self.assertEqual([title.value for title in at.title], ["Recipe Calculator"])
+
+    def test_results_are_inside_a_project_rather_than_a_page_of_their_own(self):
+        """Results and Insights were separate pages; they now live in the project and dashboard."""
+        import views
+
+        self.assertTrue(callable(views.results), "the results view must still exist")
+        at = fresh_at()
+        keys = [button.key for button in at.button if button.key and button.key.startswith("nav_")]
+        self.assertNotIn("nav_results", keys, "Results should no longer be a top-level page")
+        self.assertNotIn("nav_insights", keys, "Insights should no longer be a top-level page")
 
     def test_the_workspace_renders_the_experiments(self):
         at = fresh_at()
