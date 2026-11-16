@@ -53,6 +53,8 @@ def render(user: str, start_open: bool = False) -> None:
         clean = str(state["name"]).strip()
         if clean and clean in auth.list_projects(user):
             st.error(t("wiz.duplicate"))
+        elif not clean:
+            st.info(t("wiz.fill_name"))
         ready = bool(clean) and clean not in auth.list_projects(user)
         columns = st.columns([1, 1])
         if columns[1].button(t("wiz.next"), type="primary", key="wiz_next1", disabled=not ready):
