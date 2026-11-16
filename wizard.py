@@ -107,14 +107,18 @@ def render(user: str, start_open: bool = False) -> None:
         if columns[0].button(t("wiz.back"), key="wiz_back2"):
             _goto(1)
         if columns[2].button(t("wiz.next"), type="primary", key="wiz_next2"):
-            _goto(3)
+            # with no file there is nothing to map, so the mapping step is skipped entirely
+            _goto(3 if state.get("frame") is not None and not state["frame"].empty else 4)
         return
 
     if step == 3:
         frame = state.get("frame")
         columns_in = [str(c) for c in (frame.columns if frame is not None else [])]
         if not columns_in:
-            st.caption(t("wiz.no_file_skip"))
+            st.info(t("wiz.skipped"))
+            if st.button(t("wiz.next"), type="primary", key="wiz_skip3"):
+                _goto(4)
+            return
         else:
             if ai.available() and st.button(t("exp.read_columns"), key="wiz_ai_cols"):
                 with st.spinner(t("exp.ai_thinking")):
@@ -194,15 +198,16 @@ def _summary(user: str) -> None:
     variables = {}
     if frame is not None and not frame.empty:
         for original, spec in mapping.items():
-            variables[spec["name"]] = {"name": spec["name"], "unit": spec.get("unit", ""),
-                                       "data_type": spec.get("data_type", ""),
-                                       "role": spec.get("role", "independent")}
-    for item in state.get("suggested") or []:
-        variables.setdefault(item["name"], {"name": item["name"], "unit": item.get("unit", ""),
-                                            "data_type": "", "role": item.get("role", "dependent")})
-    for item in state.get("manual") or []:
-        variables.setdefault(item["name"], {"name": item["name"], "unit": item.get("unit", ""),
-                                            "data_type": "", "role": "independent"})
+            proposal = columnmap.suggest(spec["name"])
+        variables[spec["name"]] = {
+            "name": spec["name"], "unit": spec.get("unit") or proposal["unit"],
+            "data_type": spec.get("data_type") or proposal["data_type"],
+            "role": spec.get("role") or proposal["role"]}
+    for item in list(state.get("suggested") or []) + list(state.get("manual") or []):
+        proposal = columnmap.suggest(item["name"])
+        variables.setdefault(item["name"], {
+            "name": item["name"], "unit": item.get("unit") or proposal["unit"],
+            "data_type": proposal["data_type"], "role": item.get("role") or proposal["role"]})
 
     rows, conflicts = [], {}
     if frame is not None and not frame.empty and mapping:
@@ -248,8 +253,15 @@ def _summary(user: str) -> None:
                       if item["key"] not in variables and st.checkbox(
                           f"{item['key']} — {item.get('why', '')}", key=f"wiz_tick_{item['key']}")]
             if st.button(t("exp.ai_add"), key="wiz_add_suggested"):
-                state["suggested"] = [{"name": research.normalise_name(key), "unit": "",
-                                       "role": "dependent"} for key in ticked]
+                # accumulate: an earlier round of suggestions must survive a later one
+                kept = {item["name"]: item for item in (state.get("suggested") or [])}
+                for key in ticked:
+                    name = research.normalise_name(key)
+                    if name and name not in kept:
+                        proposal = columnmap.suggest(name)
+                        kept[name] = {"name": name, "unit": proposal["unit"],
+                                      "role": proposal["role"] or "dependent"}
+                state["suggested"] = list(kept.values())
                 st.rerun()
 
     typed = st.text_input(t("exp.variable_by_hand"), key="wiz_typed",
