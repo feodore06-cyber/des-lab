@@ -203,7 +203,10 @@ def _summary(user: str) -> None:
             "name": spec["name"], "unit": spec.get("unit") or proposal["unit"],
             "data_type": spec.get("data_type") or proposal["data_type"],
             "role": spec.get("role") or proposal["role"]}
+    removed = set(state.get("removed") or [])
     for item in list(state.get("suggested") or []) + list(state.get("manual") or []):
+        if item["name"] in removed:
+            continue
         proposal = columnmap.suggest(item["name"])
         variables.setdefault(item["name"], {
             "name": item["name"], "unit": item.get("unit") or proposal["unit"],
@@ -249,7 +252,17 @@ def _summary(user: str) -> None:
                 "remove": st.column_config.CheckboxColumn(t("exp.col_remove")),
             })
         # the edits are applied immediately: unit, type, role and removal all survive the next step
-        variables = variables_from_rows(edited_vars.to_dict("records"))
+        rebuilt = variables_from_rows(edited_vars.to_dict("records"))
+        gone = set(variables) - set(rebuilt)
+        if gone:
+            # removed on purpose: remember it, and never add it back from a suggestion or a file
+            state["removed"] = sorted(set(state.get("removed") or []) | gone)
+            state["suggested"] = [item for item in (state.get("suggested") or [])
+                                  if item["name"] not in gone]
+            state["manual"] = [item for item in (state.get("manual") or [])
+                               if item["name"] not in gone]
+        variables = {name: item for name, item in rebuilt.items()
+                     if name not in set(state.get("removed") or [])}
         state["variables"] = variables
 
         if ai.available():
@@ -303,6 +316,8 @@ def _summary(user: str) -> None:
                           placeholder="e.g. shear_strength_MPa")
     if st.button(t("exp.variable_add"), key="wiz_add_manual"):
         name = research.normalise_name(typed)
+        if name in set(state.get("removed") or []):
+            state["removed"] = [value for value in state["removed"] if value != name]
         if name and name not in variables:
             proposal = columnmap.suggest(name)
             if ai.available():
