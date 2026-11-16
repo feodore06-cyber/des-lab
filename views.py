@@ -1547,7 +1547,10 @@ def _stored_values(user: str, name: str, columns: list) -> list:
 
 def _variables_editor(user: str, name: str) -> None:
     """Add, hide, remove and classify the variables this project records."""
-    items = auth.variable_items(user, name)
+    all_items = auth.variable_items(user, name)
+    items = [item for item in all_items if not item.get("removed")]
+    if len(all_items) != len(items):
+        st.caption(t("exp.removed_note", n=len(all_items) - len(items)))
 
     def _add(names: list) -> None:
         known = {item["name"] for item in items}
@@ -1644,7 +1647,9 @@ def _variables_editor(user: str, name: str) -> None:
                             "hidden": bool(row["hidden"]),
                             "removed": bool(row["remove"]) or original.get("removed", False)})
         auth.set_variable_items(user, name, updated)
-        st.success(t("exp.variables_saved"))
+        dropped = int(sum(1 for (_, row) in edited.iterrows() if bool(row["remove"])))
+        st.success(t("exp.variables_saved_removed", n=dropped) if dropped
+                   else t("exp.variables_saved"))
         st.rerun()
 
     st.caption(t("exp.hide_note"))
@@ -2061,10 +2066,17 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         # a derived variable is computed from the measurements, never typed by hand
         row = derive.recompute(row, auth.project_variable_items(user, project))
         auth.save_results(user, pd.DataFrame([row]), append=True)
-        total = auth.load_results(user)
-        shown = f"{preview:.2f}" if preview is not None else "—"
-        st.session_state["run_saved_note"] = t("res.saved_run", sid=row["sample_id"], pct=shown,
-                                                rows=0 if total is None else len(total))
+        everything = auth.load_results(user)
+        mine = everything
+        if mine is not None and not mine.empty and "project" in mine.columns:
+            mine = mine[mine["project"].fillna(auth.DEFAULT_PROJECT) == project]
+        in_project = 0 if mine is None or mine.empty else len(mine)
+        if preview is None:
+            st.session_state["run_saved_note"] = t("res.saved_run_no_yield",
+                                                   sid=row["sample_id"], rows=in_project)
+        else:
+            st.session_state["run_saved_note"] = t("res.saved_run", sid=row["sample_id"],
+                                                   pct=f"{preview:.2f}", rows=in_project)
         # advance the suggested ID and start the next run with a clean sheet
         # the widgets cannot be cleared after they were created in this run; the rerun picks the
         # advanced ID up from the project's rows instead
