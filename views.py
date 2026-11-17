@@ -47,6 +47,11 @@ import lab_core
 import research
 import tidy
 import wizard
+
+try:  # optional: dragging rows; without it the up/down buttons below still work
+    from streamlit_sortables import sort_items as _sort_items
+except Exception:  # the component is missing or broken: the page must still render
+    _sort_items = None
 import literature
 from lab_core import calculate_recipe, csv_bytes, merge_results, summarize
 import lab_plots
@@ -1632,7 +1637,7 @@ def _variables_editor(user: str, name: str) -> None:
     if going:
         held = _stored_values(user, name, going)
         if held:
-            st.warning(t("exp.remove_history", names=", ".join(held)))
+            st.info(t("exp.remove_history", names=", ".join(held)))
     if st.button(t("exp.variables_save"), key=f"vars_{name}_save"):
         by_label = {auth.ROLE_LABELS[value]: value for value in auth.VARIABLE_ROLES}
         updated = []
@@ -1655,8 +1660,22 @@ def _variables_editor(user: str, name: str) -> None:
 
     st.caption(t("exp.hide_note"))
 
+    # drag to reorder; the up/down buttons stay as a fallback
+    if _sort_items is not None and len(items) > 1:
+        names = [item["name"] for item in items]
+        try:
+            order = _sort_items(names, direction="vertical", key=f"vars_{name}_drag")
+        except Exception:
+            order = None
+        if order and order != names:
+            by_name = {item["name"]: item for item in items}
+            auth.set_variable_items(user, name, [by_name[value] for value in order
+                                                 if value in by_name])
+            st.rerun()
+        st.caption(t("exp.drag_hint"))
+
     # ordering and roles in one go, plus a manual nudge for single rows
-    controls = st.columns([2, 1, 1])
+    controls = st.columns([2, 1, 1, 1])
     target = controls[0].selectbox(t("exp.move_which"), [item["name"] for item in items],
                                    key=f"vars_{name}_move")
     if controls[1].button(t("exp.move_up"), key=f"vars_{name}_up"):
@@ -1665,6 +1684,19 @@ def _variables_editor(user: str, name: str) -> None:
     if controls[2].button(t("exp.move_down"), key=f"vars_{name}_down"):
         auth.set_variable_items(user, name, tidy.move(items, target, 1))
         st.rerun()
+    # one click is enough to remove a variable; the tick-column below stays for batch edits
+    if controls[3].button(t("exp.delete_one"), key=f"vars_{name}_delete"):
+        remaining = [{**item, "removed": True} if item["name"] == target else item
+                     for item in items]
+        held = _stored_values(user, name, [target])
+        auth.set_variable_items(user, name, remaining)
+        note = t("exp.deleted_one", variable=target) + (
+            " " + t("exp.deleted_kept", names=", ".join(held)) if held else "")
+        st.session_state[f"vars_{name}_deleted"] = note
+        st.rerun()
+    deleted = st.session_state.pop(f"vars_{name}_deleted", None)
+    if deleted:
+        st.success(deleted)
 
     if st.button(t("exp.tidy"), key=f"vars_{name}_tidy"):
         result = tidy.ai_tidy(name, items)
@@ -1727,9 +1759,9 @@ def _experiment_panel(user: str | None, name: str) -> None:
             st.rerun()
         return
 
-    tab_overview, tab_formulation, tab_process, tab_results, tab_records = st.tabs(
-        [t("exp.tab_overview"), t("exp.tab_formulation"), t("exp.tab_process"),
-         t("exp.tab_results"), t("exp.tab_records")])
+    tab_overview, tab_variables, tab_formulation, tab_process, tab_results, tab_records = st.tabs(
+        [t("exp.tab_overview"), t("exp.tab_variables"), t("exp.tab_formulation"),
+         t("exp.tab_process"), t("exp.tab_results"), t("exp.tab_records")])
 
     latest = part.iloc[-1]
     with tab_overview:
@@ -1774,10 +1806,9 @@ def _experiment_panel(user: str | None, name: str) -> None:
         keep = list(dict.fromkeys(value for value in keep if value in part.columns))
         st.dataframe(part[keep] if keep else part, width="stretch", hide_index=True)
         st.caption(t("exp.overview_note"))
-        st.divider()
-        st.caption(t("exp.variables_here"))
+        st.caption(t("exp.variables_moved"))
+    with tab_variables:
         _variables_editor(user, name)
-
         with st.expander(t("exp.history"), expanded=False):
             lines = [line for line in auth.change_log(200)
                      if line.get("target") == name or line.get("kind") == "record"]
@@ -1785,43 +1816,6 @@ def _experiment_panel(user: str | None, name: str) -> None:
                 st.caption(t("exp.history_none"))
             for line in lines[:30]:
                 st.caption(audit.describe(line))
-            export_body = dataset.payload(
-                name, auth.project_variable_items(user, name),
-                (part.drop(columns=[c for c in ("_owner",) if c in part.columns])
-                 .to_dict("records")))
-            st.download_button(t("exp.export_json"), dataset.to_json(export_body),
-                               f"{name.replace(' ', '_')}.json", "application/json",
-                               key=f"export_{name}")
-            st.caption(dataset.describe(export_body))
-            if st.button(t("exp.recompute"), key=f"recompute_{name}"):
-                frame = auth.load_results(user)
-                if frame is not None and not frame.empty:
-                    frame = frame.copy()
-                    mask = frame["project"].fillna(auth.DEFAULT_PROJECT) == name
-                    items = auth.project_variable_items(user, name)
-                    changed = 0
-                    for index in frame[mask].index:
-                        before = frame.loc[index].to_dict()
-                        after = derive.recompute(before, items)
-                        for key, value in after.items():
-                            if key in items and key not in before:
-                                continue
-                        differences = {key: {"before": before.get(key), "after": value}
-                                       for key, value in after.items()
-                                       if str(before.get(key)) != str(value)}
-                        if differences:
-                            for key, value in after.items():
-                                if key in frame.columns:
-                                    frame.at[index, key] = value
-                            changed += 1
-                    if changed:
-                        auth.save_results(user, frame, append=False)
-                        auth.record_change(user, "record", name, {},
-                                           note=f"derived values recomputed for {changed} row(s)")
-                        st.success(t("exp.recomputed", n=changed))
-                        st.rerun()
-                    else:
-                        st.caption(t("exp.recompute_none"))
 
     with tab_formulation:
         current = auth.project_formulation(user, name)
