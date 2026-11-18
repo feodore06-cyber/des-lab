@@ -699,6 +699,47 @@ def paper_delete(paper_id: int, owner: str) -> None:
         conn.commit()
 
 
+def run_set_field(owner: str, project: str, sample_id: str, field: str, value) -> int:
+    """Set one field of one run; the value keeps its JSON type (a number stays a number)."""
+    changed = 0
+    encoded = json.dumps(value)
+    with _connect() as conn:
+        with conn.transaction():
+            cur = conn.execute(
+                "update runs set payload = jsonb_set(payload, %s, %s::jsonb, true)"
+                " where owner = %s and project = %s and sample_id = %s",
+                ("{" + field + "}", encoded, owner, project, sample_id))
+            changed += cur.rowcount
+            cur = conn.execute(
+                "update records set payload = jsonb_set(payload, %s, %s::jsonb, true)"
+                " where username = %s and kind = 'results' and payload->>'project' = %s"
+                " and payload->>'sample_id' = %s",
+                ("{" + field + "}", encoded, owner, project, sample_id))
+            changed += cur.rowcount
+    return changed
+
+
+def run_rename(owner: str, project: str, old_id: str, new_id: str) -> int:
+    """Rename one run wherever it is stored: runs, records and its photographs."""
+    changed = 0
+    with _connect() as conn:
+        with conn.transaction():
+            cur = conn.execute(
+                "update runs set sample_id = %s where owner = %s and project = %s"
+                " and sample_id = %s", (new_id, owner, project, old_id))
+            changed += cur.rowcount
+            cur = conn.execute(
+                "update records set payload = jsonb_set(payload, '{sample_id}', to_jsonb(%s::text))"
+                " where username = %s and kind = 'results' and payload->>'project' = %s"
+                " and payload->>'sample_id' = %s", (new_id, owner, project, old_id))
+            changed += cur.rowcount
+            cur = conn.execute(
+                "update images set sample_id = %s where owner = %s and sample_id = %s",
+                (new_id, owner, old_id))
+            changed += cur.rowcount
+    return changed
+
+
 def variable_rows(owner: str, project: str) -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(

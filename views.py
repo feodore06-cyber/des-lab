@@ -1806,6 +1806,33 @@ def _experiment_panel(user: str | None, name: str) -> None:
         keep = list(dict.fromkeys(value for value in keep if value in part.columns))
         st.dataframe(part[keep] if keep else part, width="stretch", hide_index=True)
         st.caption(t("exp.overview_note"))
+
+        with st.expander(t("exp.edit_run"), expanded=False):
+            ids = ([str(value) for value in part["sample_id"].tolist()]
+                   if "sample_id" in part.columns else [])
+            if not ids:
+                st.caption(t("res.empty_records"))
+            else:
+                derived = {item["name"] for item in auth.variable_items(user, name)
+                           if item.get("role") == "derived"}
+                editable = ["sample_id"] + [value for value in own
+                                            if value not in ("sample_id", "recorded_at")
+                                            and value not in derived and value in part.columns]
+                a, b = st.columns([1, 1])
+                which = a.selectbox(t("exp.edit_which_run"), ids, key=f"edit_run_{name}")
+                field = b.selectbox(t("exp.edit_which_field"), editable,
+                                    key=f"edit_field_{name}")
+                current = part[part["sample_id"].astype(str) == which]
+                shown = "" if current.empty else str(current.iloc[0].get(field) or "")
+                value = st.text_input(t("exp.edit_value"), value=shown, key=f"edit_value_{name}")
+                if st.button(t("exp.edit_save"), key=f"edit_save_{name}"):
+                    try:
+                        auth.update_run_field(user, name, which, field, value)
+                    except ValueError as exc:
+                        st.error(t(str(exc)))
+                    else:
+                        st.success(t("exp.edit_done", field=field, run=which))
+                        st.rerun()
         st.caption(t("exp.variables_moved"))
     with tab_variables:
         _variables_editor(user, name)

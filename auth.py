@@ -1742,3 +1742,79 @@ def change_log(limit: int = 30) -> list:
     """The most recent changes, newest first."""
     log = audit.load(_local_projects().get("_audit"))
     return list(reversed(log))[:limit]
+
+def rename_sample(username: str, project: str, old_id: str, new_id: str) -> int:
+    """Rename one run, keeping its measurements, photographs and history in place."""
+    clean = str(new_id or "").strip()
+    if not clean:
+        raise ValueError("The new sample ID cannot be empty.")
+    if clean == str(old_id).strip():
+        return 0
+    frame = load_results(username)
+    if frame is None or frame.empty:
+        raise ValueError("There is no run with that ID.")
+    mine = frame if "project" not in frame.columns else \
+        frame[frame["project"].fillna(DEFAULT_PROJECT) == project]
+    existing = {str(value) for value in mine.get("sample_id", [])}
+    if clean in existing:
+        raise ValueError(f"Sample ID {clean} already exists in this project.")
+    if str(old_id) not in existing:
+        raise ValueError(f"Sample ID {old_id} was not found in this project.")
+
+    if store.enabled():
+        updated = store.run_rename(username, project, str(old_id), clean)
+    else:
+        work = frame.copy()
+        mask = work["sample_id"].astype(str) == str(old_id)
+        if "project" in work.columns:
+            mask &= work["project"].fillna(DEFAULT_PROJECT) == project
+        work.loc[mask, "sample_id"] = clean
+        save_results(username, work, append=False)
+        updated = int(mask.sum())
+    record_change(username, "record", project,
+                  {"sample_id": {"before": str(old_id), "after": clean}})
+    _forget_cached_reads()
+    return updated
+
+
+def update_run_field(username: str, project: str, sample_id: str, field: str, value) -> int:
+    """Correct a run's field: the sample ID, or any variable, numeric or text."""
+    field = str(field or "").strip()
+    if not field or field in ("project", "_owner", "recorded_at"):
+        raise ValueError("That field cannot be edited here.")
+    if field == "sample_id":
+        return rename_sample(username, project, sample_id, value)
+
+    frame = load_results(username)
+    if frame is None or frame.empty:
+        raise ValueError("There is no run with that ID.")
+    mine = frame if "project" not in frame.columns else \
+        frame[frame["project"].fillna(DEFAULT_PROJECT) == project]
+    if str(sample_id) not in {str(item) for item in mine.get("sample_id", [])}:
+        raise ValueError(f"Sample ID {sample_id} was not found in this project.")
+    if field not in mine.columns:
+        raise ValueError(f"{field} is not recorded by this project.")
+
+    column = mine[field]
+    stored = "" if value is None else str(value).strip()
+    if str(column.dtype).startswith(("int", "float")):
+        if stored == "":
+            raise ValueError(f"{field} must be a number.")
+        try:
+            stored = float(stored)
+        except (TypeError, ValueError):
+            raise ValueError(f"{field} must be a number.") from None
+
+    if store.enabled():
+        updated = store.run_set_field(username, project, str(sample_id), field, stored)
+    else:
+        work = frame.copy()
+        mask = work["sample_id"].astype(str) == str(sample_id)
+        if "project" in work.columns:
+            mask &= work["project"].fillna(DEFAULT_PROJECT) == project
+        work.loc[mask, field] = stored
+        save_results(username, work, append=False)
+        updated = int(mask.sum())
+    record_change(username, "record", project, {field: {"before": "", "after": str(stored)}})
+    _forget_cached_reads()
+    return updated
