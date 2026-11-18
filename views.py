@@ -1825,6 +1825,19 @@ def _experiment_panel(user: str | None, name: str) -> None:
                 current = part[part["sample_id"].astype(str) == which]
                 shown = "" if current.empty else str(current.iloc[0].get(field) or "")
                 value = st.text_input(t("exp.edit_value"), value=shown, key=f"edit_value_{name}")
+                st.divider()
+                st.caption(t("exp.delete_run_note"))
+                confirm = st.checkbox(t("exp.delete_run_confirm", run=which),
+                                      key=f"del_run_ok_{name}")
+                if st.button(t("exp.delete_run"), key=f"del_run_{name}", disabled=not confirm):
+                    try:
+                        auth.delete_run(user, name, which)
+                    except ValueError as exc:
+                        st.error(t(str(exc)))
+                    else:
+                        st.success(t("exp.delete_run_done", run=which))
+                        st.rerun()
+
                 if st.button(t("exp.edit_save"), key=f"edit_save_{name}"):
                     try:
                         auth.update_run_field(user, name, which, field, value)
@@ -2127,6 +2140,10 @@ def _record_tab(user: str | None, project: str = auth.DEFAULT_PROJECT) -> None:
         # the widgets cannot be cleared after they were created in this run; the rerun picks the
         # advanced ID up from the project's rows instead
         st.session_state["run_sample_project"] = None
+        # back to the project the run belongs to, so the new row is visible at once
+        st.session_state["ws_open"] = project
+        st.session_state["ws_mode"] = "open"
+        st.session_state["project_wanted"] = project
         st.rerun()
 
 

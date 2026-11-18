@@ -1818,3 +1818,26 @@ def update_run_field(username: str, project: str, sample_id: str, field: str, va
     record_change(username, "record", project, {field: {"before": "", "after": str(stored)}})
     _forget_cached_reads()
     return updated
+
+def delete_run(username: str, project: str, sample_id: str) -> int:
+    """Remove one run from one project. Nothing else is touched."""
+    frame = load_results(username)
+    if frame is None or frame.empty:
+        raise ValueError("There is no run with that ID.")
+    mine = frame if "project" not in frame.columns else \
+        frame[frame["project"].fillna(DEFAULT_PROJECT) == project]
+    if str(sample_id) not in {str(value) for value in mine.get("sample_id", [])}:
+        raise ValueError(f"Sample ID {sample_id} was not found in this project.")
+
+    if store.enabled():
+        removed = store.run_delete(username, project, str(sample_id))
+    else:
+        mask = frame["sample_id"].astype(str) == str(sample_id)
+        if "project" in frame.columns:
+            mask &= frame["project"].fillna(DEFAULT_PROJECT) == project
+        kept = frame[~mask]
+        save_results(username, kept, append=False)
+        removed = int(mask.sum())
+    record_change(username, "record", project, {}, note=f"deleted run {sample_id}")
+    _forget_cached_reads()
+    return removed

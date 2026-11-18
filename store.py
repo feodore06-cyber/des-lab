@@ -699,6 +699,25 @@ def paper_delete(paper_id: int, owner: str) -> None:
         conn.commit()
 
 
+def run_delete(owner: str, project: str, sample_id: str) -> int:
+    """Delete one run and the photographs attached to it."""
+    removed = 0
+    with _connect() as conn:
+        with conn.transaction():
+            cur = conn.execute(
+                "delete from runs where owner = %s and project = %s and sample_id = %s",
+                (owner, project, sample_id))
+            removed += cur.rowcount
+            cur = conn.execute(
+                "delete from records where username = %s and kind = 'results'"
+                " and payload->>'project' = %s and payload->>'sample_id' = %s",
+                (owner, project, sample_id))
+            removed += cur.rowcount
+            conn.execute("delete from images where owner = %s and sample_id = %s",
+                         (owner, sample_id))
+    return removed
+
+
 def run_set_field(owner: str, project: str, sample_id: str, field: str, value) -> int:
     """Set one field of one run; the value keeps its JSON type (a number stays a number)."""
     changed = 0
